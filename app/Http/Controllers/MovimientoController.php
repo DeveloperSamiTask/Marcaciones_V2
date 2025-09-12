@@ -33,7 +33,7 @@ class MovimientoController extends Controller
                 'empleado_id' => 'required|exists:empleados,id',
                 'motivo' => 'required|string|min:3',
                 'tipo_movimiento' => 'required|in:cese,reactivacion',
-                'fecha_cambio' => 'required|date'
+                'fecha_cambio' => 'required|date|after_or_equal:today'
             ]);
 
             $empleado = Empleado::findOrFail($request->empleado_id);
@@ -92,8 +92,10 @@ class MovimientoController extends Controller
                 'empleado_id' => 'required|exists:empleados,id',
                 'motivo' => 'required|string|min:3',
                 'tipo_movimiento' => 'required|in:cese,reactivacion',
-                'fecha_cambio' => 'required|date'
+                'fecha_cambio' => 'required|date|after_or_equal:today'
             ]);
+
+
 
             $empleado = Empleado::findOrFail($request->empleado_id);
 
@@ -101,9 +103,8 @@ class MovimientoController extends Controller
             $registro_activacion = Carbon::parse($empleado->fecha_ingreso);
 
             if ($request->tipo_movimiento === 'cese') {
-                
-                $empleado->fecha_cese = Carbon::parse($request->fecha_cambio);
 
+                $empleado->fecha_cese = Carbon::parse($request->fecha_cambio);
             } elseif ($request->tipo_movimiento === 'reactivacion') {
 
                 $empleado->fecha_ingreso = Carbon::parse($request->fecha_cambio);
@@ -129,11 +130,13 @@ class MovimientoController extends Controller
             ]);
 
             // Redirigir con mensaje flash para Inertia
-            return Redirect::route('empleados.index')->withSuccess('success', "Empleado {$request->tipo_movimiento} exitosamente.");
+            return Redirect::route('empleados.index')->with('success', "Empleado {$request->tipo_movimiento} exitosamente.");
         } catch (Exception $e) {
             Log::error('Error al cambiar estado del empleado: ' . $e->getMessage());
 
-            return Redirect::back()->with('error', 'Ocurrió un error al procesar la solicitud.');
+            return Redirect::back()->withErrors([
+                'message' => 'Ocurrió un error al procesar la solicitud.',
+            ]);
         }
     }
 
