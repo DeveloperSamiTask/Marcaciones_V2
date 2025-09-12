@@ -107,7 +107,7 @@ export default function ModalEmpleado({
                             value={data.fecha_cambio}
                             onChange={(e) => setData('fecha_cambio', e.target.value)}
                         />
-                        <InputError message={errors.fecha_cambio} />
+                        <InputError message={errors.message} />
                     </div>
 
                     <div className="grid gap-2">
