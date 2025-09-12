@@ -1,0 +1,131 @@
+<?php
+
+use App\Http\Controllers\AreaController;
+use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmpleadoController;
+use App\Http\Controllers\EmpresaController;
+use App\Http\Controllers\HorarioController;
+use App\Http\Controllers\MarcacionController;
+use App\Http\Controllers\MemorandumController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PermisoController;
+use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\SuspensionController;
+use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\MovimientoController;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
+Route::redirect('/', 'dashboard')->name('home');
+
+Route::middleware(['auth', 'verified'])->group(function () {
+
+    // Dashboard
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Empleados
+    Route::resource('empleados', EmpleadoController::class)->except(['show']);
+    Route::post('empleados/download', [EmpleadoController::class, 'download'])->name('empleados.download');
+
+    Route::get('/empleados/{id}/modal', [EmpleadoController::class, 'mostrarEmpleadoModal'])
+        ->name('empleados.modal');
+
+
+    //movimientos
+    /*
+        incluso si no rendiriza una vista, necesito definir la ruta en web.php
+        1. la ruta desde la cual viene la peticion
+        2. A que parte de mi controlador se dirigue
+        3. el nombre/apodo de la ruta
+    */
+    Route::post('/movimiento/toggle', [MovimientoController::class, 'toggleEstadoInertia'])
+        ->name('movimiento.toggle');
+
+
+
+    // Areas
+    Route::resource('areas', AreaController::class)->except(['show']);
+    // Route::post('{area}/restore', [AreaController::class, 'restore'])->name('restore');
+
+    // Empresas
+    Route::resource('empresas', EmpresaController::class)->except(['show']);
+    // Route::post('{empresa}/restore', [EmpresaController::class, 'restore'])->name('restore');
+
+    // Horarios
+    Route::resource('horarios', HorarioController::class)->except(['show', 'destroy']);
+
+    // Permisos
+    Route::resource('permisos', PermisoController::class)->except(['show']);
+    Route::group(['prefix' => 'permisos', 'as' => 'permisos.'], function () {
+        Route::get('extras', [PermisoController::class, 'extras'])->name('extras');
+        Route::get('{permiso}/horarios', [PermisoController::class, 'showHorarios'])->name('showHorarios');
+        Route::get('{permiso}/imprimir', [PermisoController::class, 'imprimir'])->name('imprimir');
+        Route::post('{permiso}/upload', [PermisoController::class, 'upload'])->name('upload');
+    });
+
+    // Marcaciones
+    Route::resource('marcaciones', MarcacionController::class)->except(['show']);
+    Route::group(['prefix' => 'marcaciones', 'as' => 'marcaciones.'], function () {
+        Route::get('reales', [MarcacionController::class, 'real'])->name('reales');
+        Route::get('ediciones', [MarcacionController::class, 'edicion'])->name('ediciones');
+        Route::post('download', [MarcacionController::class, 'download'])->name('download');
+        Route::post('{marcacion}/upload', [MarcacionController::class, 'upload'])->name('upload');
+        Route::post('pull', [MarcacionController::class, 'pull'])->name('pull');
+    });
+
+    // Asistencias
+    Route::resource('asistencias', AsistenciaController::class);
+    Route::post('asistencias/{asistenciaDetalle}/horas-extra/', [AsistenciaController::class, 'updateHorasExtra'])->name('asistencias.horasExtra');
+
+    // Memorandums
+    Route::resource('memorandums', MemorandumController::class)->except(['show']);
+    Route::get('memorandums/{memorandum}/imprimir', [MemorandumController::class, 'imprimir'])->name('memorandums.imprimir');
+
+    // Suspensiones
+    Route::resource('suspensiones', SuspensionController::class);
+    Route::group(['prefix' => 'suspensiones', 'as' => 'suspensiones.'], function () {
+        Route::get('{suspension}/imprimir', [SuspensionController::class, 'print'])->name('imprimir');
+        Route::post('{suspension}/upload', [SuspensionController::class, 'upload'])->name('upload');
+    });
+
+    // Usuarios
+    Route::resource('usuarios', UsuarioController::class)->except(['show']);
+
+    // Reportes
+    Route::group(['prefix' => 'reportes', 'as' => 'reportes.'], function () {
+        Route::get('tareo', [ReporteController::class, 'tareoIndex'])->name('tareo.index');
+        Route::post('tareo/download', [ReporteController::class, 'tareoDownload'])->name('tareo.download');
+        Route::post('tareo/download-starsoft', [ReporteController::class, 'tareoDownloadStarsoft'])->name('tareo.download.estarsoft');
+
+        Route::get('amonestaciones', [ReporteController::class, 'amonestacionIndex'])->name('amonestaciones.index');
+        Route::post('amonestaciones/download', [ReporteController::class, 'amonestacionDownload'])->name('amonestaciones.download');
+
+        Route::get('compensas', [ReporteController::class, 'compensaIndex'])->name('compensas.index');
+        Route::post('compensas/download', [ReporteController::class, 'compensaDownload'])->name('compensas.download');
+
+        Route::get('horas-extra', [ReporteController::class, 'extraIndex'])->name('extras.index');
+        Route::post('horas-extra/download', [ReporteController::class, 'extraDownload'])->name('extras.download');
+    });
+
+    // Settings
+    Route::redirect('configuracion', 'configuracion/perfil');
+    Route::group(['prefix' => 'configuracion', 'as' => 'configuracion.'], function () {
+        // Perfil
+        Route::get('perfil', [ProfileController::class, 'edit'])->name('perfil.edit');
+        Route::patch('perfil', [ProfileController::class, 'update'])->name('perfil.update');
+        Route::delete('perfil', [ProfileController::class, 'destroy'])->name('perfil.destroy');
+
+        // Notificaciones
+        Route::get('notificaciones', [NotificationController::class, 'index'])->name('notificaciones.index');
+        Route::patch('notificaciones/{notification}', [NotificationController::class, 'update'])->name('notificaciones.update');
+        Route::delete('notificaciones/{notification}', [NotificationController::class, 'destroy'])->name('notificaciones.destroy');
+
+        Route::get('appearance', function () {
+            return Inertia::render('settings/appearance');
+        })->name('appearance');
+    });
+});
+
+require __DIR__ . '/auth.php';
