@@ -143,6 +143,12 @@ const mainNavItems: NavItem[] = [
             },
         ],
     },
+        {
+        title: 'Movimientos',
+        href: route('movimientos.index'),
+        icon: Users,
+        permissions: [1, 2]
+    }
 ];
 
 export function AppSidebar() {

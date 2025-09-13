@@ -3,7 +3,7 @@ import { DateRangeFilter } from '@/components/date-range';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { SelectFilter } from '@/components/select-filter';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem, SharedData } from '@/types';
 import { Empresa } from '@/types/empresas';

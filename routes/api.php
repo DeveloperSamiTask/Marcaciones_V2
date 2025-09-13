@@ -15,3 +15,4 @@ Route::get('/user', function (Request $request) {
 
 Route::post('/empleados/toggle', [MovimientoController::class, 'toggleEstadoAPI']);
 
+Route::get('/empleados/listar', [MovimientoController::class, 'index']);

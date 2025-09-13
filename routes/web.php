@@ -43,6 +43,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/movimiento/toggle', [MovimientoController::class, 'toggleEstadoInertia'])
         ->name('movimiento.toggle');
 
+    Route::get('/movimientos', [MovimientoController::class, 'indexInertia'])->name('movimientos.index');
+
+
 
 
     // Areas

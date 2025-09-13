@@ -21,7 +21,8 @@ class Movimiento extends Model
             $table->foreign('empleados_id')->references('id')->on('empleados')->onDelete('cascade');
     */
     protected $fillable = [
-        'nombres',
+        'id',
+        'empleado',
         'dni',
         'fecha_movimiento',
         'tipo_movimiento',

@@ -9,7 +9,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 import { Plus } from "lucide-react";
 import DownloadEmpleado from "./download";
 import { router } from "@inertiajs/react";
-import ModalEmpleado from './deleteModal';
+
 
 const breadcrumbs: BreadcrumbItem[] = [
     {

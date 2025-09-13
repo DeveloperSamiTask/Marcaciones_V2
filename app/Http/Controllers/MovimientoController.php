@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
 use Exception;
 use Carbon\Carbon;
+use Inertia\Inertia;
 
 class MovimientoController extends Controller
 {
@@ -17,7 +18,48 @@ class MovimientoController extends Controller
      */
     public function index()
     {
-        //
+        $movimientos = Movimiento::with('empleado')->orderBy('created_at', 'desc')->get();
+
+        $data = $movimientos->map(function ($movimiento) {
+            return [
+                'dni' => $movimiento->dni,
+                'empleados_id' => $movimiento->empleados_id,
+                'motivo' => $movimiento->motivo,
+                'nombres' => $movimiento->nombres,
+                'tipo_movimiento' => $movimiento->tipo_movimiento,
+                'fecha_movimiento' => Carbon::parse($movimiento->fecha_movimiento),
+                'ultima_fecha_cese' => Carbon::parse($movimiento->ultima_fecha_cese),
+                'ultima_fecha_activacion' => Carbon::parse($movimiento->ultima_fecha_activacion),
+                'fecha_cese_actual' => Carbon::parse($movimiento->fecha_cese_actual),
+                'fecha_activacion_actual' => Carbon::parse($movimiento->fecha_activacion_actual),
+            ];
+        });
+
+        return response()->json($data, 200);
+    }
+
+    public function indexInertia()
+    {
+        $movimientos = Movimiento::with('empleado')->orderBy('created_at', 'desc')->get();
+
+        $data = $movimientos->map(function ($movimiento) {
+            return [
+                'id' => $movimiento->id,
+                'empleados_id' => $movimiento->empleados_id,
+                'empleado' => $movimiento->empleado,
+                'dni' => $movimiento->dni,
+                'fecha_movimiento' => optional($movimiento->fecha_movimiento)->format('Y-m-d'),
+                'motivo' => $movimiento->motivo,
+                'tipo_movimiento' => $movimiento->tipo_movimiento,
+                'fecha_cese_actual' => optional($movimiento->fecha_cese_actual)->format('Y-m-d'),
+                'fecha_activacion_actual' => optional($movimiento->fecha_activacion_actual)->format('Y-m-d'),
+            ];
+        });
+
+        return Inertia::render('movimientos/index', [
+            'movimientos' => $data,
+            'csrf_token' => csrf_token(),
+        ]);
     }
 
     /**
@@ -33,7 +75,7 @@ class MovimientoController extends Controller
                 'empleado_id' => 'required|exists:empleados,id',
                 'motivo' => 'required|string|min:3',
                 'tipo_movimiento' => 'required|in:cese,reactivacion',
-                'fecha_cambio' => 'required|date|after_or_equal:today'
+                'fecha_cambio' => 'required|date'
             ]);
 
             $empleado = Empleado::findOrFail($request->empleado_id);
@@ -43,6 +85,7 @@ class MovimientoController extends Controller
 
             if ($request->tipo_movimiento === 'cese') {
                 $empleado->fecha_cese = Carbon::parse($request->fecha_cambio);
+                
             } elseif ($request->tipo_movimiento === 'reactivacion') {
 
                 $empleado->fecha_ingreso = Carbon::parse($request->fecha_cambio);
@@ -53,7 +96,7 @@ class MovimientoController extends Controller
 
             // Registrar movimiento
             $movimiento = Movimiento::create([
-                'nombres' => $empleado->nombres,
+                'empleado' => $empleado->apellidos . ' ' . $empleado->nombres,
                 'dni' => $empleado->dni,
                 'fecha_movimiento' => now()->format('d-m-Y'),
                 'motivo' => $request->motivo,
@@ -92,10 +135,8 @@ class MovimientoController extends Controller
                 'empleado_id' => 'required|exists:empleados,id',
                 'motivo' => 'required|string|min:3',
                 'tipo_movimiento' => 'required|in:cese,reactivacion',
-                'fecha_cambio' => 'required|date|after_or_equal:today'
+                'fecha_cambio' => 'required|date'
             ]);
-
-
 
             $empleado = Empleado::findOrFail($request->empleado_id);
 
@@ -103,7 +144,6 @@ class MovimientoController extends Controller
             $registro_activacion = Carbon::parse($empleado->fecha_ingreso);
 
             if ($request->tipo_movimiento === 'cese') {
-
                 $empleado->fecha_cese = Carbon::parse($request->fecha_cambio);
             } elseif ($request->tipo_movimiento === 'reactivacion') {
 
@@ -115,18 +155,18 @@ class MovimientoController extends Controller
 
             // Registrar movimiento
             Movimiento::create([
-                'nombres' => $empleado->nombres,
+                'empleado' => $empleado->apellidos . ' ' . $empleado->nombres,
                 'dni' => $empleado->dni,
                 'fecha_movimiento' => now()->format('d-m-Y'),
                 'motivo' => $request->motivo,
                 'tipo_movimiento' => $request->tipo_movimiento,
                 'empleados_id' => $empleado->id,
 
-                'ultima_fecha_cese' =>  $registro_cese,
-                'ultima_fecha_activacion' => $registro_activacion,
+                'ultima_fecha_cese' =>  Carbon::parse($registro_cese),
+                'ultima_fecha_activacion' => Carbon::parse($registro_activacion),
 
-                'fecha_cese_actual' =>  $empleado->fecha_cese,
-                'fecha_activacion_actual' => $empleado->fecha_ingreso,
+                'fecha_cese_actual' =>  Carbon::parse($empleado->fecha_cese),
+                'fecha_activacion_actual' => Carbon::parse($empleado->fecha_ingreso),
             ]);
 
             // Redirigir con mensaje flash para Inertia
