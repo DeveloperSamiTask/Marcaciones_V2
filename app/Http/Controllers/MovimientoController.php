@@ -38,9 +38,33 @@ class MovimientoController extends Controller
         return response()->json($data, 200);
     }
 
-    public function indexInertia()
+    public function indexInertia(Request $request)
     {
-        $movimientos = Movimiento::with('empleado')->orderBy('created_at', 'desc')->get();
+        $fechaInicio = $request->input('fechaInicio');
+        $fechaFin = $request->input('fechaFin');
+        $search = $request->input('search');
+
+        $query = Movimiento::with('empleado')->orderBy('created_at', 'desc');
+
+        // Filtro por rango de fechas
+        if ($fechaInicio && $fechaFin) {
+            $query->whereBetween('fecha_movimiento', [$fechaInicio, $fechaFin]);
+        }
+
+        // Filtro por búsqueda libre
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('motivo', 'like', "%{$search}%")
+                    ->orWhere('dni', 'like', "%{$search}%")
+                    ->orWhereHas('empleado', function ($e) use ($search) {
+                        $e->where('nombres', 'like', "%{$search}%")
+                            ->orWhere('apellidos', 'like', "%{$search}%")
+                            ->orWhereRaw("CONCAT(apellidos, ' ', nombres) LIKE ?", ["%{$search}%"]);
+                    });
+            });
+        }
+
+        $movimientos = $query->get();
 
         $data = $movimientos->map(function ($movimiento) {
             return [
@@ -58,6 +82,11 @@ class MovimientoController extends Controller
 
         return Inertia::render('movimientos/index', [
             'movimientos' => $data,
+            'filters' => [
+                'fechaInicio' => $fechaInicio,
+                'fechaFin' => $fechaFin,
+                'search' => $search,
+            ],
             'csrf_token' => csrf_token(),
         ]);
     }
@@ -85,7 +114,6 @@ class MovimientoController extends Controller
 
             if ($request->tipo_movimiento === 'cese') {
                 $empleado->fecha_cese = Carbon::parse($request->fecha_cambio);
-                
             } elseif ($request->tipo_movimiento === 'reactivacion') {
 
                 $empleado->fecha_ingreso = Carbon::parse($request->fecha_cambio);
