@@ -2,34 +2,69 @@
 <html lang="es">
 
 <head>
+    <meta charset="UTF-8">
     <style>
         @page {
-            margin-left: 0px;
+            size: A4 landscape;
             margin: 0;
+            /* Sin margen en el papel */
         }
 
-        * {
-            font-family: "arial";
+        body {
+            font-family: "Arial", sans-serif;
+            margin: 0;
+            padding: 10mm;
+            /* Simula margen visual */
+            box-sizing: border-box;
         }
 
-        table {
-            font-size: 14px;
-        }
-
-        .firma-container {
-            font-size: 12px;
+        .contenedor {
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
+            gap: 20px;
+            page-break-inside: avoid;
+            max-width: 100%;
+            min-width: 980px;
+            /* Puedes ajustar el padding si quieres más espacio */
+            /* padding: 10mm;  // opcional si quieres espacio extra dentro */
+            box-sizing: border-box;
         }
 
-        .firma-izquierda {
-            align-items: flex-start;
-            /* Alinea el texto a la izquierda */
+
+        .memorandum {
+            width: 50%;
+            box-sizing: border-box;
+            padding: 10px;
         }
 
-        .firma-derecha {
-            align-items: flex-end;
-            /* Alinea el texto a la derecha */
+        h2 {
+            font-size: 16px;
+            text-align: center;
+            text-decoration: underline;
+        }
+
+        p,
+        li {
+            font-size: 14px;
+            text-align: justify;
+            margin: 5px 0;
+        }
+
+        .firmas {
+            margin-top: 20px;
+        }
+
+        .firmas img {
+            height: 60px;
+        }
+
+        .firmas td {
+            text-align: center;
+        }
+
+        .lineas td {
+            font-size: 12px;
+            text-align: center;
         }
     </style>
 </head>
@@ -41,145 +76,71 @@
             'A' => 'AMONESTACION ESCRITA POR NEGLIGENCIA DE FUNCIONES',
         ];
     @endphp
-    <div style="page-break-inside: avoid;">
-        <div style="text-align: center;">
-            <h2 style="font-size:16px; text-align:center; margin-left: 50px;">
-                <u>&nbsp;MEMORANDUM {{ $fechaMemo }}-RRHH/GVS&nbsp;</u>
-            </h2>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                DE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
-                {{ $suspension->empleado->empresa->razonsocial }}</p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                A&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
-                {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}
-            </p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                ÁREA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
-                {{ $suspension->empleado->area->nombre }}
-            </p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                <strong>AMONESTACION ESCRITA POR INCUMPLIR LAS NORMAS DE TRABAJO</strong>
-            </p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
-                ________________________________________________________________________________________</p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la ley,
-                le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en una
-                <strong>AMONESTACION ESCRITA POR INCUMPLIR LAS NORMAS DE TRABAJO</strong> en referencia a los hechos que describimos a continuación:
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                {{ $suspension->motivo }}
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
-                artículo 38 inciso
-                {{ $articulo }}
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Sobre el particular, le recordamos que cumplir con las normas establecidas por la empresa es obligación inherente a su contrato de trabajo,
-                constituyendo además su inobservancia una manifiesta contravención del Reglamento Interno de Trabajo de la empresa, cuyas disposiciones
-                son obligatorias y plenamente conocidas por todo el personal que labora para la empresa.            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Finalmente, se le exhorta, que hechos como este no vuelva a suceder, caso contrario, se tomaran
-                medidas pertinentes al respecto,
-                siendo de su entera responsabilidad.
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
 
-            <table style="width:100%;">
-                <tbody>
-                    <tr align="center">
-                        <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt=""></td>
-                        <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt=""></td>
-                    </tr>
-                </tbody>
-            </table>
+    <div class="contenedor">
+        @for ($i = 0; $i < 2; $i++)
+            <div class="memorandum">
+                <h2>MEMORANDUM {{ $fechaMemo }}-RRHH/GVS</h2>
 
-            <table style="width:100%;">
-                <tr>
-                    <td align="center" style="font-size:12px;">___________________________________________</td>
-                    <td align="center" style="font-size:12px;">___________________________________________</td>
-                </tr>
-                <tbody>
-                    <tr align="center">
-                        <td>EL EMPLEADOR</td>
-                        <td>EL TRABAJADOR</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-    <div style="page-break-inside: avoid;">
-        <div style="text-align: center;">
-            <h2 style="font-size:16px; text-align:center; margin-left: 50px;">
-                <u>&nbsp;MEMORANDUM {{ $fechaMemo }}-RRHH/GVS&nbsp;</u>
-            </h2>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                DE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
-                {{ $suspension->empleado->empresa->razonsocial }}</p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                A&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
-                {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}
-            </p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                ÁREA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
-                {{ $suspension->empleado->area->nombre }}
-            </p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">
-                FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                <strong>AMONESTACION ESCRITA POR INCUMPLIR LAS NORMAS DE TRABAJO</strong>
-            </p>
-            <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
-                ________________________________________________________________________________________</p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la ley,
-                le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en una
-                <strong>AMONESTACION ESCRITA POR INCUMPLIR LAS NORMAS DE TRABAJO</strong> en referencia a los hechos que describimos a continuación:
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                {{ $suspension->motivo }}
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
-                artículo 38 inciso
-                {{ $articulo }}
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Sobre el particular, le recordamos que cumplir con las normas establecidas por la empresa es obligación inherente a su contrato de trabajo,
-                constituyendo además su inobservancia una manifiesta contravención del Reglamento Interno de Trabajo de la empresa, cuyas disposiciones
-                son obligatorias y plenamente conocidas por todo el personal que labora para la empresa.            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                Finalmente, se le exhorta, que hechos como este no vuelva a suceder, caso contrario, se tomaran
-                medidas pertinentes al respecto,
-                siendo de su entera responsabilidad.
-            </p>
-            <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
+                <p><strong>DE:</strong> {{ $suspension->empleado->empresa->razonsocial }}</p>
+                <p><strong>A:</strong> {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</p>
+                <p><strong>ÁREA:</strong> {{ $suspension->empleado->area->nombre }}</p>
+                <p><strong>FECHA:</strong> {{ now()->format('d/m/Y') }}</p>
+                <p><strong>ASUNTO:</strong> <strong>AMONESTACION ESCRITA POR INCUMPLIR LAS NORMAS DE TRABAJO</strong>
+                </p>
+                <hr>
 
-            <table style="width:100%;">
-                <tbody>
-                    <tr align="center">
-                        <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt=""></td>
-                        <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt=""></td>
-                    </tr>
-                </tbody>
-            </table>
+                <p>
+                    Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
+                    ley,
+                    le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en una
+                    <strong>AMONESTACION ESCRITA POR INCUMPLIR LAS NORMAS DE TRABAJO</strong> en referencia a los hechos
+                    que describimos a continuación:
+                </p>
 
-            <table style="width:100%;">
-                <tr>
-                    <td align="center" style="font-size:12px;">___________________________________________</td>
-                    <td align="center" style="font-size:12px;">___________________________________________</td>
-                </tr>
-                <tbody>
-                    <tr align="center">
-                        <td>EL EMPLEADOR</td>
-                        <td>EL TRABAJADOR</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                <p>{{ $suspension->motivo }}</p>
+
+                <p>
+                    Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
+                    artículo 38 inciso {{ $articulo }}.
+                </p>
+
+                <p>
+                    Sobre el particular, le recordamos que cumplir con las normas establecidas por la empresa es
+                    obligación inherente a su contrato de trabajo,
+                    constituyendo además su inobservancia una manifiesta contravención del Reglamento Interno de Trabajo
+                    de la empresa, cuyas disposiciones
+                    son obligatorias y plenamente conocidas por todo el personal que labora para la empresa.
+                </p>
+
+                <p>
+                    Finalmente, se le exhorta a que hechos como este no vuelvan a suceder, caso contrario,
+                    se tomarán medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                </p>
+
+                <p>Atentamente,</p>
+
+                <div class="firmas">
+                    <table style="width: 100%;">
+                        <tr>
+                            <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt="Firma Empleador"></td>
+                            <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt="Firma Trabajador"></td>
+                        </tr>
+                    </table>
+
+                    <table class="lineas" style="width: 100%;">
+                        <tr>
+                            <td>___________________________________________</td>
+                            <td>___________________________________________</td>
+                        </tr>
+                        <tr>
+                            <td>EL EMPLEADOR</td>
+                            <td>EL TRABAJADOR</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        @endfor
     </div>
 </body>
 

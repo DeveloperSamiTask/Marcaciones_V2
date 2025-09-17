@@ -34,8 +34,12 @@ export const columnsMovimiento: ColumnDef<Movimiento>[] = [
                 <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
         ),
-        cell: ({ row }) =>
-            format(new Date(row.original.fecha_movimiento), "dd/MM/yyyy"),
+        cell: ({ row }) => {
+            const fecha = row.original.fecha_movimiento; // "2025-09-15"
+            const [year, month, day] = fecha.split("-");
+            const localDate = new Date(Number(year), Number(month) - 1, Number(day));
+            return format(localDate, "dd/MM/yyyy");
+        },
     },
     {
         accessorKey: "motivo",

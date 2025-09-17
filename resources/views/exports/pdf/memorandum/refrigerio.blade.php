@@ -4,6 +4,7 @@
  <head>
      <style>
          @page {
+
              margin-left: 0px;
              margin: 0;
          }

@@ -83,7 +83,7 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
         cell: ({ row }) => {
             const motivo = row.original.motivo;
             return (
-                <span>{ motivo?.length > 30 ? `${motivo.slice(0, 30)}...` : motivo }</span>
+                <span>{motivo?.length > 30 ? `${motivo.slice(0, 30)}...` : motivo}</span>
             );
         },
     },
@@ -93,7 +93,7 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
         cell: ({ row }) => {
             const motivo_rechazo = row.original.motivo_rechazo;
             return (
-                <span className='text-red-600'>{ motivo_rechazo?.length > 30 ? `${motivo_rechazo.slice(0, 30)}...` : motivo_rechazo }</span>
+                <span className='text-red-600'>{motivo_rechazo?.length > 30 ? `${motivo_rechazo.slice(0, 30)}...` : motivo_rechazo}</span>
             );
         },
     },
@@ -101,9 +101,12 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
         accessorKey: 'extra',
         header: 'EXTRA',
         cell: ({ row }) => {
+            /*
+                    Cuantas horas extra trabajo un empleado el dia que pidio un permiso y lo muestra como columna extra.
+            */
             const extra = row.original.empleado.horarios ? row.original.empleado.horarios?.find(horario => horario.fecha === row.original.fecha)?.extra : '';
             return (
-                <span className='text-red-600'>{ extra }</span>
+                <span className='text-red-600'>{extra}</span>
             );
         },
     },
@@ -134,12 +137,12 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
                 <div className="flex items-center gap-2">
                     {!permiso.estado ? (
                         <>
-                            <EditPermiso key={`edit-permiso${permiso.id}`} permisoId={permiso.id}/>
-                            <DeletePermiso key={`delete-permiso${permiso.id}`} permisoId={permiso.id}/>
+                            <EditPermiso key={`edit-permiso${permiso.id}`} permisoId={permiso.id} />
+                            <DeletePermiso key={`delete-permiso${permiso.id}`} permisoId={permiso.id} />
                             {isAdmin && !permiso.comprobante && permiso.tipo_id != 9 && permiso.tipo_id != 2 && permiso.tipo_id != 20 &&
                                 <UploadPermiso key={`upload-permiso-${permiso.id}`} permisoId={permiso.id} />}
                         </>
-                    ): (
+                    ) : (
                         permiso.tipo_id == 9 && (<PrintPermiso key={`print-permiso${permiso.id}`} permiso={permiso} isPrint={permiso.estado_print} />)
                     )}
 

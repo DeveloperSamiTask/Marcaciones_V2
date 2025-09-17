@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { SharedData, type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Building2, ChartBarStacked, CircleMinus, CircleX, ClipboardPenLine, ClockArrowUp, LayoutGrid, NotebookPen, SquareDashedMousePointer, User, Users } from 'lucide-react';
+import { Building2, ChartBarStacked, CircleMinus, CircleX, ClipboardPenLine, ClockArrowUp, LayoutGrid, NotebookPen, SquareDashedMousePointer, User, Users, FileText } from 'lucide-react';
 import AppLogo from './app-logo';
 
 
@@ -144,9 +144,9 @@ const mainNavItems: NavItem[] = [
         ],
     },
         {
-        title: 'Movimientos',
+        title: 'Logs',
         href: route('movimientos.index'),
-        icon: Users,
+        icon: FileText,
         permissions: [1, 2]
     }
 ];

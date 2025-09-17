@@ -78,26 +78,42 @@ class MarcacionController extends Controller
                 $anticipado = 0;
                 $nocturno = 0;
 
-                if ($horario && $marcacion && $marcacion->ingreso) {
-                    $partTime = $empleado->jornada_id == 2 && !$marcacion->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
-                    $horasTrabajadas = $horario->ingreso->diffInMinutes($horario->salida, false);
-                    $horasAnticipado = $marcacion->salida ? max(0, $marcacion->salida->diffInMinutes($horario->salida, false)) : 0; // hora antes de su salida programado considerar 20 min si es su salida programada 11 o 11:30
+            if ($horario && $marcacion && $marcacion->ingreso) {
+                $partTime = $empleado->jornada_id == 2 && !$marcacion->ingreso_refri;
 
-                    $tardanza = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false)); // si es negativo devuelve 0
-                    $extra = max(0, $horario->salida->diffInMinutes($marcacion->salida, false)); // tiempo despues de su hora de salida
-                    $horas = $horasTrabajadas - $tardanza - ($partTime ? 0 : 60); // no se descuenta la hora de refrigerio si es parttime y no tomo refrigerio
-                    $anticipado = $horasAnticipado;
+                // Tiempo total programado
+                $horasTrabajadas = $horario->ingreso->diffInMinutes($horario->salida, false);
 
-                    if((in_array($horario->salida->format('H:i'), ['23:00', '23:30' , '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)){ // solo para chacxra y granja
-                        $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20; // estos minutos son de tolerancia en salida anticipada, solo granja tiene hasta 30 minutos
-                        $anticipado += $horasAnticipado >= $minutosTolerancia ? $horasAnticipado : 0;
-                    }
+                // 1. Tardanza
+                $tardanza = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false));
 
-                    if ($empleado->empresa_id == 1 || $empleado->empresa_id == 4 || $empleado->empresa_id == 3) { // nocturno + de 22horas
-                        $nocturno = max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
-                        // $nocturno = $minutosNocturnos >= 30 ? $minutosNocturnos : 0;
-                    }
+                // 2. Extra (si salió después)
+                if ($marcacion->salida && $marcacion->salida->gt($horario->salida)) {
+                    $extra = $horario->salida->diffInMinutes($marcacion->salida);
                 }
+
+                // 3. Anticipado (si salió antes)
+                if ($marcacion->salida && $horario->salida && $marcacion->salida->lt($horario->salida)) {
+                    $anticipado = $horario->salida->diffInMinutes($marcacion->salida);
+
+                    // Aplica tolerancia según empresa
+                    /*if (
+                        (in_array($horario->salida->format('H:i'), ['23:00', '23:30', '23:59']) && in_array($empleado->empresa_id, [3, 4])) ||
+                        ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)
+                    ) {
+                        $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20;
+                        $anticipado = $anticipado >= $minutosTolerancia ? $anticipado : 0;
+                    }*/
+                }
+
+                // 4. Total de horas (restando tardanza y refrigerio si aplica)
+                $horas = $horasTrabajadas - $tardanza - ($partTime ? 0 : 60);
+
+                // 5. Nocturno (después de las 22:00)
+                if (in_array($empleado->empresa_id, [1, 3, 4])) {
+                    $nocturno = max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
+                }
+            }
 
                 return [
                     'empleado' => $empleado,

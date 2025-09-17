@@ -302,14 +302,21 @@ export const columns: ColumnDef<Marcacion>[] = [
             )
         }
     },
-    {
-        accessorKey: 'anticipado', // hora antes de su salida programada (horario)
-        header: 'ANTICIPADO',
-        cell: ({ row }) => {
-            const anticipado = row.original.anticipado;
-            return (<span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {anticipado ? formatMinutes(anticipado) : '00:00'} </span>)
-        }
-    },
+   {
+    accessorKey: 'anticipado',
+    header: 'ANTICIPADO',
+    cell: ({ row }) => {
+        const anticipado = row.original.anticipado;
+        const value = Math.abs(anticipado); // 👈 fuerza valor positivo
+
+        return (
+            <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                {anticipado ? formatMinutes(value) : '00:00'}
+            </span>
+        );
+    }
+},
+
     {
         accessorKey: 'nocturno', // hora pasada las 10 pm
         header: 'NOCTURNO',
