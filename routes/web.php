@@ -67,7 +67,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{permiso}/imprimir', [PermisoController::class, 'imprimir'])->name('imprimir');
         Route::post('{permiso}/upload', [PermisoController::class, 'upload'])->name('upload');
     });
-
+    
     // Marcaciones
     Route::resource('marcaciones', MarcacionController::class)->except(['show']);
     Route::group(['prefix' => 'marcaciones', 'as' => 'marcaciones.'], function () {

@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 
 type TipoMarcacion = 'ingreso' | 'salida' | 'ingreso_refri' | 'salida_refri';
 
-export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabled, horariosExtra } :
+export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabled, horariosExtra }:
     { marcacionId: number, tipo: TipoMarcacion, marcacionHora: string, disabled: boolean, horariosExtra?: Horario[] }) {
     const horaInput = useRef<HTMLInputElement>(null);
     const motivoInput = useRef<HTMLTextAreaElement>(null);
@@ -31,6 +31,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
         setData('hora', marcacionHora);
     }, [marcacionHora]);
 
+    // manda datos al backend
     const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
 
@@ -73,9 +74,9 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
             </DialogTrigger>
             <DialogContent>
                 <DialogTitle>Editar marcacion</DialogTitle>
-                    <DialogDescription>
-                        Ingrese hora de { tipoFormateado[tipo] }
-                    </DialogDescription>
+                <DialogDescription>
+                    Ingrese hora de {tipoFormateado[tipo]}
+                </DialogDescription>
 
                 <form className="space-y-6" onSubmit={updateMarcacion}>
 
@@ -89,20 +90,71 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                             ref={horaInput}
                             value={data.hora}
                             onChange={(e) => setData('hora', e.target.value)}
+                            readOnly
                         />
 
                         <InputError message={errors.hora} />
                     </div>
 
-                    {horariosExtra && (<div className="grid gap-2">
-                        {horariosExtra.map((extra) => {
-                            return (
-                                <span key={extra.id} className='text-teal-400'>
-                                    Tienes {extra.extra} extra, el dia: {format(extra.fecha, 'dd/MM/yyyy')}
-                                </span>
-                            );
-                        })}
-                    </div>)}
+
+
+
+                    <InputError message={errors.hora} />
+
+
+                    {/*
+                    Lista de horas extras aprobadas
+                    {horariosExtra && (
+                        <div className="grid gap-2">
+                            {horariosExtra.map((extra) => {
+                                return (
+                                    <span key={extra.id} className='text-teal-400'>
+                                        Tienes {extra.extra} extra, el dia: {format(extra.fecha, 'dd/MM/yyyy')}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    )}
+                    */}
+
+                    {horariosExtra && horariosExtra.length > 0 && (
+                        <div className="grid gap-2">
+                            <label htmlFor="extraSeleccionada" className="font-semibold">Selecciona una hora extra disponible:</label>
+                            <select
+                                name="extraSeleccionada"
+                                id="extraSeleccionada"
+                                className="border rounded px-3 py-2 text-black bg-white">
+
+                                <option value="">-- Selecciona una opción --</option>
+                                {horariosExtra.map((extra) => (
+                                    <option key={extra.id} value={extra.extra}>
+                                        {extra.extra} minutos (día {format(extra.fecha, 'dd/MM/yyyy')})
+                                    </option>
+                                ))}
+                            </select>
+
+                        </div>
+                    )}
+
+                    {horariosExtra && horariosExtra.length > 0 && (
+                        <div className="grid gap-2 mt-4">
+                            <label htmlFor="tiempoDescontar" className="font-semibold">Tiempo a descontar:</label>
+                            <select
+                                name="tiempoDescontar"
+                                id="tiempoDescontar"
+                                className="border rounded px-3 py-2 text-black bg-white"
+                            //value={data.tiempoDescontar}
+                            //onChange={(e) => setData('tiempoDescontar', e.target.value)}
+                            >
+                                <option value="">-- Selecciona un tiempo --</option>
+                                <option value="30">30 minutos</option>
+                                <option value="40">40 minutos</option>
+                            </select>
+                            <InputError message={errors.tiempoDescontar} />
+                        </div>
+                    )}
+
+
 
                     <div className="grid gap-2">
                         <Textarea
@@ -134,6 +186,6 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                     </DialogFooter>
                 </form>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     );
 }

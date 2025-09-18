@@ -175,6 +175,9 @@ export const columns: ColumnDef<Marcacion>[] = [
         cell: ({ row }) => <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.ingreso?.substring(0, 5) || '-'}</span>,
     },
     {
+        /*
+            te muestra la salida del empleado , si no la tiene te permite crear otra o editar la que existe
+        */
         accessorKey: 'salida', // salida de la marcacion
         header: 'HS',
         cell: ({ row }) => {
@@ -199,6 +202,8 @@ export const columns: ColumnDef<Marcacion>[] = [
                     disabled={estado}
                     empleadoId={empleadoId}
                     fecha={fecha} tipo="salida"
+
+                    //lista de horas extras
                     horariosExtra={row.original.horariosExtra}
                 />
             );
@@ -283,7 +288,10 @@ export const columns: ColumnDef<Marcacion>[] = [
         header: 'EXTRA',
         cell: ({ row }) => {
             const extra = row.original.extra;
-            const estadoExtra = row.original.marcacion?.estado_horas_extra as keyof typeof estadoHorasExtra;
+            /*El row original reprensenta el contenido de una fila
+                El backend envia esto en forma de objeto
+            */
+            const estadoExtra = row.original.marcacion?.estado_horas_extra as keyof typeof estadoHorasExtra; /*Obtiene el estado */
 
             return (
                 <span className={extra ? 'text-red-600 font-semibold flex gap-2' : 'text-green-600 font-semibold flex gap-2'}>
@@ -302,20 +310,20 @@ export const columns: ColumnDef<Marcacion>[] = [
             )
         }
     },
-   {
-    accessorKey: 'anticipado',
-    header: 'ANTICIPADO',
-    cell: ({ row }) => {
-        const anticipado = row.original.anticipado;
-        const value = Math.abs(anticipado); // 👈 fuerza valor positivo
+    {
+        accessorKey: 'anticipado',
+        header: 'ANTICIPADO',
+        cell: ({ row }) => {
+            const anticipado = row.original.anticipado;
+            const value = Math.abs(anticipado); // 👈 fuerza valor positivo
 
-        return (
-            <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
-                {anticipado ? formatMinutes(value) : '00:00'}
-            </span>
-        );
-    }
-},
+            return (
+                <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                    {anticipado ? formatMinutes(value) : '00:00'}
+                </span>
+            );
+        }
+    },
 
     {
         accessorKey: 'nocturno', // hora pasada las 10 pm
