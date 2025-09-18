@@ -31,7 +31,6 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
         setData('hora', marcacionHora);
     }, [marcacionHora]);
 
-    // manda datos al backend
     const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
 
@@ -90,41 +89,23 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                             ref={horaInput}
                             value={data.hora}
                             onChange={(e) => setData('hora', e.target.value)}
-                            readOnly
                         />
 
                         <InputError message={errors.hora} />
                     </div>
 
-
-
-
-                    <InputError message={errors.hora} />
-
-
-                    {/*
-                    Lista de horas extras aprobadas
-                    {horariosExtra && (
-                        <div className="grid gap-2">
-                            {horariosExtra.map((extra) => {
-                                return (
-                                    <span key={extra.id} className='text-teal-400'>
-                                        Tienes {extra.extra} extra, el dia: {format(extra.fecha, 'dd/MM/yyyy')}
-                                    </span>
-                                );
-                            })}
-                        </div>
-                    )}
-                    */}
-
                     {horariosExtra && horariosExtra.length > 0 && (
                         <div className="grid gap-2">
-                            <label htmlFor="extraSeleccionada" className="font-semibold">Selecciona una hora extra disponible:</label>
+                            <label htmlFor="extraSeleccionada" className="font-semibold">
+                                Selecciona una hora extra disponible:
+                            </label>
                             <select
                                 name="extraSeleccionada"
                                 id="extraSeleccionada"
-                                className="border rounded px-3 py-2 text-black bg-white">
-
+                                className="border rounded px-3 py-2 text-black bg-white"
+                                value={data.extraSeleccionada}
+                                onChange={(e) => setData('extraSeleccionada', e.target.value)}
+                            >
                                 <option value="">-- Selecciona una opción --</option>
                                 {horariosExtra.map((extra) => (
                                     <option key={extra.id} value={extra.extra}>
@@ -132,7 +113,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                                     </option>
                                 ))}
                             </select>
-
+                            <InputError message={errors.extraSeleccionada} />
                         </div>
                     )}
 
@@ -143,8 +124,8 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                                 name="tiempoDescontar"
                                 id="tiempoDescontar"
                                 className="border rounded px-3 py-2 text-black bg-white"
-                            //value={data.tiempoDescontar}
-                            //onChange={(e) => setData('tiempoDescontar', e.target.value)}
+                                value={data.tiempoDescontar}
+                                onChange={(e) => setData('tiempoDescontar', e.target.value)}
                             >
                                 <option value="">-- Selecciona un tiempo --</option>
                                 <option value="30">30 minutos</option>
@@ -153,6 +134,9 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                             <InputError message={errors.tiempoDescontar} />
                         </div>
                     )}
+
+
+
 
 
 
@@ -186,6 +170,6 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                     </DialogFooter>
                 </form>
             </DialogContent>
-        </Dialog >
+        </Dialog>
     );
 }

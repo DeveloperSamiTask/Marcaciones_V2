@@ -50,7 +50,7 @@ const formatMinutes = (minutes: number | false): string => {
 const estadoHorasExtra = {
     0: { label: 'Horas extra no aprobado', icon: <CircleAlert className='w-4 text-yellow-600' /> },
     1: { label: 'Horas extra aprobadas', icon: <CheckCheck className='w-4 text-green-600' /> },
-    2: { label: 'Horas extra pendiente de aprobación', icon: <ClockAlert className='w-4 text-yellow-600' /> },
+    2: { label: 'Horas extra pendiente de aprobaciÃ³n', icon: <ClockAlert className='w-4 text-yellow-600' /> },
 } as const;
 
 export const columns: ColumnDef<Marcacion>[] = [
@@ -175,9 +175,6 @@ export const columns: ColumnDef<Marcacion>[] = [
         cell: ({ row }) => <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.ingreso?.substring(0, 5) || '-'}</span>,
     },
     {
-        /*
-            te muestra la salida del empleado , si no la tiene te permite crear otra o editar la que existe
-        */
         accessorKey: 'salida', // salida de la marcacion
         header: 'HS',
         cell: ({ row }) => {
@@ -202,8 +199,6 @@ export const columns: ColumnDef<Marcacion>[] = [
                     disabled={estado}
                     empleadoId={empleadoId}
                     fecha={fecha} tipo="salida"
-
-                    //lista de horas extras
                     horariosExtra={row.original.horariosExtra}
                 />
             );
@@ -288,10 +283,7 @@ export const columns: ColumnDef<Marcacion>[] = [
         header: 'EXTRA',
         cell: ({ row }) => {
             const extra = row.original.extra;
-            /*El row original reprensenta el contenido de una fila
-                El backend envia esto en forma de objeto
-            */
-            const estadoExtra = row.original.marcacion?.estado_horas_extra as keyof typeof estadoHorasExtra; /*Obtiene el estado */
+            const estadoExtra = row.original.marcacion?.estado_horas_extra as keyof typeof estadoHorasExtra;
 
             return (
                 <span className={extra ? 'text-red-600 font-semibold flex gap-2' : 'text-green-600 font-semibold flex gap-2'}>
@@ -315,7 +307,7 @@ export const columns: ColumnDef<Marcacion>[] = [
         header: 'ANTICIPADO',
         cell: ({ row }) => {
             const anticipado = row.original.anticipado;
-            const value = Math.abs(anticipado); // 👈 fuerza valor positivo
+            const value = Math.abs(anticipado); // ðŸ‘ˆ fuerza valor positivo
 
             return (
                 <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
