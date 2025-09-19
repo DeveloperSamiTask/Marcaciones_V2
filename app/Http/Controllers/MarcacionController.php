@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\MarcacionExport;
 use App\Http\Requests\Marcacion\StoreMarcacionRequest;
 use App\Http\Requests\Marcacion\UpdateMarcacionRequest;
+use App\Models\Descuento_extra;
 use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Horario;
@@ -240,6 +241,9 @@ class MarcacionController extends Controller
 
     public function update(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
+
+
+
         $data = $request->validated();
         try {
             DB::transaction(function () use ($data, $marcacione) {
@@ -289,90 +293,63 @@ class MarcacionController extends Controller
         }
     }
 
-    public function update_Respaldo(UpdateMarcacionRequest $request, Marcacion $marcacione)
+    public function update_Prueba(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
+
+
+
         $data = $request->validated();
         try {
-            DB::transaction(function () use ($data, $marcacione) {
 
-                /*Agregar campos a la migracion , para registrar antes y despues del edit */
-                MarcacionEdicion::create([ // editar -->
+            DB::transaction(function () use ($data, $marcacione) {
+                Descuento_extra::create([
                     'empleado_id' => $marcacione->empleado_id,
                     'user_id' => Auth::user()->id,
-                    'fecha' => $marcacione->fecha,
-                    'hora_original' => $marcacione->{$data['tipo']},
-                    'hora' => $data['hora'],
+                    'marcacion_id' => $marcacione->id,
+                    'tipo' => $marcacione->{$data['tipo']},
+                    'hora_original' => $data['hora'],
                     'motivo' => $data['motivo'],
+                    'total_horas_descontadas' => $data['descuento'],
                 ]);
-                /*
-                Agarrar el rango de descuento del front y las horas extras a restar pero de dependiendo del rango
-                */
-                $marcacione->update([$data['tipo'] => $data['hora']]);
-
-                // horarios que coincidan con el empleado y si tiene extras
-                $horarios = Horario::where('empleado_id', $marcacione->empleado_id)->whereNotNull('extra')->get();
-
-                if ($horarios->count() > 0) {
-
-                    $rangoDescuento = $data['descuento'] ?? 0;
-                    $horasRestar = $data['extraSeleccionada'] ?? 0;
-
-                    // obtener el horario ESPECIFICO del empleado en la fecha de la marcación que estás EDITANDO
-                    $horarioExtra = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacione->empleado_id)->first();
-
-                    // Minutos de + o - respecto al horario original
-                    $marcacionExtra = $horarioExtra->salida->diffInMinutes($marcacione->salida);
-
-                    foreach ($horarios as $horario) {
-                        if ($horario->extra) {
-
-                            /*Validar :
-                                  - 1. que el tiempo a descontar no exceda las horas extras que estoy seleccionando
-                                  - 2. Restamos las horas extras menos el descuento
-                                  - 3. Supongo que se usa el descuento para afectaar al tiempo que el usuario se paso en la marcacion
-                                  - 4.
-                        */
-
-
-                        }
-                    }
-
-                }
-
-                if ($horarios->count() > 0) { // validar si hay horas extra registradas
-                    $horarioExtra = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacione->empleado_id)->first();
-                    // Minutos de + o - respecto al horario original
-                    $marcacionExtra = $horarioExtra->salida->diffInMinutes($marcacione->salida);
-                    // resta los minutos extras de todos los horarios de lo que me salio antes
-                    foreach ($horarios as $horario) {
-                        // Verificar si tenemos suficiente  tiempo en el registro actual para restar
-                        if ($horario->extra) {
-                            $extraTime = $horario->extra;
-                            // convertir la columna extra a minutos
-                            if (Carbon::today()->diffInMinutes($horario->extra) > $marcacionExtra) {
-                                // Al total de horas extras le resto los minutos que se adelantó en la salida
-
-                                $horario->extra = $extraTime->subMinutes($marcacionExtra);
-                                $horario->save();
-                                break; // Ya no necesitamos seguir iterando, porque hemos restado todo
-                            } else {
-
-                                // Detecta que el tiempo extra disponible es menor que lo que necesitas descontar
-                                $marcacionExtra -= Carbon::today()->diffInMinutes($horario->extra); // Restamos lo que queda
-                                $horario->extra = null; // Ponemos 'extra' en null
-                                $horario->save();
-                            }
-                        }
-                    }
-
-                    if ($marcacionExtra > 0 && $horario->extra) {
-                        $ultimoHorario = $horarios->last();
-                        $ultimoHorario->extra = $extraTime->subMinutes($marcacionExtra); // Restamos lo que queda, asegurándonos de no pasar de cero
-                        $ultimoHorario->save();
-                    }
-                }
-
             });
+
+            $extraId = $data['extraSeleccionada'];
+
+            $horario = Horario::find($extraId);
+
+            $rangoExtras = $horario->extra ?? 0;
+
+            // validamos que no exceda el rango de horas extras disponibles
+            if ($rangoExtras < $data['descuento']) {
+                throw new Exception('El descuento no puede ser mayor al rango de horas extras disponibles.');
+            } else {
+                // horario a editar
+                $horarioEditar = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacionesEdit->empleado_id)->first();
+
+                // conseguir minutos de + o -
+                $salida = $horarioEditar->salida->diffInMinutes($marcacione->salida);
+
+                // Si minutos extras es mayor al tiempo que se adelanto a la salida
+                if ($rangoExtras > $salida) {
+
+                    $extraSobrante = $rangoExtras - $salida;
+
+                    $horario->extra = $extraSobrante;
+
+                    $horario->save();
+
+                    // Si minutos extras son menores al tiempo que se adelanto a la salida se consume todo
+                } else {
+                    $salida = $salida - $rangoExtras;
+
+                    $horario->extra = null;
+
+                    $horario->save();
+
+                }
+
+            }
+
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
         }

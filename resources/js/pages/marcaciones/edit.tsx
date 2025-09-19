@@ -104,11 +104,17 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                                 id="extraSeleccionada"
                                 className="border rounded px-3 py-2 text-black bg-white"
                                 value={data.extraSeleccionada}
-                                onChange={(e) => setData('extraSeleccionada', e.target.value)}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    console.log("Extra seleccionada (entero):", value);
+                                    setData('extraSeleccionada', value);
+                                }}
+
+
                             >
                                 <option value="">-- Selecciona una opción --</option>
                                 {horariosExtra.map((extra) => (
-                                    <option key={extra.id} value={extra.extra}>
+                                    <option key={extra.id} value={extra.id}>
                                         {extra.extra} minutos (día {format(extra.fecha, 'dd/MM/yyyy')})
                                     </option>
                                 ))}

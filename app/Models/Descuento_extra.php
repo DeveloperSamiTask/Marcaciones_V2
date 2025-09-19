@@ -18,10 +18,11 @@ class Descuento_extra extends Model
 
     */
     protected $fillable = [
-        'permiso_id',
+        'empleado_id',
         'marcacion_id',
         'user_id',
-
+        'tipo',
+        'hora_modificada',
         'total_horas_descontadas',
         'motivo',
     ];
@@ -40,8 +41,4 @@ class Descuento_extra extends Model
     {
         return $this->belongsTo(User::class);
     }
-
-
-
-
 }
