@@ -22,9 +22,12 @@ class UpdateMarcacionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'hora'   => 'nullable',
-            'motivo'     => 'required|string|max:255',
+            'hora' => 'nullable',
+            'motivo' => 'required|string|max:255',
             'tipo' => ['nullable', 'in:ingreso,salida,ingreso_refri,salida_refri'],
+
+            'extraSeleccionada' => 'nullable|integer|min:1', // si envías el ID
+            'descuento' => ['nullable', 'regex:/^([01]\d|2[0-3]):(00|30)$/'],
         ];
     }
 }

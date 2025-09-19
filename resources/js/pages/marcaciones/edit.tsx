@@ -33,7 +33,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
 
     const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
-
+        console.log("Datos que se van a guardar:", data);
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
             onSuccess: () => {
@@ -117,27 +117,32 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                         </div>
                     )}
 
-                    {horariosExtra && horariosExtra.length > 0 && (
-                        <div className="grid gap-2 mt-4">
-                            <label htmlFor="tiempoDescontar" className="font-semibold">Tiempo a descontar:</label>
-                            <select
-                                name="tiempoDescontar"
-                                id="tiempoDescontar"
-                                className="border rounded px-3 py-2 text-black bg-white"
-                                value={data.tiempoDescontar}
-                                onChange={(e) => setData('tiempoDescontar', e.target.value)}
-                            >
-                                <option value="">-- Selecciona un tiempo --</option>
-                                <option value="30">30 minutos</option>
-                                <option value="40">40 minutos</option>
-                            </select>
-                            <InputError message={errors.tiempoDescontar} />
-                        </div>
-                    )}
 
+                    {horariosExtra && horariosExtra.length > 0 && (<div className="grid gap-2">
+                        <label htmlFor="descuento" className="font-semibold text-black">
+                            Tiempo a descontar (HH:mm):
+                        </label>
 
+                        <input
+                            type="time"
+                            name="descuento"
+                            id="descuento"
+                            className="border rounded px-3 py-2 text-black bg-white"
+                            value={data.descuento || ''}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                setData('descuento', value);
+                                console.log("Hora descuento seleccionada:", value);
+                            }}
+                            list="half-hours"       // ← vincula el datalist
+                            step="1800"             // 30 minutos (por si el navegador lo respeta)
+                            pattern="^([01]\d|2[0-3]):(00|30)$"  // solo 00 o 30
+                            inputMode="numeric"
+                            placeholder="01:30"
+                        />
 
-
+                        <InputError message={errors.descuento} />
+                    </div>)}
 
 
                     <div className="grid gap-2">
