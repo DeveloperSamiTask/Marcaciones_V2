@@ -35,6 +35,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
         setHoraOriginal(marcacionHora);
         setHoraActual(marcacionHora);
         setHoraDescontada("");
+        reset();
     }, [marcacionHora]);
 
     const updateMarcacion: FormEventHandler = (e) => {
@@ -87,11 +88,16 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
             .padStart(2, "0")}`;
     };
 
-
+    //
     const closeModal = () => {
         clearErrors();
         reset();
         setData('motivo', '');
+
+        setHoraOriginal(marcacionHora);
+        setHoraActual(marcacionHora);
+        setHoraDescontada("");
+
         setOpen(false);
     };
 
@@ -101,7 +107,6 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                 <Button variant="ghost" className="hover-ghost" size="sm" disabled={disabled}>
                     {marcacionHora}
                 </Button>
-
             </DialogTrigger>
             <DialogContent>
                 <DialogTitle>Editar marcacion</DialogTitle>
@@ -119,15 +124,24 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                             className="mt-1 block w-full"
                             tabIndex={1}
                             ref={horaInput}
+                            //mostrar desde 0 --> resetear
                             value={data.hora}
                             onChange={(e) => {
                                 const nuevaHora = e.target.value;
                                 setHoraActual(nuevaHora);
                                 setData("hora", nuevaHora);
-
                                 // calcular diferencia con la hora original
                                 const resultado = calcularDiferencia(horaOriginal, nuevaHora);
                                 setHoraDescontada(resultado);
+
+                                // guardar también la diferencia en el form
+                                setData("diferencia", resultado);
+
+                                // log para ver qué se está mandando
+                                console.log("Payload al backend:", {
+                                    ...data,
+                                    diferencia: resultado,
+                                });
                             }}
                         />
 
@@ -159,15 +173,8 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                                 name="extraSeleccionada"
                                 id="extraSeleccionada"
                                 className="border rounded px-3 py-2 text-black bg-white"
-                                value={data.extraSeleccionada}
-                                onChange={(e) => {
-                                    const value = e.target.value;
-                                    console.log("Extra seleccionada (entero):", value);
-                                    setData('extraSeleccionada', value);
-                                }}
+                                value={data.extraSeleccionada}>
 
-
-                            >
                                 <option value="">-- Selecciona una opción --</option>
                                 {horariosExtra.map((extra) => (
                                     <option key={extra.id} value={extra.id}>

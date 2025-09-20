@@ -14,14 +14,19 @@ return new class extends Migration
         Schema::create('descuento_extras', function (Blueprint $table) {
             // Relaciones
             $table->id();
-           // $table->foreignId('empleado_id')->constrained('empleados')->onDelete('cascade');
-            $table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
-            $table->foreignId('marcacion_id')->constrained('marcacions')->onDelete('cascade');
+
+            $table->foreignId('marcacion_id')->constrained('permisos')->onDelete('cascade');
+
+            //$table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
+
+            $table->foreignId('horario_id')->constrained('horarios')->onDelete('cascade');
+
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
 
-            // Datos del descuento
-            $table->integer('total_horas_descontadas'); // De 30 en 30
-            //$table->integer('total_horas_extras'); // en minutos
+            $table->time('hora_modificada');
+
+            $table->time('total_horas_descontadas');
+
             $table->string('motivo')->nullable();
 
             $table->timestamps();

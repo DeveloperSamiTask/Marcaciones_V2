@@ -23,12 +23,14 @@ class UpdateMarcacionRequest extends FormRequest
     {
         return [
             'hora' => 'nullable',
+
             'motivo' => 'required|string|max:255',
+
             'tipo' => ['nullable', 'in:ingreso,salida,ingreso_refri,salida_refri'],
 
-            'extraSeleccionada' => 'nullable|integer|min:1',
+           'diferencia' => 'nullable|date_format:H:i',
 
-            'descuento' => ['nullable', 'date_format:H:i'],
+
 
         ];
     }

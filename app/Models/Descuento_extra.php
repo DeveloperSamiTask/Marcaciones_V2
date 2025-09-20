@@ -7,20 +7,28 @@ use Illuminate\Database\Eloquent\Model;
 class Descuento_extra extends Model
 {
     /*
-            $table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
-            $table->foreignId('marcacion_id')->constrained('marcacions')->onDelete('cascade');
+            $table->foreignId('marcacion_id')->constrained('permisos')->onDelete('cascade');
+
+            //$table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
+
+            $table->foreignId('horario_id')->constrained('horarios')->onDelete('cascade');
+
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
 
-            // Datos del descuento
-            $table->integer('total_horas_descontadas'); // De 30 en 30
-            //$table->integer('total_horas_extras'); // en minutos
+            $table->time('hora_modificada');
+
+            $table->time('total_horas_descontadas');
+
             $table->string('motivo')->nullable();
+
 
     */
     protected $fillable = [
-        'empleado_id',
+        // horario
         'marcacion_id',
+        'horario_id',
         'user_id',
+
         'tipo',
         'hora_modificada',
         'total_horas_descontadas',
@@ -32,9 +40,9 @@ class Descuento_extra extends Model
         return $this->belongsTo(Permiso::class);
     }
 
-    public function marcacion()
+    public function horario()
     {
-        return $this->belongsTo(Marcacion::class);
+        return $this->belongsTo(Horario::class);
     }
 
     public function user()
