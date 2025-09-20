@@ -305,19 +305,12 @@ class MarcacionController extends Controller
     {
         $data = $request->validated();
 
-        // horario dond se paso
-        $horarioExtra = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacione->empleado_id)->first();
-
         try {
-
             /*
             $table->foreignId('marcacion_id')->constrained('permisos')->onDelete('cascade');
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             //$table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
-
             $table->foreignId('horario_id')->constrained('horarios')->onDelete('cascade');
-
-
 
             $table->time('hora_modificada');
 
@@ -325,15 +318,19 @@ class MarcacionController extends Controller
 
             $table->string('motivo')->nullable();
             */
-
             DB::transaction(function () use ($data, $marcacione) {
+
+                $horarioExtra = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacione->empleado_id)->first();
                 // Registrar la edición
                 Descuento_extra::create([
                     'marcacion_id' => $marcacione->id,
                     'user_id' => Auth::id(),
+                    'horario_id' => $horarioExtra->id,
+                    'hora_modificada' => $data['hora'],
+
                     'fecha' => $marcacione->fecha,
-                    'hora_original' => $marcacione->{$data['tipo']},
-                    'hora' => $data['hora'],
+                    'hora_modificada' => $marcacione->{$data['tipo']},
+                    'total_horas_descontadas' => $data['hora'],
                     'motivo' => $data['motivo'],
                 ]);
 

@@ -28,15 +28,16 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
     };
 
     useEffect(() => {
-        // cada vez que cambie la marcación (ej. al abrir modal con nueva data)
-        setData('hora', marcacionHora);
-
-        // reseteamos los estados locales
-        setHoraOriginal(marcacionHora);
-        setHoraActual(marcacionHora);
-        setHoraDescontada("");
-        reset();
-    }, [marcacionHora]);
+        if (!open) {
+            // cuando el modal se cierra, reseteamos todo
+            clearErrors();
+            reset(); // limpia el useForm
+            setData('motivo', '');
+            setHoraOriginal(marcacionHora);
+            setHoraActual(marcacionHora);
+            setHoraDescontada("");
+        }
+    }, [open]);
 
     const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
