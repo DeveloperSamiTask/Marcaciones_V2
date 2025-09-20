@@ -125,23 +125,29 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                             className="mt-1 block w-full"
                             tabIndex={1}
                             ref={horaInput}
-                            //mostrar desde 0 --> resetear
-                            value={data.hora}
+                            value={horaActual} // 👈 usamos horaActual, no data.hora
+                            // onChange solo actualiza el estado local para que el input sea editable
                             onChange={(e) => {
+                                setHoraActual(e.target.value);
+                            }}
+                            // onBlur: cuando el usuario termina de escribir
+                            onBlur={(e) => {
                                 const nuevaHora = e.target.value;
-                                setHoraActual(nuevaHora);
-                                setData("hora", nuevaHora);
-                                // calcular diferencia con la hora original
+
+                                // calcular diferencia con la original
                                 const resultado = calcularDiferencia(horaOriginal, nuevaHora);
                                 setHoraDescontada(resultado);
 
-                                // guardar también la diferencia en el form
-                                setData("diferencia", resultado);
+                                // guardar en el form lo que se va a mandar
+                                setData("hora_original", horaOriginal); // fija
+                                setData("hora_restada", nuevaHora);     // la nueva
 
-                                // log para ver qué se está mandando
+                                // log final
                                 console.log("Payload al backend:", {
-                                    ...data,
-                                    diferencia: resultado,
+                                    hora_original: horaOriginal,
+                                    hora_restada: nuevaHora,
+                                    motivo: data.motivo,
+                                    tipo: data.tipo,
                                 });
                             }}
                         />
