@@ -296,8 +296,6 @@ class MarcacionController extends Controller
     public function update_Prueba(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
 
-
-
         $data = $request->validated();
         try {
 
@@ -324,7 +322,7 @@ class MarcacionController extends Controller
                 throw new Exception('El descuento no puede ser mayor al rango de horas extras disponibles.');
             } else {
                 // horario a editar
-                $horarioEditar = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacionesEdit->empleado_id)->first();
+                $horarioEditar = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacione->empleado_id)->first();
 
                 // conseguir minutos de + o -
                 $salida = $horarioEditar->salida->diffInMinutes($marcacione->salida);

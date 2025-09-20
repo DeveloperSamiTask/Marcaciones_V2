@@ -28,7 +28,13 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
     };
 
     useEffect(() => {
+        // cada vez que cambie la marcación (ej. al abrir modal con nueva data)
         setData('hora', marcacionHora);
+
+        // reseteamos los estados locales
+        setHoraOriginal(marcacionHora);
+        setHoraActual(marcacionHora);
+        setHoraDescontada("");
     }, [marcacionHora]);
 
     const updateMarcacion: FormEventHandler = (e) => {
@@ -55,6 +61,32 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
             onFinish: () => reset(),
         });
     };
+
+
+    const [horaOriginal, setHoraOriginal] = useState(data.hora);
+    const [horaActual, setHoraActual] = useState(data.hora);
+    const [horaDescontada, setHoraDescontada] = useState("");
+
+    // calcular diferencia en HH:mm siempre positiva
+    const calcularDiferencia = (base: string, nueva: string) => {
+        if (!base || !nueva) return "";
+
+        const [h1, m1] = base.split(":").map(Number);
+        const [h2, m2] = nueva.split(":").map(Number);
+
+        const minutosBase = h1 * 60 + m1;
+        const minutosNueva = h2 * 60 + m2;
+
+        const diff = Math.abs(minutosNueva - minutosBase); // siempre positivo
+
+        const horas = Math.floor(diff / 60);
+        const minutos = diff % 60;
+
+        return `${horas.toString().padStart(2, "0")}:${minutos
+            .toString()
+            .padStart(2, "0")}`;
+    };
+
 
     const closeModal = () => {
         clearErrors();
@@ -88,11 +120,35 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                             tabIndex={1}
                             ref={horaInput}
                             value={data.hora}
-                            onChange={(e) => setData('hora', e.target.value)}
+                            onChange={(e) => {
+                                const nuevaHora = e.target.value;
+                                setHoraActual(nuevaHora);
+                                setData("hora", nuevaHora);
+
+                                // calcular diferencia con la hora original
+                                const resultado = calcularDiferencia(horaOriginal, nuevaHora);
+                                setHoraDescontada(resultado);
+                            }}
                         />
 
                         <InputError message={errors.hora} />
                     </div>
+
+                    {horariosExtra && horariosExtra.length > 0 && horaDescontada && (
+                        <div className="grid gap-2 mt-2">
+                            <label htmlFor="horaDescontada" className="font-semibold">
+                                Diferencia de horas
+                            </label>
+                            <Input
+                                id="horaDescontada"
+                                type="text"
+                                value={horaDescontada}
+                                readOnly
+                                className="mt-1 block w-full"
+                            />
+                        </div>
+                    )}
+
 
                     {horariosExtra && horariosExtra.length > 0 && (
                         <div className="grid gap-2">
@@ -124,31 +180,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                     )}
 
 
-                    {horariosExtra && horariosExtra.length > 0 && (<div className="grid gap-2">
-                        <label htmlFor="descuento" className="font-semibold text-black">
-                            Tiempo a descontar (HH:mm):
-                        </label>
 
-                        <input
-                            type="time"
-                            name="descuento"
-                            id="descuento"
-                            className="border rounded px-3 py-2 text-black bg-white"
-                            value={data.descuento || ''}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                setData('descuento', value);
-                                console.log("Hora descuento seleccionada:", value);
-                            }}
-                            list="half-hours"       // ← vincula el datalist
-                            step="1800"             // 30 minutos (por si el navegador lo respeta)
-                            pattern="^([01]\d|2[0-3]):(00|30)$"  // solo 00 o 30
-                            inputMode="numeric"
-                            placeholder="01:30"
-                        />
-
-                        <InputError message={errors.descuento} />
-                    </div>)}
 
 
                     <div className="grid gap-2">
