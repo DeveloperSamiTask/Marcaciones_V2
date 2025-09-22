@@ -15,7 +15,7 @@ return new class extends Migration
             // Relaciones
             $table->id();
 
-            $table->foreignId('marcacion_id')->constrained('permisos')->onDelete('cascade');
+            $table->foreignId('marcacion_id')->constrained('marcacions')->onDelete('cascade');
 
             //$table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
 

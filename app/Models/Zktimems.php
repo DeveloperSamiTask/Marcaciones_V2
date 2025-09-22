@@ -7,9 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 
+/**- Representa la tabla de marcaciones del reloj biométrico (cada vez que alguien pasa su tarjeta).
+ * - Representa una tabla de OTRA BD
+ * - Lee las marcaciones para procesarlas en marcaciones
+ *
+*/
 class Zktimems extends Model
 {
+    /*tabla secundaria de otra bd -> database.php */
     protected $connection = 'zktimems';
+
+    /*Apunta a la tabla marcacion */
     protected $table = 'marcacion';
     protected $primaryKey = 'registro';
     public $keyType = 'string';
@@ -18,7 +26,7 @@ class Zktimems extends Model
     protected $fillable = [
         'registro',
         'reloj',
-        'tarjeta',
+        'tarjeta', // huella biometrica empleado
         'fecha',
         'tecla',
         'modom',

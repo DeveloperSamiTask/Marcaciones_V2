@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\MarcacionExport;
 use App\Http\Requests\Marcacion\StoreMarcacionRequest;
 use App\Http\Requests\Marcacion\UpdateMarcacionRequest;
+use App\Models\AsistenciaDetalle;
 use App\Models\Descuento_extra;
 use App\Models\Empleado;
 use App\Models\Empresa;
@@ -60,6 +61,12 @@ class MarcacionController extends Controller
             ->groupBy('empleado_id');
 
         $marcaciones = Marcacion::whereIn('empleado_id', $empleados->pluck('id'))
+            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->get()
+            ->groupBy('empleado_id');
+
+        //
+        $detalles = AsistenciaDetalle::whereIn('empleado_id', $empleados->pluck('id'))
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
             ->get()
             ->groupBy('empleado_id');
@@ -140,6 +147,7 @@ class MarcacionController extends Controller
         ]);
     }
 
+    /* Obtiene las marcaciones de esos empleados en el rango de fechas. */
     public function real(Request $request)// : Response
     {
         $filters = $request->validate([
@@ -239,7 +247,7 @@ class MarcacionController extends Controller
         }
     }
 
-    public function update(UpdateMarcacionRequest $request, Marcacion $marcacione)
+    public function update_Res(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
 
         $data = $request->validated();
@@ -301,7 +309,7 @@ class MarcacionController extends Controller
         }
     }
 
-    public function update_Prueba(UpdateMarcacionRequest $request, Marcacion $marcacione)
+    public function update(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
         $data = $request->validated();
 
@@ -320,20 +328,65 @@ class MarcacionController extends Controller
             */
             DB::transaction(function () use ($data, $marcacione) {
 
-                $horarioExtra = Horario::where('fecha', $marcacione->fecha)->where('empleado_id', $marcacione->empleado_id)->first();
-                // Registrar la edición
+                $horarioExtra = Horario::where('fecha', $marcacione->fecha)
+                    ->where('empleado_id', $marcacione->empleado_id)
+                    ->first();
+
+                // 1. Minutos a restar (vienen del front)
+                [$h, $m] = explode(':', $data['hora_restada']);
+                $minutosARestar = ($h * 60) + $m;
+
+                // 2. Total de minutos extra disponibles
+                $horarios = Horario::where('empleado_id', $marcacione->empleado_id)
+                    ->whereNotNull('extra')
+                    ->get();
+
+                $totalExtras = 0;
+                foreach ($horarios as $h) {
+                    $totalExtras += Carbon::today()->diffInMinutes($h->extra);
+                }
+
+                // 3. Validar
+                if ($minutosARestar > $totalExtras) {
+                    throw new \Exception('No hay suficientes horas extra para descontar.');
+                }
+
+                // 4. Descontar en cascada
+                $restante = $minutosARestar;
+                foreach ($horarios as $horario) {
+                    if ($horario->extra) {
+                        $extraDisponible = Carbon::today()->diffInMinutes($horario->extra);
+
+                        if ($extraDisponible >= $restante) {
+                            $horario->extra = $horario->extra->subMinutes($restante);
+                            $horario->save();
+                            $restante = 0;
+                            break;
+                        } else {
+                            $restante -= $extraDisponible;
+                            $horario->extra = null;
+                            $horario->save();
+                        }
+                    }
+                }
+
+                // 5. Ahora sí: calcular la nueva hora
+                $horaOriginal = Carbon::parse($marcacione->{$data['tipo']});
+                $nuevaHora = $horaOriginal->copy()->subMinutes($minutosARestar);
+
+                // 6. Registrar la edición
                 Descuento_extra::create([
                     'marcacion_id' => $marcacione->id,
                     'user_id' => Auth::id(),
                     'horario_id' => $horarioExtra->id,
-                    'hora_modificada' => $data['hora'],
-
+                    'hora_modificada' => $data['hora_original'], // 👈 ahora sí la hora real
                     'fecha' => $marcacione->fecha,
-                    'hora_modificada' => $marcacione->{$data['tipo']},
-                    'total_horas_descontadas' => $data['hora'],
+                    'total_horas_descontadas' => $data['hora_restada'],
                     'motivo' => $data['motivo'],
                 ]);
 
+                // 7. Actualizar la marcación
+                $marcacione->update([$data['tipo'] => $nuevaHora->format('H:i')]);
             });
 
             return redirect()->back()->with('success', 'Marcación actualizada correctamente.');
@@ -386,32 +439,63 @@ class MarcacionController extends Controller
         }
     }
 
+    /*jala las marcas del reloj desde una fecha dada , identifica HI, HS , HRF
+     y las convierte en registros oficiales de asistencia en la tabla marcaciones*/
+
     public function pull(Request $request)
     {
+        // 1. Valida que venga una empresa válida y una fecha válida
         $data = $request->validate([
             'empresa' => 'required|integer|exists:empresas,id',
             'fecha' => 'required|date',
         ]);
 
         try {
+            // 2. Todo lo que se hace aquí dentro va en una transacción (si algo falla, se revierte)
             DB::transaction(function () use ($data) {
-                $dnis = Empleado::where('empresa_id', $data['empresa'])->whereNull('fecha_cese')->pluck('id', 'dni');
+
+                // 3. Obtiene todos los empleados activos de esa empresa (dni => id)
+                $dnis = Empleado::where('empresa_id', $data['empresa'])
+                    ->whereNull('fecha_cese')
+                    ->pluck('id', 'dni');
+
+                // 4. Busca en la tabla de marcaciones crudas (Zktimems)
+                //    todas las marcas desde la fecha indicada hasta hoy,
+                //    solo de esos empleados
                 Zktimems::whereBetween('fecha', [$data['fecha'], now()->toDateString()])
                     ->whereIn('tarjeta', $dnis->keys())
                     ->get(['tarjeta', 'fecha', 'hora'])
+
+                    // 5. Agrupa las marcas por empleado y fecha
                     ->groupBy(fn ($item) => $item->fecha->format('Y-m-d').'-'.$item->tarjeta)
+
+                    // 6. Recorre cada grupo (cada empleado en cada día)
                     ->each(function ($items) use ($dnis) {
+
+                        // 7. Toma el primer registro del grupo (para sacar fecha y tarjeta)
                         $item = $items->first();
+
+                        // 8. Saca todas las horas de ese día, las ordena y elimina duplicados
                         $horas = $items->pluck('hora')->filter()->unique()->sort()->values();
+
+                        // 9. Si hay más de 4 marcas, aplica una validación especial
                         if ($horas->count() > 4) {
                             $horas = Marcacion::validarHora($horas);
                         }
+
+                        // 10. Asigna las horas según la posición:
+                        //     primera = ingreso, última = salida, etc.
                         $ingreso = $horas->count() > 0 ? $horas->get(0) : null;
                         $salida = $horas->count() >= 2 ? $horas->last() : null;
                         $ingreso_refri = $horas->count() >= 3 ? $horas->get(1) : null;
                         $salida_refri = $horas->count() == 4 ? $horas->get(2) : null;
-                        $marcacion = Marcacion::where('empleado_id', $dnis->get($item->tarjeta))->whereDate('fecha', $item->fecha)->first();
 
+                        // 11. Busca si ya existe un registro de marcación en tu tabla principal
+                        $marcacion = Marcacion::where('empleado_id', $dnis->get($item->tarjeta))
+                            ->whereDate('fecha', $item->fecha)
+                            ->first();
+
+                        // 12. Si no existe, lo crea
                         if (! $marcacion) {
                             $marcacion = Marcacion::create([
                                 'empleado_id' => $dnis->get($item->tarjeta),
@@ -419,6 +503,8 @@ class MarcacionController extends Controller
                             ]);
                         }
 
+                        // 13. Si el registro está en estado "editable" (estado = 0),
+                        //     actualiza los campos con las horas calculadas
                         if ($marcacion->estado == 0) {
                             $marcacion->update([
                                 'ingreso' => $ingreso ?? $marcacion->ingreso,
@@ -430,7 +516,28 @@ class MarcacionController extends Controller
                     });
             });
         } catch (Exception $e) {
+            // 14. Si algo falla, vuelve atrás y devuelve un error
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
+
+            /*
+            Paso a paso, pero resumido
+
+            Valida que se envíe una empresa y una fecha correctas.
+
+            Busca empleados activos de esa empresa.
+
+            Lee las marcas crudas del reloj (Zktimems) desde la fecha indicada hasta hoy.
+
+            Agrupa las marcas por empleado y día.
+
+            Ordena las horas y decide: primera = ingreso, última = salida, intermedias = refrigerio.
+
+            Busca o crea un registro en tu tabla marcaciones para ese empleado y fecha.
+
+            Si está editable, actualiza ese registro con las horas calculadas.
+
+            Si algo falla, revierte todo y devuelve error.
+            */
         }
     }
 
@@ -445,5 +552,17 @@ class MarcacionController extends Controller
         ]);
 
         return Excel::download(new MarcacionExport($data), 'marcaciones.xlsx');
+
+    }
+
+    public function download_API(Request $request)
+    {
+        try {
+            $data = $request->validate(['marcaciones' => 'required|array', 'empresa' => 'required|integer|exists:empresas,id', 'encargado' => 'nullable|integer|exists:empleados,id', 'fechaInicio' => 'required|date', 'fechaFin' => 'required|date|after_or_equal:fechaInicio']);
+
+            return Excel::download(new MarcacionExport($data), 'marcaciones.xlsx');
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage(), 'trace' => config('app.debug') ? $e->getTrace() : []], 500);
+        }
     }
 }

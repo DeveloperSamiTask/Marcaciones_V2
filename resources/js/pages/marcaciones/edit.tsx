@@ -119,9 +119,9 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
 
                     <div className="grid gap-2">
                         <Input
-                            id="hora"
+                            id="hora_original"
                             type="time"
-                            name="hora"
+                            name="hora_original"
                             className="mt-1 block w-full"
                             tabIndex={1}
                             ref={horaInput}

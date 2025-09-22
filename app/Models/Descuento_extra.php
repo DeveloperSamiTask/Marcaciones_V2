@@ -35,9 +35,9 @@ class Descuento_extra extends Model
         'motivo',
     ];
 
-    public function permiso()
+    public function marcacion()
     {
-        return $this->belongsTo(Permiso::class);
+        return $this->belongsTo(Marcacion::class);
     }
 
     public function horario()
