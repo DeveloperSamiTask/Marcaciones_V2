@@ -18,13 +18,16 @@ use App\Models\Suspension;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReporteController extends Controller
 {
+    //
+
+
+
     public function tareoIndex(Request $request): Response
     {
         $filters = $request->validate([
@@ -43,7 +46,7 @@ class ReporteController extends Controller
         // $feriadoIds = Feriado::whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])->pluck('id');
 
         $empleados = Empleado::query()
-            ->when($request->user()->rol_id == 4, fn($q) => $q->where('jefe_id', $request->user()->empleado_id))
+            ->when($request->user()->rol_id == 4, fn ($q) => $q->where('jefe_id', $request->user()->empleado_id))
             ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'horas', 'jornada_id', 'empresa_id', 'fecha_ingreso')
             ->with(['area:id,nombre', 'horarios' => function ($q) use ($request) {
                 $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
@@ -51,7 +54,7 @@ class ReporteController extends Controller
                 $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
             }])
             ->where('empresa_id', $request->empresa)
-            ->when($request->area, fn($query) => $query->where('area_id', $request->area))
+            ->when($request->area, fn ($query) => $query->where('area_id', $request->area))
             ->where('jornada_id', $request->jornada)
             ->when($request->fechaFin, function ($query) use ($request) {
                 $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
@@ -72,16 +75,16 @@ class ReporteController extends Controller
                 $fechasHorarios = $horarios->pluck('fecha');
 
                 return Feriado::whereIn('fecha', $fechasHorarios)
-                    ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $empleadoId))
+                    ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleadoId))
                     ->count();
-        });
+            });
 
         $lista = $empleados->map(function ($empleado) use ($feriadosPendientes, $inicio, $fin) {
             $fechaCorte = $empleado->fecha_ingreso > $inicio ? $empleado->fecha_ingreso : $inicio;
             // $empleadoHorarios = $empleado->horarios ?? collect();
             // $empleadoMarcaciones = $empleado->marcaciones ?? collect();
-            $empleadoHorarios = $empleado->horarios->filter(fn($h) => $h->fecha >= $fechaCorte && $h->fecha <= $fin);
-            $empleadoMarcaciones = $empleado->marcaciones->filter(fn($m) => $m->fecha >= $fechaCorte && $m->fecha <= $fin);
+            $empleadoHorarios = $empleado->horarios->filter(fn ($h) => $h->fecha >= $fechaCorte && $h->fecha <= $fin);
+            $empleadoMarcaciones = $empleado->marcaciones->filter(fn ($m) => $m->fecha >= $fechaCorte && $m->fecha <= $fin);
             $estadosCount = $empleadoHorarios->countBy('estado');
             $dias = $fechaCorte->diffInDays($fin) + 1;
 
@@ -97,24 +100,30 @@ class ReporteController extends Controller
             // hallar horas, tardanza, extra, ....
             $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$horasLaboradas, &$tardanza, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35) {
                 $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
-                $partTime = $empleado->jornada_id == 2 && !$marcacion->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
+                $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
+
+
+
 
                 if ($horario && $marcacion->ingreso && $marcacion->salida) {
-                    $horasTrabajadas = max(0, $horario->ingreso->diffInMinutes($empleado->jornada_id == 2 ? $horario->salida : $marcacion->salida, false));
+                    /* */ $horasTrabajadas = max(0, $horario->ingreso->diffInMinutes($empleado->jornada_id == 2 ? $horario->salida : $marcacion->salida, false));
+
+
+                    
                     $horasTardanza = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false)); // si es negativo devuelve 0
                     $horasExtras = $marcacion->estado_horas_extra == 1 ? $horario->salida->diffInMinutes($marcacion->salida, false) : 0;
                     $horasAnticipado = max(0, $marcacion->salida->diffInMinutes($horario->salida, false)); // hora antes de su salida programado considerar 20 min si es su salida programada 11 o 11:30
                     $descansoMedico = $horario->estado == 'M' && $empleado->jornada_id == 2 ? 240 : 0; // solo para part-time
 
                     $horas += ($horasTrabajadas - $horasTardanza - ($partTime ? 0 : 60) + $descansoMedico); // no se descuenta la hora de refrigerio si es parttime y si no tomo refrigerio
-                    $horasLaboradas += (max(0, $horario->ingreso->diffInMinutes($horario->salida, false)) - ($partTime ? 0 : 60)); // no se descuenta la hora de refrigerio si es parttime y si no tomo refrigerio
+                    /* */ $horasLaboradas += (max(0, $horario->ingreso->diffInMinutes($horario->salida, false)) - ($partTime ? 0 : 60));
                     $tardanza += $horasTardanza;
                     $extra += max(0, $horario->salida->diffInMinutes($marcacion->salida, false)); // tiempo despues de su hora de salida
 
-                    if((in_array($horario->salida->format('H:i'), ['23:00', '23:30' , '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)){ // solo para chacxra y granja
+                    if ((in_array($horario->salida->format('H:i'), ['23:00', '23:30', '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)) { // solo para chacxra y granja
                         $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20; // estos minutos son de tolerancia en salida anticipada, solo granja tiene hasta 30 minutos
                         $anticipado += $horasAnticipado >= $minutosTolerancia ? $horasAnticipado : 0;
-                    }else{
+                    } else {
                         $anticipado += $horasAnticipado;
                     }
 
@@ -145,24 +154,24 @@ class ReporteController extends Controller
                 'feriado_laboral' => $estadosCount->get('FL', 0), // VERIFICAR CON RRHH
                 'descanso_medico' => $estadosCount->get('M', 0),
                 'vacaciones' => $estadosCount->get('V', 0),
-                'compensa' => $compensas = $estadosCount->filter(fn($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum(),
+                'compensa' => $compensas = $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum(),
                 'licencia_con_goce' => $estadosCount->get('LCG', 0),
                 'licencia_sin_goce' => $estadosCount->get('LSG', 0),
                 'licencia_paternidad' => $estadosCount->get('LP', 0),
                 'licencia_maternidad' => $estadosCount->get('LM', 0),
                 'licencia_fallecimiento' => $estadosCount->get('LF', 0),
-				'sin_programacion' => $estadosCount->get('SP', 0),
-                'suspension' => $estadosCount->filter(fn($count, $estado) => in_array($estado, ['S', 'SN', 'ST', 'SFI']))->sum(),
+                'sin_programacion' => $estadosCount->get('SP', 0),
+                'suspension' => $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['S', 'SN', 'ST', 'SFI']))->sum(),
                 'asistencia' => $estadosCount->get('L', 0),
-                'total_pago' => $estadosCount->filter(fn($count, $estado) => in_array($estado, ['D', 'F', 'M', 'C', 'CA', 'CHE', 'LCG', 'LP', 'LM', 'LF', 'L']))->sum(),
+                'total_pago' => $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['D', 'F', 'M', 'C', 'CA', 'CHE', 'LCG', 'LP', 'LM', 'LF', 'L']))->sum(),
                 'total_100' => $empleadoHorarios->count(),
                 // 'total_dias_trabajados' => 30 - $compensas - $estadosCount->filter(fn($count, $estado) => in_array($estado, ['M', 'FI', 'FJ', 'LCG', 'LSG', 'V', 'S']))->sum(),
                 'total_dias_trabajados' => $empleadoHorarios->count(),
-                'descuento' => $estadosCount->filter(fn($count, $estado) => in_array($estado, ['FI', 'FJ', 'LSG', 'S']))->sum(),
+                'descuento' => $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['FI', 'FJ', 'LSG', 'S']))->sum(),
                 'tardanza' => $tardanza,
                 'horas' => $horas,
                 'horasLaboradas' => $horasLaboradas,
-                'horasExcedente' => $empleado->jornada_id == 2  ? ($dias == 7 ? $horas - 1410 : $horas - 5580) : ($dias == 7 ? $horas - 2880 : $horas - 14400),
+                'horasExcedente' => $empleado->jornada_id == 2 ? ($dias == 7 ? $horas - 1410 : $horas - 5580) : ($dias == 7 ? $horas - 2880 : $horas - 14400),
                 'extra_25' => $extra_25,
                 'extra_35' => $extra_35,
                 'anticipado' => $anticipado,
@@ -222,7 +231,7 @@ class ReporteController extends Controller
 
         $lista = Suspension::whereHas('empleado', function ($query) use ($request) {
             $query->where('empresa_id', $request->empresa)
-                ->when($request->area, fn($q) => $q->where('area_id', $request->area))
+                ->when($request->area, fn ($q) => $q->where('area_id', $request->area))
                 ->whereNull('fecha_cese');
         })
             ->with('empleado.area')
@@ -234,6 +243,7 @@ class ReporteController extends Controller
                 if (str_starts_with($item->codigo, 'S')) {
                     return 'suspensiones';
                 }
+
                 return match (strtoupper($item->tipo)) {
                     'TARDANZA' => 'tardanzas',
                     'INCOMPLETO' => 'incompleto',
@@ -270,7 +280,7 @@ class ReporteController extends Controller
         return Excel::download(new AmonestacionExport($data), 'amonestaciones.xlsx');
     }
 
-    public function compensaIndex(Request $request) //: Response
+    public function compensaIndex(Request $request) // : Response
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -280,10 +290,10 @@ class ReporteController extends Controller
         ]);
 
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', 1)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', 1)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
         $empleadoIds = Empleado::where('empresa_id', $request->empresa)
-            ->when($request->encargado, fn($q) => $q->where('jefe_id', $request->encargado))
+            ->when($request->encargado, fn ($q) => $q->where('jefe_id', $request->encargado))
             ->whereNull('fecha_cese')
             ->pluck('id')
             ->unique();
@@ -294,19 +304,19 @@ class ReporteController extends Controller
             ->whereDate('fecha', '<=', now())
             ->get()
             ->groupBy('empleado_id')
-            ->map(function ($horarios){
+            ->map(function ($horarios) {
                 $empleado = $horarios->first()->empleado;
                 $fechasHorarios = $horarios->pluck('fecha');
 
                 $feriados = Feriado::whereIn('fecha', $fechasHorarios)
-                    ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $empleado->id))
+                    ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleado->id))
                     ->select(['id', 'fecha', 'nombre'])
                     ->get();
 
                 if ($feriados->isNotEmpty()) {
                     return [
                         'id' => $empleado->id,
-                        'empleado' => $empleado->apellidos. ' ' .$empleado->nombres,
+                        'empleado' => $empleado->apellidos.' '.$empleado->nombres,
                         'dni' => $empleado->dni,
                         'fecha_ingreso' => $empleado->fecha_ingreso->format('d/m/Y'),
                         'area' => $empleado->area->nombre,
@@ -364,7 +374,7 @@ class ReporteController extends Controller
         return Excel::download(new CompensaExport($data, $tipo), 'compensas.xlsx');
     }
 
-    public function extraIndex(Request $request)//: Response
+    public function extraIndex(Request $request)// : Response
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -374,9 +384,9 @@ class ReporteController extends Controller
         ]);
 
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', 1)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', 1)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
         $empleados = Empleado::query()
-            ->when($request->user()->rol_id == 4, fn($q) => $q->where('jefe_id', $request->user()->empleado_id))
+            ->when($request->user()->rol_id == 4, fn ($q) => $q->where('jefe_id', $request->user()->empleado_id))
             ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id', 'fecha_ingreso')
             ->with(['area:id,nombre', 'jornada:id,nombre', 'horarios' => function ($q) use ($request) {
                 $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
@@ -397,7 +407,7 @@ class ReporteController extends Controller
         $revision = collect();
         $aprobados = collect();
 
-        $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados){
+        $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
             $empleadoMarcaciones = $empleado->marcaciones ?? collect();
             $horas = 0;
             $extra = 0;
@@ -406,7 +416,7 @@ class ReporteController extends Controller
             // hallar horas, tardanza, extra, ....
             $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$extra, &$estados_extras) {
                 $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
-                $partTime = $empleado->jornada_id == 2 && !$marcacion->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
+                $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
 
                 if ($horario && $marcacion->ingreso && $marcacion->salida) {
                     // $horasTrabajadas = max(0, $horario->ingreso->diffInMinutes($empleado->jornada_id == 2 ? $horario->salida : $marcacion->salida, false));
@@ -420,7 +430,7 @@ class ReporteController extends Controller
             });
 
             $estadoFinal = null;
-            if (!empty($estados_extras)) {
+            if (! empty($estados_extras)) {
                 if (in_array(0, $estados_extras)) {
                     $estadoFinal = 'pendientes';
                 } elseif (in_array(2, $estados_extras)) {
@@ -435,7 +445,7 @@ class ReporteController extends Controller
                     'empleado' => $empleado,
                     'horas' => 0,
                     'extra' => $extra,
-                    'estado' => $estadoFinal
+                    'estado' => $estadoFinal,
                 ];
 
                 // Clasificar según el estado
@@ -474,5 +484,4 @@ class ReporteController extends Controller
 
         return Excel::download(new HorasExtraExport($data), 'reporte_horas_extra.xlsx');
     }
-
 }

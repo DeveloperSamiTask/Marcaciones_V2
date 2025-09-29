@@ -67,6 +67,7 @@ class HorarioController extends Controller
         ]);
     }
 
+    /*Crea horarios para un empleado en un rango de fechas.*/
     public function store(StoreHorarioRequest $request)
     {
         $data = $request->validated();

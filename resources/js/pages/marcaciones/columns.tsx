@@ -38,6 +38,9 @@ const estadoBadgeVariants = {
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
 } as const;
 
+
+
+
 const formatMinutes = (minutes: number | false): string => {
     if (typeof minutes !== 'number') return '-';
 
@@ -154,18 +157,29 @@ export const columns: ColumnDef<Marcacion>[] = [
             const marcacionHora = row.original.marcacion?.ingreso ? row.original.marcacion?.ingreso?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
+
+            // VERIFICACIÓN SIMPLE: si horarios.validado === 0, edición ABSOLUTA
+            const horariosValidado = row.original.horario?.validado ?? 1;
+            const esEdicionAbsoluta = horariosValidado === 0;
+
+            const estaRechazado = row.original.marcacion?.estado === 2;
+            const estado = row.original.marcacion ?
+                (estaRechazado ? false : row.original.marcacion?.estado != 0) :
+                fecha < format(new Date(), 'yyyy-MM-dd');
+
+            // Si es edición absoluta, ignorar todas las validaciones
+            const disabled = esEdicionAbsoluta ? false : estado;
 
             return row.original.marcacion?.ingreso ? (
                 <EditMarcacion
                     key={`marcacion-ingreso-${marcacionId}`}
-                    disabled={estado}
+                    disabled={disabled}
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
                     tipo="ingreso"
                 />
             ) : (
-                <CreateMarcacion key={`marcacion-ingreso-${fecha}-${empleadoId}`} disabled={estado} empleadoId={empleadoId} fecha={fecha} tipo="ingreso" />
+                <CreateMarcacion key={`marcacion-ingreso-${fecha}-${empleadoId}`} disabled={disabled} empleadoId={empleadoId} fecha={fecha} tipo="ingreso" />
             );
         },
     },
@@ -178,29 +192,34 @@ export const columns: ColumnDef<Marcacion>[] = [
         accessorKey: 'salida', // salida de la marcacion
         header: 'HS',
         cell: ({ row }) => {
+            const horario = row.original.horario ?? false;
             const marcacionId = row.original.marcacion?.id || 0;
-            const marcacionHora = row.original.marcacion?.salida ? row.original.marcacion?.salida?.substring(0, 5) : '';
+            const marcacionHora = row.original.marcacion?.ingreso ? row.original.marcacion?.ingreso?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
-            return row.original.marcacion?.salida ? (
+            // VERIFICACIÓN SIMPLE: si horarios.validado === 0, edición ABSOLUTA
+            const horariosValidado = row.original.horario?.validado ?? 1;
+            const esEdicionAbsoluta = horariosValidado === 0;
+
+            const estaRechazado = row.original.marcacion?.estado === 2;
+            const estado = row.original.marcacion ?
+                (estaRechazado ? false : row.original.marcacion?.estado != 0) :
+                fecha < format(new Date(), 'yyyy-MM-dd');
+
+            // Si es edición absoluta, ignorar todas las validaciones
+            const disabled = esEdicionAbsoluta ? false : estado;
+
+            return row.original.marcacion?.ingreso ? (
                 <EditMarcacion
-                    key={`marcacion-salida-${marcacionId}`}
-                    disabled={estado}
+                    key={`marcacion-ingreso-${marcacionId}`}
+                    disabled={disabled}
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
-                    tipo="salida"
-                    horariosExtra={row.original.horariosExtra}
+                    tipo="ingreso"
                 />
             ) : (
-                <CreateMarcacion
-                    key={`marcacion-salida-${fecha}-${empleadoId}`}
-                    disabled={estado}
-                    empleadoId={empleadoId}
-                    fecha={fecha} tipo="salida"
-                    horariosExtra={row.original.horariosExtra}
-                />
+                <CreateMarcacion key={`marcacion-ingreso-${fecha}-${empleadoId}`} disabled={disabled} empleadoId={empleadoId} fecha={fecha} tipo="ingreso" />
             );
         },
     },
@@ -213,28 +232,34 @@ export const columns: ColumnDef<Marcacion>[] = [
         accessorKey: 'ingreso_refri', // ingreso de refrigerio de la marcacion
         header: 'HIREF',
         cell: ({ row }) => {
+            const horario = row.original.horario ?? false;
             const marcacionId = row.original.marcacion?.id || 0;
-            const marcacionHora = row.original.marcacion?.ingreso_refri ? row.original.marcacion?.ingreso_refri?.substring(0, 5) : '';
+            const marcacionHora = row.original.marcacion?.ingreso ? row.original.marcacion?.ingreso?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
-            return row.original.marcacion?.ingreso_refri ? (
+            // VERIFICACIÓN SIMPLE: si horarios.validado === 0, edición ABSOLUTA
+            const horariosValidado = row.original.horario?.validado ?? 1;
+            const esEdicionAbsoluta = horariosValidado === 0;
+
+            const estaRechazado = row.original.marcacion?.estado === 2;
+            const estado = row.original.marcacion ?
+                (estaRechazado ? false : row.original.marcacion?.estado != 0) :
+                fecha < format(new Date(), 'yyyy-MM-dd');
+
+            // Si es edición absoluta, ignorar todas las validaciones
+            const disabled = esEdicionAbsoluta ? false : estado;
+
+            return row.original.marcacion?.ingreso ? (
                 <EditMarcacion
-                    key={`marcacion-ingreso_refri-${marcacionId}`}
-                    disabled={estado}
+                    key={`marcacion-ingreso-${marcacionId}`}
+                    disabled={disabled}
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
-                    tipo="ingreso_refri"
+                    tipo="ingreso"
                 />
             ) : (
-                <CreateMarcacion
-                    key={`marcacion-ingreso_refri-${fecha}-${empleadoId}`}
-                    disabled={estado}
-                    empleadoId={empleadoId}
-                    fecha={fecha}
-                    tipo="ingreso_refri"
-                />
+                <CreateMarcacion key={`marcacion-ingreso-${fecha}-${empleadoId}`} disabled={disabled} empleadoId={empleadoId} fecha={fecha} tipo="ingreso" />
             );
         },
     },
@@ -242,22 +267,34 @@ export const columns: ColumnDef<Marcacion>[] = [
         accessorKey: 'salida_refri', // salida de refrigerio de la marcacion
         header: 'HTREF',
         cell: ({ row }) => {
+            const horario = row.original.horario ?? false;
             const marcacionId = row.original.marcacion?.id || 0;
-            const marcacionHora = row.original.marcacion?.salida_refri ? row.original.marcacion?.salida_refri?.substring(0, 5) : '';
+            const marcacionHora = row.original.marcacion?.ingreso ? row.original.marcacion?.ingreso?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
-            return row.original.marcacion?.salida_refri ? (
+            // VERIFICACIÓN SIMPLE: si horarios.validado === 0, edición ABSOLUTA
+            const horariosValidado = row.original.horario?.validado ?? 1;
+            const esEdicionAbsoluta = horariosValidado === 0;
+
+            const estaRechazado = row.original.marcacion?.estado === 2;
+            const estado = row.original.marcacion ?
+                (estaRechazado ? false : row.original.marcacion?.estado != 0) :
+                fecha < format(new Date(), 'yyyy-MM-dd');
+
+            // Si es edición absoluta, ignorar todas las validaciones
+            const disabled = esEdicionAbsoluta ? false : estado;
+
+            return row.original.marcacion?.ingreso ? (
                 <EditMarcacion
-                    key={`marcacion-salida_refri-${marcacionId}`}
-                    disabled={estado}
+                    key={`marcacion-ingreso-${marcacionId}`}
+                    disabled={disabled}
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
-                    tipo="salida_refri"
+                    tipo="ingreso"
                 />
             ) : (
-                <CreateMarcacion key={`marcacion-salida_refri-${fecha}-${empleadoId}`} disabled={estado} empleadoId={empleadoId} fecha={fecha} tipo="salida_refri" />
+                <CreateMarcacion key={`marcacion-ingreso-${fecha}-${empleadoId}`} disabled={disabled} empleadoId={empleadoId} fecha={fecha} tipo="ingreso" />
             );
         },
     },
@@ -271,11 +308,23 @@ export const columns: ColumnDef<Marcacion>[] = [
         }
     },
     {
-        accessorKey: 'tardanza', // tardanza
-        header: 'TARDANZA',
-        cell: ({ row }) => {
-            const tardanza = row.original.tardanza;
-            return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
+        accessorKey: 'horas',
+        header: 'TOTAL',
+        cell: ({ row, table }) => {
+            const horas = row.original.horas;
+            const horario = row.original.horario?.estado;
+
+            // Calcular total (esto se ejecutará por cada fila)
+            const totalHoras = table.getRowModel().rows.reduce((sum, row) => {
+                return sum + (row.original.horas || 0);
+            }, 0);
+
+            console.log('Total horas:', totalHoras, 'minutos |', formatMinutes(totalHoras));
+
+            return (
+                <span className={horas < 480 && horario == 'L' ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                    {horas ? formatMinutes(horas) : '00:00'}
+                </span>)
         }
     },
     {

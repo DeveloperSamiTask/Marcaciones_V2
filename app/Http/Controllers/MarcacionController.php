@@ -26,6 +26,8 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class MarcacionController extends Controller
 {
+    /*Asistencia general */
+    //marcacion
     public function index(Request $request)// : Response
     {
         $filters = $request->validate([
@@ -55,21 +57,18 @@ class MarcacionController extends Controller
             ->get()
             ->groupBy('empleado_id');
 
+            //horario
         $horariosExtra = Horario::whereIn('empleado_id', $empleados->pluck('id'))
             ->whereNotNull('extra')
             ->get()
             ->groupBy('empleado_id');
 
+        // de aqui sale la hora de salida
         $marcaciones = Marcacion::whereIn('empleado_id', $empleados->pluck('id'))
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
             ->get()
             ->groupBy('empleado_id');
 
-        //
-        $detalles = AsistenciaDetalle::whereIn('empleado_id', $empleados->pluck('id'))
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->get()
-            ->groupBy('empleado_id');
 
         $lista = $empleados->flatMap(function ($empleado) use ($horarios, $horariosExtra, $marcaciones, $request) {
             $fechas = CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
@@ -113,7 +112,7 @@ class MarcacionController extends Controller
                         }*/
                     }
 
-                    // 4. Total de horas (restando tardanza y refrigerio si aplica)
+                    // 4.Total de horas (restando tardanza y refrigerio si aplica)
                     $horas = $horasTrabajadas - $tardanza - ($partTime ? 0 : 60);
 
                     // 5. Nocturno (después de las 22:00)
@@ -147,7 +146,7 @@ class MarcacionController extends Controller
         ]);
     }
 
-    /* Obtiene las marcaciones de esos empleados en el rango de fechas. */
+    /* Obtiene las MARCACIONES REALES de esos empleados en el rango de fechas. */
     public function real(Request $request)// : Response
     {
         $filters = $request->validate([
@@ -169,6 +168,7 @@ class MarcacionController extends Controller
             ->whereNull('fecha_cese')
             ->pluck('dni');
 
+            /*jala la hora de la otra bd de la marcacion real */
         $marcaciones = Zktimems::query()
             ->with(['empleado' => function ($query) {
                 $query->select('id', 'dni', 'nombres', 'apellidos');
@@ -247,7 +247,7 @@ class MarcacionController extends Controller
         }
     }
 
-    public function update_Res(UpdateMarcacionRequest $request, Marcacion $marcacione)
+    public function update(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
 
         $data = $request->validated();
@@ -309,7 +309,7 @@ class MarcacionController extends Controller
         }
     }
 
-    public function update(UpdateMarcacionRequest $request, Marcacion $marcacione)
+    public function update_Prueba(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
         $data = $request->validated();
 
@@ -486,6 +486,7 @@ class MarcacionController extends Controller
                         // 10. Asigna las horas según la posición:
                         //     primera = ingreso, última = salida, etc.
                         $ingreso = $horas->count() > 0 ? $horas->get(0) : null;
+
                         $salida = $horas->count() >= 2 ? $horas->last() : null;
                         $ingreso_refri = $horas->count() >= 3 ? $horas->get(1) : null;
                         $salida_refri = $horas->count() == 4 ? $horas->get(2) : null;

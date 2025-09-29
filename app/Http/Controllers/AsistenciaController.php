@@ -23,6 +23,8 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class AsistenciaController extends Controller
 {
+
+    //validacion
     public function index(Request $request)//: Response
     {
         $filters = $request->validate([
