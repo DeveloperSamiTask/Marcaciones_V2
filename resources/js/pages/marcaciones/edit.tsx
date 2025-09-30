@@ -17,8 +17,21 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
     const horaInput = useRef<HTMLInputElement>(null);
     const motivoInput = useRef<HTMLTextAreaElement>(null);
     const [open, setOpen] = useState(false);
-    const { data, patch, processing, setData, reset, errors, clearErrors } = useForm<Required<{ hora: string, tipo: string, motivo: string }>>
-        ({ hora: marcacionHora, tipo: tipo, motivo: '' })
+
+    // CORREGIDO: usa los mismos nombres que en los inputs
+    const { data, patch, processing, setData, reset, errors, clearErrors } = useForm<{
+        hora_original: string;
+        hora_restada: string;
+        tipo: string;
+        motivo: string;
+        extraSeleccionada?: string;
+    }>({
+        hora_original: marcacionHora,
+        hora_restada: marcacionHora, // Inicialmente igual
+        tipo: tipo,
+        motivo: '',
+        extraSeleccionada: ''
+    });
 
     const tipoFormateado: Record<TipoMarcacion, string> = {
         ingreso: 'ingreso',
@@ -29,15 +42,46 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
 
     useEffect(() => {
         if (!open) {
-            // cuando el modal se cierra, reseteamos todo
             clearErrors();
-            reset(); // limpia el useForm
+            reset();
             setData('motivo', '');
+            setData('extraSeleccionada', '');
             setHoraOriginal(marcacionHora);
             setHoraActual(marcacionHora);
             setHoraDescontada("");
         }
     }, [open]);
+
+    const [horaOriginal, setHoraOriginal] = useState(marcacionHora);
+    const [horaActual, setHoraActual] = useState(marcacionHora);
+    const [horaDescontada, setHoraDescontada] = useState("");
+
+    const calcularDiferencia = (base: string, nueva: string) => {
+        if (!base || !nueva) return "";
+
+        const [h1, m1] = base.split(":").map(Number);
+        const [h2, m2] = nueva.split(":").map(Number);
+
+        const minutosBase = h1 * 60 + m1;
+        const minutosNueva = h2 * 60 + m2;
+
+        const diff = Math.abs(minutosNueva - minutosBase);
+        const horas = Math.floor(diff / 60);
+        const minutos = diff % 60;
+
+        return `${horas.toString().padStart(2, "0")}:${minutos.toString().padStart(2, "0")}`;
+    };
+
+    const closeModal = () => {
+        clearErrors();
+        reset();
+        setData('motivo', '');
+        setData('extraSeleccionada', '');
+        setHoraOriginal(marcacionHora);
+        setHoraActual(marcacionHora);
+        setHoraDescontada("");
+        setOpen(false);
+    };
 
     const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
@@ -46,14 +90,14 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
             preserveScroll: true,
             onSuccess: () => {
                 closeModal();
-                toast.success('Marcacion creada exitosamente!', {
+                toast.success('Marcación actualizada exitosamente!', {
                     richColors: true,
                     position: 'top-center',
                     duration: 4000,
                 });
             },
             onError: (errors) => {
-                const messageError = errors.message && errors.message != '' ? errors.message : 'Ocurrio un error inesperado';
+                const messageError = errors.message && errors.message != '' ? errors.message : 'Ocurrió un error inesperado';
                 toast.error(messageError, {
                     richColors: true,
                     position: 'top-center',
@@ -64,44 +108,6 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
         });
     };
 
-
-    const [horaOriginal, setHoraOriginal] = useState(data.hora);
-    const [horaActual, setHoraActual] = useState(data.hora);
-    const [horaDescontada, setHoraDescontada] = useState("");
-
-    // calcular diferencia en HH:mm siempre positiva
-    const calcularDiferencia = (base: string, nueva: string) => {
-        if (!base || !nueva) return "";
-
-        const [h1, m1] = base.split(":").map(Number);
-        const [h2, m2] = nueva.split(":").map(Number);
-
-        const minutosBase = h1 * 60 + m1;
-        const minutosNueva = h2 * 60 + m2;
-
-        const diff = Math.abs(minutosNueva - minutosBase); // siempre positivo
-
-        const horas = Math.floor(diff / 60);
-        const minutos = diff % 60;
-
-        return `${horas.toString().padStart(2, "0")}:${minutos
-            .toString()
-            .padStart(2, "0")}`;
-    };
-
-    //
-    const closeModal = () => {
-        clearErrors();
-        reset();
-        setData('motivo', '');
-
-        setHoraOriginal(marcacionHora);
-        setHoraActual(marcacionHora);
-        setHoraDescontada("");
-
-        setOpen(false);
-    };
-
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -110,39 +116,33 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                 </Button>
             </DialogTrigger>
             <DialogContent>
-                <DialogTitle>Editar marcacion</DialogTitle>
+                <DialogTitle>Editar marcación</DialogTitle>
                 <DialogDescription>
                     Ingrese hora de {tipoFormateado[tipo]}
                 </DialogDescription>
 
                 <form className="space-y-6" onSubmit={updateMarcacion}>
-
                     <div className="grid gap-2">
                         <Input
-                            id="hora_original"
+                            id="hora_restada"
                             type="time"
-                            name="hora_original"
+                            name="hora_restada"
                             className="mt-1 block w-full"
                             tabIndex={1}
                             ref={horaInput}
-                            value={horaActual} // 👈 usamos horaActual, no data.hora
-                            // onChange solo actualiza el estado local para que el input sea editable
+                            value={horaActual}
                             onChange={(e) => {
                                 setHoraActual(e.target.value);
                             }}
-                            // onBlur: cuando el usuario termina de escribir
                             onBlur={(e) => {
                                 const nuevaHora = e.target.value;
-
-                                // calcular diferencia con la original
                                 const resultado = calcularDiferencia(horaOriginal, nuevaHora);
                                 setHoraDescontada(resultado);
 
-                                // guardar en el form lo que se va a mandar
-                                setData("hora_original", horaOriginal); // fija
-                                setData("hora_restada", nuevaHora);     // la nueva
+                                // CORREGIDO: usa los nombres correctos
+                                setData("hora_original", horaOriginal);
+                                setData("hora_restada", nuevaHora);
 
-                                // log final
                                 console.log("Payload al backend:", {
                                     hora_original: horaOriginal,
                                     hora_restada: nuevaHora,
@@ -151,8 +151,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                                 });
                             }}
                         />
-
-                        <InputError message={errors.hora} />
+                        <InputError message={errors.hora_restada} />
                     </div>
 
                     {horariosExtra && horariosExtra.length > 0 && horaDescontada && (

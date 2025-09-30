@@ -258,11 +258,11 @@ class MarcacionController extends Controller
                     'user_id' => Auth::user()->id,
                     'fecha' => $marcacione->fecha,
                     'hora_original' => $marcacione->{$data['tipo']},
-                    'hora' => $data['hora'],
+                    'hora' => $data['hora_restada'],
                     'motivo' => $data['motivo'],
                 ]);
 
-                $marcacione->update([$data['tipo'] => $data['hora']]);
+                $marcacione->update([$data['tipo'] => $data['hora_restada']]);
 
                 $horarios = Horario::where('empleado_id', $marcacione->empleado_id)->whereNotNull('extra')->get();
 
