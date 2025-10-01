@@ -186,6 +186,7 @@ class MarcacionController extends Controller
 
     }
 
+    /*Enviar las marcaciones a asistencias */
     public function store(StoreMarcacionRequest $request)
     {
         $data = $request->validated();

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Exports\MarcacionExport;
 use App\Jobs\CrearNotificacionAsistencia;
 use App\Models\Asistencia;
 use App\Models\AsistenciaDetalle;
@@ -19,13 +18,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
-use Maatwebsite\Excel\Facades\Excel;
 
 class AsistenciaController extends Controller
 {
-
-    //validacion
-    public function index(Request $request)//: Response
+    // validacion
+    public function index(Request $request)// : Response
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -35,9 +32,9 @@ class AsistenciaController extends Controller
         ]);
 
         $fechaInicio = Carbon::parse($request->fechaInicio)->startOfDay(); // 00:00:00
-		$fechaFin = Carbon::parse($request->fechaFin)->endOfDay(); // 23:59:59
+        $fechaFin = Carbon::parse($request->fechaFin)->endOfDay(); // 23:59:59
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
         $motivos = Asistencia::where('empleado_id', $request->encargado)
             ->where('empresa_id', $request->empresa)
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
@@ -45,24 +42,24 @@ class AsistenciaController extends Controller
             ->count();
 
         $asistencias = Asistencia::where('empleado_id', $request->encargado)
-        ->where('empresa_id', $request->empresa)
-        ->with(['empleado.area'])
-        ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-        ->orderBy('fecha', 'desc')
-        ->get()
-        ->groupBy(function($item) {
-            $estados = [
-                0 => 'pendientes',
-                1 => 'aprobados',
-                2 => 'rechazados'
-            ];
+            ->where('empresa_id', $request->empresa)
+            ->with(['empleado.area'])
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->orderBy('fecha', 'desc')
+            ->get()
+            ->groupBy(function ($item) {
+                $estados = [
+                    0 => 'pendientes',
+                    1 => 'aprobados',
+                    2 => 'rechazados',
+                ];
 
-            return $estados[$item->estado] ?? '';
-        });
+                return $estados[$item->estado] ?? '';
+            });
 
         session(['asistencias_url' => $request->fullUrl()]);
 
-        return Inertia::render('asistencias/index',[
+        return Inertia::render('asistencias/index', [
             'filters' => $filters,
             'empresas' => $empresas,
             'encargados' => $encargados,
@@ -98,7 +95,7 @@ class AsistenciaController extends Controller
                     'semana' => "Del {$fechaInicio->format('d/m/Y')} al {$fechaFin->format('d/m/Y')}",
                     'estado' => 0, // estado pendiente
                 ]);
-                $asistencia->codigo = 'AS' . now()->format('Ymd') . $asistencia->id;
+                $asistencia->codigo = 'AS'.now()->format('Ymd').$asistencia->id;
                 $asistencia->save();
                 foreach ($marcaciones as $item) {
                     $marcacionId = optional($item->marcacion)->id; // verificar si existe una marcacion para actualizar el estado
@@ -125,13 +122,14 @@ class AsistenciaController extends Controller
                         'estado' => $item->horario ? $item->horario->estado : null, // estado del horario L|D|DM|F|FI|FJ
                     ]);
                 }
+
                 return $asistencia;
             });
 
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
 
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
@@ -145,17 +143,17 @@ class AsistenciaController extends Controller
         $detalles = $asistencia->detalles()
             ->with(['empleado.area', 'empleado.jornada'])
             ->get()
-            ->map(function ($detalle){
+            ->map(function ($detalle) {
 
                 $tardanza = 0;
                 $extra = 0;
                 $anticipado = 0;
                 $nocturno = 0;
-                if($detalle->ingreso && $detalle->salida && $detalle->hora_ingreso && $detalle->hora_salida){
+                if ($detalle->ingreso && $detalle->salida && $detalle->hora_ingreso && $detalle->hora_salida) {
                     $tardanza = max(0, $detalle->ingreso->diffInMinutes($detalle->hora_ingreso, false)); // si es negativo devuelve 0
                     $extra = max(0, $detalle->salida->diffInMinutes($detalle->hora_salida, false)); // tiempo despues de su hora de salida
                     $anticipado = max(0, $detalle->hora_salida->diffInMinutes($detalle->salida, false)); // hora antes de su salida programado
-                    if($detalle->empleado->empresa_id == 1 || $detalle->empleado->empresa_id == 4){
+                    if ($detalle->empleado->empresa_id == 1 || $detalle->empleado->empresa_id == 4) {
                         $minutosNocturnos = max(0, $detalle->hora_salida->setTime(22, 0)->diffInMinutes($detalle->hora_salida, false));
                         $nocturno = $minutosNocturnos >= 30 ? $minutosNocturnos : 0;
                     }
@@ -181,7 +179,7 @@ class AsistenciaController extends Controller
                 ];
             });
 
-        return Inertia::render('asistencias/show',[
+        return Inertia::render('asistencias/show', [
             'asistencia' => $asistencia,
             'detalles' => $detalles,
             'motivos' => $motivos,
@@ -190,12 +188,13 @@ class AsistenciaController extends Controller
 
     }
 
+    /* ACEPTAR UNA VALIDACION */
     public function update(Asistencia $asistencia)
     {
         try {
             DB::transaction(function () use ($asistencia) {
                 $asistencia->update(['estado' => 1, 'fecha_aprobacion' => now()]);
-                $asistencia->detalles()->each(function ($detalle){
+                $asistencia->detalles()->each(function ($detalle) {
                     $isMantoSeguridad = $detalle->empleado->area_id == 4 || $detalle->empleado->area_id == 5; // estas areas estan aprobadas sus horas extras manto y seguridad
                     $marcacion = Marcacion::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->first();
                     $horario = Horario::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->first();
@@ -204,9 +203,9 @@ class AsistenciaController extends Controller
 
                     if ($marcacion) {
                         $marcacion->update([
-                            //'salida' => $isMantoSeguridad ? $marcacion->salida : $horario->salida,
+                            // 'salida' => $isMantoSeguridad ? $marcacion->salida : $horario->salida,
                             'estado_horas_extra' => $isMantoSeguridad ? 1 : $marcacion->estado_horas_extra, // se vuelve a validar las horas extras ya que manto y otra area se autoriza por defecto
-                            'estado' => 1
+                            'estado' => 1,
                         ]); // se setea la hora segun la aprobacion de sus horas extra
                     }
                 });
@@ -215,7 +214,7 @@ class AsistenciaController extends Controller
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
 
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
@@ -233,7 +232,7 @@ class AsistenciaController extends Controller
                     ->where('tipo_id', $tipoPermiso->id)
                     ->where('estado', '!=', 2); // que no este rechazado
 
-                if (!$permisoExistente->exists()) { // se crea el permiso si no existe
+                if (! $permisoExistente->exists()) { // se crea el permiso si no existe
                     Horario::where('empleado_id', $asistenciaDetalle->empleado_id)->whereDate('fecha', $asistenciaDetalle->fecha)->update(['extra' => $request->extra]); // horas extra enviado para aprobacion
                     Permiso::create([ // creamos el permiso para poder autorizar o rechazar el cambio del horario
                         'empleado_id' => $asistenciaDetalle->empleado_id,
@@ -242,29 +241,30 @@ class AsistenciaController extends Controller
                         'motivo' => $tipoPermiso->nombre,
                         'estado' => 0,
                     ]);
-                }else{
-                    throw new \Exception("El empleado ya tiene un permiso programado.");
+                } else {
+                    throw new \Exception('El empleado ya tiene un permiso programado.');
                 }
             });
 
             // CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
 
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
+    /* RECHAZAR UNA VALIDACION */
     public function destroy(Request $request, Asistencia $asistencia)
     {
         $request->validate([
-            'motivo' => 'required|string'
+            'motivo' => 'required|string',
         ]);
         try {
             DB::transaction(function () use ($request, $asistencia) {
                 $asistencia->update(['estado' => 2, 'motivo' => $request->motivo, 'fecha_aprobacion' => now()]);
-                $asistencia->detalles()->each(function ($detalle){
+                $asistencia->detalles()->each(function ($detalle) {
                     $detalle->update(['estado_horas_extra' => 0]);
-                    Marcacion::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->update(['estado' => 0, 'estado_horas_extra'=> 0]); // vuelve a estado pendiente
+                    Marcacion::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->update(['estado' => 0, 'estado_horas_extra' => 0]); // vuelve a estado pendiente
                     Horario::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->update(['validado' => 0]); // vuelve a estado pendiente
                 });
             });
@@ -272,7 +272,7 @@ class AsistenciaController extends Controller
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
 
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 }

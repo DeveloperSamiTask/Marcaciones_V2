@@ -159,27 +159,25 @@ export const columns: ColumnDef<Marcacion>[] = [
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
 
             // NUEVA LÓGICA CORRECTA
-            const horariosValidado = row.original.horario?.validado ?? 1;
-            const estadoLaboral = row.original.horario?.estado;
 
-            // REGLAS PRINCIPALES
+            const horariosValidado = row.original.horario?.validado ?? 1;
+            const estadoMarcacion = row.original.marcacion?.estado ?? 0;
+
             let disabled;
-            if (horariosValidado === 0) {
-                disabled = false; // ABSOLUTA
-            } else if (horariosValidado === 2) {
-                disabled = estadoLaboral !== 'L'; // SOLO LABORAL
-            } else {
-                disabled = true; // NULA (estado 1 u otros)
+
+            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            if (horariosValidado === 0 && estadoMarcacion === 0) {
+                disabled = false;
             }
 
-            // Si no es edición absoluta, aplicar validaciones adicionales
-            if (horariosValidado !== 0 && !disabled) {
-                const estaRechazado = row.original.marcacion?.estado === 2;
-                const estadoMarcacion = row.original.marcacion ?
-                    (estaRechazado ? false : row.original.marcacion?.estado != 0) :
-                    fecha < format(new Date(), 'yyyy-MM-dd');
-
-                disabled = estadoMarcacion;
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            else if (horariosValidado === 1 || horariosValidado === 2 ||
+                estadoMarcacion === 1 || estadoMarcacion === 2) {
+                disabled = true;
+            }
+            // Cualquier otro caso → BLOQUEADO por defecto
+            else {
+                disabled = true;
             }
 
             return row.original.marcacion?.ingreso ? (
@@ -209,29 +207,26 @@ export const columns: ColumnDef<Marcacion>[] = [
             const marcacionHora = row.original.marcacion?.salida ? row.original.marcacion?.salida?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-
-
-            const horariosValidado = row.original.horario?.validado ?? 1;
-            const estadoLaboral = row.original.horario?.estado;
             const hsp = row.original.horario?.salida?.substring(0, 5) || '';
 
+            const horariosValidado = row.original.horario?.validado ?? 1;
+            const estadoMarcacion = row.original.marcacion?.estado ?? 0;
+
             let disabled;
-            if (horariosValidado === 0) {
+
+            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            if (horariosValidado === 0 && estadoMarcacion === 0) {
                 disabled = false;
-            } else if (horariosValidado === 2) {
-                disabled = estadoLaboral !== 'L';
-            } else {
-                disabled = true;
             }
 
-
-            if (horariosValidado !== 0 && !disabled) {
-                const estaRechazado = row.original.marcacion?.estado === 2;
-                const estadoMarcacion = row.original.marcacion ?
-                    (estaRechazado ? false : row.original.marcacion?.estado != 0) :
-                    fecha < format(new Date(), 'yyyy-MM-dd');
-
-                disabled = estadoMarcacion;
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            else if (horariosValidado === 1 || horariosValidado === 2 ||
+                estadoMarcacion === 1 || estadoMarcacion === 2) {
+                disabled = true;
+            }
+            // Cualquier otro caso → BLOQUEADO por defecto
+            else {
+                disabled = true;
             }
 
             return row.original.marcacion?.salida ? (
@@ -264,28 +259,24 @@ export const columns: ColumnDef<Marcacion>[] = [
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
 
-            // NUEVA LÓGICA CORRECTA
             const horariosValidado = row.original.horario?.validado ?? 1;
-            const estadoLaboral = row.original.horario?.estado;
+            const estadoMarcacion = row.original.marcacion?.estado ?? 0;
 
-            // REGLAS PRINCIPALES
             let disabled;
-            if (horariosValidado === 0) {
-                disabled = false; // ABSOLUTA
-            } else if (horariosValidado === 2) {
-                disabled = estadoLaboral !== 'L'; // SOLO LABORAL
-            } else {
-                disabled = true; // NULA (estado 1 u otros)
+
+            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            if (horariosValidado === 0 && estadoMarcacion === 0) {
+                disabled = false;
             }
 
-            // Si no es edición absoluta, aplicar validaciones adicionales
-            if (horariosValidado !== 0 && !disabled) {
-                const estaRechazado = row.original.marcacion?.estado === 2;
-                const estadoMarcacion = row.original.marcacion ?
-                    (estaRechazado ? false : row.original.marcacion?.estado != 0) :
-                    fecha < format(new Date(), 'yyyy-MM-dd');
-
-                disabled = estadoMarcacion;
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            else if (horariosValidado === 1 || horariosValidado === 2 ||
+                estadoMarcacion === 1 || estadoMarcacion === 2) {
+                disabled = true;
+            }
+            // Cualquier otro caso → BLOQUEADO por defecto
+            else {
+                disabled = true;
             }
 
             return row.original.marcacion?.ingreso_refri ? (
@@ -311,28 +302,24 @@ export const columns: ColumnDef<Marcacion>[] = [
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
 
-            // NUEVA LÓGICA CORRECTA
             const horariosValidado = row.original.horario?.validado ?? 1;
-            const estadoLaboral = row.original.horario?.estado;
+            const estadoMarcacion = row.original.marcacion?.estado ?? 0;
 
-            // REGLAS PRINCIPALES
             let disabled;
-            if (horariosValidado === 0) {
-                disabled = false; // ABSOLUTA
-            } else if (horariosValidado === 2) {
-                disabled = estadoLaboral !== 'L'; // SOLO LABORAL
-            } else {
-                disabled = true; // NULA (estado 1 u otros)
+
+            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            if (horariosValidado === 0 && estadoMarcacion === 0) {
+                disabled = false;
             }
 
-            // Si no es edición absoluta, aplicar validaciones adicionales
-            if (horariosValidado !== 0 && !disabled) {
-                const estaRechazado = row.original.marcacion?.estado === 2;
-                const estadoMarcacion = row.original.marcacion ?
-                    (estaRechazado ? false : row.original.marcacion?.estado != 0) :
-                    fecha < format(new Date(), 'yyyy-MM-dd');
-
-                disabled = estadoMarcacion;
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            else if (horariosValidado === 1 || horariosValidado === 2 ||
+                estadoMarcacion === 1 || estadoMarcacion === 2) {
+                disabled = true;
+            }
+            // Cualquier otro caso → BLOQUEADO por defecto
+            else {
+                disabled = true;
             }
 
             return row.original.marcacion?.salida_refri ? (
@@ -384,7 +371,7 @@ export const columns: ColumnDef<Marcacion>[] = [
         }
     },
     // ELIMINA completamente la columna horas_log
-    /*
+
     {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
@@ -409,7 +396,7 @@ export const columns: ColumnDef<Marcacion>[] = [
             )
         }
     },
-    */
+
 
     {
         accessorKey: 'anticipado',
