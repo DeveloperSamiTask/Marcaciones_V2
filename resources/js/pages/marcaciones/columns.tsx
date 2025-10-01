@@ -210,21 +210,21 @@ export const columns: ColumnDef<Marcacion>[] = [
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
 
-            // NUEVA LÓGICA CORRECTA
+
             const horariosValidado = row.original.horario?.validado ?? 1;
             const estadoLaboral = row.original.horario?.estado;
+            const hsp = row.original.horario?.salida?.substring(0, 5) || '';
 
-            // REGLAS PRINCIPALES
             let disabled;
             if (horariosValidado === 0) {
-                disabled = false; // ABSOLUTA
+                disabled = false;
             } else if (horariosValidado === 2) {
-                disabled = estadoLaboral !== 'L'; // SOLO LABORAL
+                disabled = estadoLaboral !== 'L';
             } else {
-                disabled = true; // NULA (estado 1 u otros)
+                disabled = true;
             }
 
-            // Si no es edición absoluta, aplicar validaciones adicionales
+
             if (horariosValidado !== 0 && !disabled) {
                 const estaRechazado = row.original.marcacion?.estado === 2;
                 const estadoMarcacion = row.original.marcacion ?
@@ -241,6 +241,8 @@ export const columns: ColumnDef<Marcacion>[] = [
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
                     tipo="salida"
+                    horariosExtra={row.original.horariosExtra}
+                    hsp={hsp}
                 />
             ) : (
                 <CreateMarcacion key={`marcacion-salida-${fecha}-${empleadoId}`} disabled={disabled} empleadoId={empleadoId} fecha={fecha} tipo="salida" />
@@ -362,11 +364,11 @@ export const columns: ColumnDef<Marcacion>[] = [
                     const totalHoras = table.getRowModel().rows.reduce((sum, row) => {
                         return sum + (row.original.horas || 0);
                     }, 0);
-                    console.log('=== TOTAL HORAS DEL DÍA ===');
-                    console.log('Total minutos:', totalHoras);
-                    console.log('Total horas:', formatMinutes(totalHoras));
-                    console.log('Número de registros:', table.getRowModel().rows.length);
-                    console.log('========================');
+                    //console.log('=== TOTAL HORAS DEL DÍA ===');
+                    //console.log('Total minutos:', totalHoras);
+                    //console.log('Total horas:', formatMinutes(totalHoras));
+                    //console.log('Número de registros:', table.getRowModel().rows.length);
+                    //console.log('========================');
 
                 }, 0);
             }
@@ -382,6 +384,7 @@ export const columns: ColumnDef<Marcacion>[] = [
         }
     },
     // ELIMINA completamente la columna horas_log
+    /*
     {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
@@ -406,6 +409,8 @@ export const columns: ColumnDef<Marcacion>[] = [
             )
         }
     },
+    */
+
     {
         accessorKey: 'anticipado',
         header: 'ANTICIPADO',

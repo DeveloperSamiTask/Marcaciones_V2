@@ -22,14 +22,14 @@ class UpdateMarcacionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'hora_original' => 'nullable',
 
+            'hora_original' => 'nullable|date_format:H:i',
             'motivo' => 'required|string|max:255',
-
             'tipo' => ['nullable', 'in:ingreso,salida,ingreso_refri,salida_refri'],
 
-            'hora_restada' => 'nullable|date_format:H:i',
-
+            'hora_nueva' => 'nullable|date_format:H:i',
+            'tiempo_extra' => 'nullable|date_format:H:i',
+            'hsp' => 'nullable|date_format:H:i',
         ];
     }
 }

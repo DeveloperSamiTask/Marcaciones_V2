@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Exports\MarcacionExport;
 use App\Http\Requests\Marcacion\StoreMarcacionRequest;
 use App\Http\Requests\Marcacion\UpdateMarcacionRequest;
-use App\Models\AsistenciaDetalle;
 use App\Models\Descuento_extra;
 use App\Models\Empleado;
 use App\Models\Empresa;
@@ -20,14 +19,15 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
 
 class MarcacionController extends Controller
 {
-    /*Asistencia general */
-    //marcacion
+    /* Asistencia general */
+    // marcacion
     public function index(Request $request)// : Response
     {
         $filters = $request->validate([
@@ -57,7 +57,7 @@ class MarcacionController extends Controller
             ->get()
             ->groupBy('empleado_id');
 
-            //horario
+        // horario
         $horariosExtra = Horario::whereIn('empleado_id', $empleados->pluck('id'))
             ->whereNotNull('extra')
             ->get()
@@ -68,7 +68,6 @@ class MarcacionController extends Controller
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
             ->get()
             ->groupBy('empleado_id');
-
 
         $lista = $empleados->flatMap(function ($empleado) use ($horarios, $horariosExtra, $marcaciones, $request) {
             $fechas = CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
@@ -168,7 +167,7 @@ class MarcacionController extends Controller
             ->whereNull('fecha_cese')
             ->pluck('dni');
 
-            /*jala la hora de la otra bd de la marcacion real */
+        /* jala la hora de la otra bd de la marcacion real */
         $marcaciones = Zktimems::query()
             ->with(['empleado' => function ($query) {
                 $query->select('id', 'dni', 'nombres', 'apellidos');
@@ -249,20 +248,160 @@ class MarcacionController extends Controller
 
     public function update(UpdateMarcacionRequest $request, Marcacion $marcacione)
     {
-
         $data = $request->validated();
+
         try {
             DB::transaction(function () use ($data, $marcacione) {
-                MarcacionEdicion::create([
-                    'empleado_id' => $marcacione->empleado_id,
+
+                // VALIDACIÓN 1: Solo aplica para salida con HSP
+                if ($data['tipo'] !== 'salida' || ! isset($data['hsp'])) {
+                    $marcacione->update([$data['tipo'] => $data['hora_nueva']]);
+
+                    return;
+                }
+
+                try {
+                    // USAR Carbon::parse EN LUGAR DE createFromFormat
+                    $hsActual = Carbon::parse($marcacione->salida);
+                    $hsp = Carbon::parse($data['hsp']);
+                    $nuevaHora = Carbon::parse($data['hora_nueva']);
+
+                } catch (Exception $e) {
+                    throw new Exception('Error en formato de hora: '.$e->getMessage());
+                }
+                // DEBUG: Log después de Carbon
+
+                // VALIDACIÓN 2: No editar si HS ≥ HSP
+
+                if ($hsActual->gte($hsp)) {
+                    throw new Exception("No puede editar - La hora de salida actual ({$hsActual->format('H:i')}) ya es mayor o igual a la HSP ({$hsp->format('H:i')})");
+                }
+                // VALIDACIÓN 3: No permitir retroceder hora
+
+                if ($nuevaHora->lte($hsActual)) {
+                    throw new Exception("No puede disminuir la hora. Hora actual: {$hsActual->format('H:i')}, Nueva hora: {$nuevaHora->format('H:i')}");
+                }
+                // VALIDACIÓN 4: Nueva hora no puede exceder HSP
+                if ($nuevaHora->gt($hsp)) {
+                    throw new Exception("La nueva hora ({$nuevaHora->format('H:i')}) no puede exceder la HSP ({$hsp->format('H:i')})");
+                }
+                // VALIDACIÓN 5: Debe tener tiempo_extra
+                if (! isset($data['tiempo_extra'])) {
+                    throw new Exception('Se requiere tiempo extra para ajustar la hora de salida');
+                }
+                // VALIDACIÓN 6: Verificar horas extras disponibles
+                $horariosConExtras = Horario::where('empleado_id', $marcacione->empleado_id)
+                    ->whereNotNull('extra')
+                    ->get();
+                if ($horariosConExtras->isEmpty()) {
+                    throw new Exception('No tiene horas extras disponibles para realizar el ajuste');
+                }
+                // Convertir tiempo_extra a minutos
+                [$horas, $minutos] = explode(':', $data['tiempo_extra']);
+                $tiempoExtraMinutos = ($horas * 60) + $minutos;
+                // Calcular total horas extras disponibles
+                $totalHorasExtras = $horariosConExtras->sum(function ($horario) {
+                    try {
+                        // VERIFICAR FORMATO DE EXTRA
+
+                        if (is_numeric($horario->extra)) {
+                            return (int) $horario->extra;
+                        } elseif (is_string($horario->extra)) {
+                            [$h, $m] = explode(':', $horario->extra);
+
+                            return ($h * 60) + $m;
+                        } else {
+                            return Carbon::today()->diffInMinutes($horario->extra);
+                        }
+                    } catch (Exception $e) {
+
+                        return 0;
+                    }
+                });
+                // VALIDACIÓN 7: Tiempo extra no puede superar horas extras disponibles
+                if ($tiempoExtraMinutos > $totalHorasExtras) {
+                    throw new Exception("No tiene suficientes horas extras. Disponibles: {$totalHorasExtras} minutos, Requeridos: {$tiempoExtraMinutos} minutos");
+                }
+                // VALIDACIÓN 8: El tiempo_extra debe coincidir con la diferencia real
+                $diferenciaReal = $hsActual->diffInMinutes($nuevaHora);
+                if ($tiempoExtraMinutos != $diferenciaReal) {
+                    throw new Exception("El tiempo extra ({$tiempoExtraMinutos}min) no coincide con la diferencia real ({$diferenciaReal}min)");
+                }
+                // ... resto del código de actualización ...
+                // 1. REGISTRAR Descuento_extra
+                $horarioExtra = Horario::where('fecha', $marcacione->fecha)
+                    ->where('empleado_id', $marcacione->empleado_id)
+                    ->first();
+
+                // 2. DESCONTAR HORAS EXTRAS
+                $tiempoRestante = $tiempoExtraMinutos;
+
+                foreach ($horariosConExtras as $horario) {
+                    if ($horario->extra && $tiempoRestante > 0) {
+                        $extraDisponible = Carbon::today()->diffInMinutes($horario->extra);
+
+                        if ($extraDisponible >= $tiempoRestante) {
+                            $horario->extra = $horario->extra->subMinutes($tiempoRestante);
+                            $horario->save();
+                            break;
+                        } else {
+                            $tiempoRestante -= $extraDisponible;
+                            $horario->extra = null;
+                            $horario->save();
+                        }
+                    }
+                }
+
+                $marcacione->update(['salida' => $data['hora_nueva']]);
+                // Verificar que sí se actualizó
+                $marcacioneActualizada = $marcacione->fresh();
+                // 4. REGISTRO DE AUDITORÍA
+                Descuento_extra::create([
+
+                    'marcacion_id' => $marcacione->id,
+                    'horario_id' => $horarioExtra->id,
                     'user_id' => Auth::user()->id,
-                    'fecha' => $marcacione->fecha,
-                    'hora_original' => $marcacione->{$data['tipo']},
-                    'hora' => $data['hora_restada'],
+
+                    'hora_original' => $data['hora_original'],
+                    'hora_modificada' => $marcacione->getOriginal('salida'),
+                    'total_horas_descontadas' => $data['tiempo_extra'],
                     'motivo' => $data['motivo'],
                 ]);
 
-                $marcacione->update([$data['tipo'] => $data['hora_restada']]);
+            });
+
+        } catch (Exception $e) {
+
+            return back()->withErrors(['message' => $e->getMessage()]);
+        }
+
+        return redirect()->back()->with('success', 'Marcación actualizada correctamente');
+    }
+
+    /*
+    public function update_Respaldo(UpdateMarcacionRequest $request, Marcacion $marcacione)
+    {
+
+        $data = $request->validated();
+        try {
+
+            DB::transaction(function () use ($data, $marcacione) {
+
+                $horarioExtra = Horario::where('fecha', $marcacione->fecha)
+                    ->where('empleado_id', $marcacione->empleado_id)
+                    ->first();
+
+                Descuento_extra::create([
+                    'marcacion_id' => $marcacione->id,
+                    'user_id' => Auth::id(),
+                    'horario_id' => $horarioExtra->id,
+                    'hora_modificada' => $data['hora_original'],
+                    'fecha' => $marcacione->fecha,
+                    'total_horas_descontadas' => $data['tiempo_extra'],
+                    'motivo' => $data['motivo'],
+                ]);
+
+                $marcacione->update([$data['tipo'] => $data['tiempo_extra']]);
 
                 $horarios = Horario::where('empleado_id', $marcacione->empleado_id)->whereNotNull('extra')->get();
 
@@ -308,92 +447,7 @@ class MarcacionController extends Controller
             return back()->withErrors(['message' => $e->getMessage()]);
         }
     }
-
-    public function update_Prueba(UpdateMarcacionRequest $request, Marcacion $marcacione)
-    {
-        $data = $request->validated();
-
-        try {
-            /*
-            $table->foreignId('marcacion_id')->constrained('permisos')->onDelete('cascade');
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            //$table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
-            $table->foreignId('horario_id')->constrained('horarios')->onDelete('cascade');
-
-            $table->time('hora_modificada');
-
-            $table->time('total_horas_descontadas');
-
-            $table->string('motivo')->nullable();
-            */
-            DB::transaction(function () use ($data, $marcacione) {
-
-                $horarioExtra = Horario::where('fecha', $marcacione->fecha)
-                    ->where('empleado_id', $marcacione->empleado_id)
-                    ->first();
-
-                // 1. Minutos a restar (vienen del front)
-                [$h, $m] = explode(':', $data['hora_restada']);
-                $minutosARestar = ($h * 60) + $m;
-
-                // 2. Total de minutos extra disponibles
-                $horarios = Horario::where('empleado_id', $marcacione->empleado_id)
-                    ->whereNotNull('extra')
-                    ->get();
-
-                $totalExtras = 0;
-                foreach ($horarios as $h) {
-                    $totalExtras += Carbon::today()->diffInMinutes($h->extra);
-                }
-
-                // 3. Validar
-                if ($minutosARestar > $totalExtras) {
-                    throw new \Exception('No hay suficientes horas extra para descontar.');
-                }
-
-                // 4. Descontar en cascada
-                $restante = $minutosARestar;
-                foreach ($horarios as $horario) {
-                    if ($horario->extra) {
-                        $extraDisponible = Carbon::today()->diffInMinutes($horario->extra);
-
-                        if ($extraDisponible >= $restante) {
-                            $horario->extra = $horario->extra->subMinutes($restante);
-                            $horario->save();
-                            $restante = 0;
-                            break;
-                        } else {
-                            $restante -= $extraDisponible;
-                            $horario->extra = null;
-                            $horario->save();
-                        }
-                    }
-                }
-
-                // 5. Ahora sí: calcular la nueva hora
-                $horaOriginal = Carbon::parse($marcacione->{$data['tipo']});
-                $nuevaHora = $horaOriginal->copy()->subMinutes($minutosARestar);
-
-                // 6. Registrar la edición
-                Descuento_extra::create([
-                    'marcacion_id' => $marcacione->id,
-                    'user_id' => Auth::id(),
-                    'horario_id' => $horarioExtra->id,
-                    'hora_modificada' => $data['hora_original'], // 👈 ahora sí la hora real
-                    'fecha' => $marcacione->fecha,
-                    'total_horas_descontadas' => $data['hora_restada'],
-                    'motivo' => $data['motivo'],
-                ]);
-
-                // 7. Actualizar la marcación
-                $marcacione->update([$data['tipo'] => $nuevaHora->format('H:i')]);
-            });
-
-            return redirect()->back()->with('success', 'Marcación actualizada correctamente.');
-        } catch (\Exception $e) {
-            return back()->withErrors(['message' => 'Error al actualizar la marcación: '.$e->getMessage()]);
-        }
-    }
+    */
 
     public function edicion(Request $request): Response
     {

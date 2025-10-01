@@ -2,7 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { LoaderCircle, Plus } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/input-error';
@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 
 type TipoMarcacion = 'ingreso' | 'salida' | 'ingreso_refri' | 'salida_refri';
 
-export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabled, horariosExtra }:
+export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabled, horariosExtra, hsp }:
     { marcacionId: number, tipo: TipoMarcacion, marcacionHora: string, disabled: boolean, horariosExtra?: Horario[] }) {
     const horaInput = useRef<HTMLInputElement>(null);
     const motivoInput = useRef<HTMLTextAreaElement>(null);
@@ -21,16 +21,20 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
     // CORREGIDO: usa los mismos nombres que en los inputs
     const { data, patch, processing, setData, reset, errors, clearErrors } = useForm<{
         hora_original: string;
-        hora_restada: string;
+        hora_nueva: string;
         tipo: string;
         motivo: string;
         extraSeleccionada?: string;
+        hsp: string;
+        tiempo_extra: string;
     }>({
         hora_original: marcacionHora,
-        hora_restada: marcacionHora, // Inicialmente igual
+        hora_nueva: marcacionHora,
         tipo: tipo,
         motivo: '',
-        extraSeleccionada: ''
+        extraSeleccionada: '',
+        hsp: hsp || '',
+        tiempo_extra: ''
     });
 
     const tipoFormateado: Record<TipoMarcacion, string> = {
@@ -85,7 +89,16 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
 
     const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
-        console.log("Datos que se van a guardar:", data);
+        //console.log("Datos que se van a guardar:", data);
+
+        console.log("=== FRONTEND DEBUG ===");
+        console.log("hora_original:", data.hora_original);
+        console.log("hora_nueva:", data.hora_nueva);
+        console.log("tiempo_extra:", data.tiempo_extra);
+        console.log("hsp:", hsp);
+        console.log("tipo:", data.tipo);
+        console.log("=========================");
+
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
             onSuccess: () => {
@@ -124,9 +137,9 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                 <form className="space-y-6" onSubmit={updateMarcacion}>
                     <div className="grid gap-2">
                         <Input
-                            id="hora_restada"
+                            id="hora_nueva"
                             type="time"
-                            name="hora_restada"
+                            name="hora_nueva"
                             className="mt-1 block w-full"
                             tabIndex={1}
                             ref={horaInput}
@@ -139,19 +152,22 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                                 const resultado = calcularDiferencia(horaOriginal, nuevaHora);
                                 setHoraDescontada(resultado);
 
-                                // CORREGIDO: usa los nombres correctos
                                 setData("hora_original", horaOriginal);
-                                setData("hora_restada", nuevaHora);
+                                setData("hora_nueva", nuevaHora);
+                                setData("tiempo_extra", resultado);
+                                setData("hsp", hsp);
 
                                 console.log("Payload al backend:", {
                                     hora_original: horaOriginal,
-                                    hora_restada: nuevaHora,
+                                    hora_nueva: nuevaHora,
+                                    tiempo_extra: resultado,
                                     motivo: data.motivo,
                                     tipo: data.tipo,
+                                    hsp: hsp,
                                 });
                             }}
                         />
-                        <InputError message={errors.hora_restada} />
+                        <InputError message={errors.hora_nueva} />
                     </div>
 
                     {horariosExtra && horariosExtra.length > 0 && horaDescontada && (

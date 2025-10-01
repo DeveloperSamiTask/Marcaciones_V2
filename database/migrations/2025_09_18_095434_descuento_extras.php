@@ -17,11 +17,12 @@ return new class extends Migration
 
             $table->foreignId('marcacion_id')->constrained('marcacions')->onDelete('cascade');
 
-            //$table->foreignId('permiso_id')->constrained('permisos')->onDelete('cascade');
-
             $table->foreignId('horario_id')->constrained('horarios')->onDelete('cascade');
 
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+
+
+            $table->time('hora_original');
 
             $table->time('hora_modificada');
 
@@ -35,6 +36,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('descuento_extras');
+        Schema::dropIfExists('descuento_extra');
     }
 };
