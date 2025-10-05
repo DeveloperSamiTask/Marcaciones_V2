@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Movimiento;
 use App\Models\Empleado;
+use App\Models\Movimiento;
+use App\Models\User;
+use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
-use Exception;
-use Carbon\Carbon;
 use Inertia\Inertia;
 
 class MovimientoController extends Controller
@@ -94,8 +95,6 @@ class MovimientoController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-
-
     public function toggleEstadoAPI(Request $request)
     {
         try {
@@ -104,7 +103,7 @@ class MovimientoController extends Controller
                 'empleado_id' => 'required|exists:empleados,id',
                 'motivo' => 'required|string|min:3',
                 'tipo_movimiento' => 'required|in:cese,reactivacion',
-                'fecha_cambio' => 'required|date'
+                'fecha_cambio' => 'required|date',
             ]);
 
             $empleado = Empleado::findOrFail($request->empleado_id);
@@ -124,17 +123,17 @@ class MovimientoController extends Controller
 
             // Registrar movimiento
             $movimiento = Movimiento::create([
-                'empleado' => $empleado->apellidos . ' ' . $empleado->nombres,
+                'empleado' => $empleado->apellidos.' '.$empleado->nombres,
                 'dni' => $empleado->dni,
                 'fecha_movimiento' => now()->format('d-m-Y'),
                 'motivo' => $request->motivo,
                 'tipo_movimiento' => $request->tipo_movimiento,
                 'empleados_id' => $empleado->id,
 
-                'ultima_fecha_cese' =>  Carbon::parse($registro_cese),
+                'ultima_fecha_cese' => Carbon::parse($registro_cese),
                 'ultima_fecha_activacion' => Carbon::parse($registro_activacion),
 
-                'fecha_cese_actual' =>  Carbon::parse($empleado->fecha_cese),
+                'fecha_cese_actual' => Carbon::parse($empleado->fecha_cese),
                 'fecha_activacion_actual' => Carbon::parse($empleado->fecha_ingreso),
             ]);
 
@@ -147,12 +146,89 @@ class MovimientoController extends Controller
                 'movimiento' => $movimiento,
             ], 200);
         } catch (Exception $e) {
-            Log::error('Error al cambiar estado del empleado: ' . $e->getMessage());
+            Log::error('Error al cambiar estado del empleado: '.$e->getMessage());
 
             return response()->json([
                 'error' => 'Ocurrió un error al procesar la solicitud.',
                 'detalle' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function toggleEstadoUsuariosInertia(Request $request)
+    {
+        try {
+
+            $request->validate([
+                'usuario_id' => 'required|exists:users,id',
+                'motivo' => 'required|string|min:3',
+                'tipo_movimiento' => 'required|in:archivado,reactivacion',
+                'fecha_cambio' => 'required|date',
+            ]);
+
+            // 1. Encontrar usuario y empleado relacionado
+            $user = User::findOrFail($request->usuario_id);
+            $empleado = $user->empleado;
+
+            if (! $empleado) {
+                throw new Exception('El usuario no tiene un empleado asociado');
+            }
+
+            // Validar estado actual vs acción solicitada
+            if ($request->tipo_movimiento === 'archivado' && $user->estado === 0) {
+                throw new Exception('No se puede archivar un usuario ya archivado');
+            }
+            if ($request->tipo_movimiento === 'reactivacion' && $user->estado === 1) {
+                throw new Exception('No se puede reactivar un usuario ya activo');
+            }
+
+            // Guardar fechas antiguas para el registro
+            $registro_cese = $empleado->fecha_cese ? Carbon::parse($empleado->fecha_cese) : null;
+            $registro_activacion = $empleado->fecha_ingreso ? Carbon::parse($empleado->fecha_ingreso) : null;
+
+            // 2. Aplicar cambios a EMPLEADO (fecha_cese)
+            if ($request->tipo_movimiento === 'archivado') {
+                $empleado->fecha_cese = Carbon::parse($request->fecha_cambio);
+            } elseif ($request->tipo_movimiento === 'reactivacion') {
+                $empleado->fecha_ingreso = Carbon::parse($request->fecha_cambio);
+                $empleado->fecha_cese = null;
+            }
+
+            // 3. Aplicar cambios a USUARIO (estado)
+            if ($request->tipo_movimiento === 'archivado') {
+                $user->estado = 0; // Archivado/Inactivo
+            } elseif ($request->tipo_movimiento === 'reactivacion') {
+                $user->estado = 1; // Activado
+            }
+
+            // 4. Guardar ambos modelos
+            $empleado->save();
+            $user->save();
+
+            // 5. Registrar movimiento
+            Movimiento::create([
+                'empleado' => $empleado->apellidos.' '.$empleado->nombres,
+                'dni' => $empleado->dni,
+                'fecha_movimiento' => now()->format('d-m-Y'),
+                'motivo' => $request->motivo,
+                'tipo_movimiento' => $request->tipo_movimiento === 'archivado' ? 'cese' : 'reactivacion',
+                'empleados_id' => $empleado->id,
+
+                'ultima_fecha_cese' => $registro_cese,
+                'ultima_fecha_activacion' => $registro_activacion,
+
+                'fecha_cese_actual' => $empleado->fecha_cese ? Carbon::parse($empleado->fecha_cese) : null,
+                'fecha_activacion_actual' => $empleado->fecha_ingreso ? Carbon::parse($empleado->fecha_ingreso) : null,
+            ]);
+
+            // 6. Redirigir a usuarios
+            return Redirect::route('usuarios.index')->with('success', "Usuario {$request->tipo_movimiento} exitosamente.");
+
+        } catch (Exception $e) {
+
+            return Redirect::back()->withErrors([
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -163,7 +239,7 @@ class MovimientoController extends Controller
                 'empleado_id' => 'required|exists:empleados,id',
                 'motivo' => 'required|string|min:3',
                 'tipo_movimiento' => 'required|in:cese,reactivacion',
-                'fecha_cambio' => 'required|date'
+                'fecha_cambio' => 'required|date',
             ]);
 
             $empleado = Empleado::findOrFail($request->empleado_id);
@@ -183,74 +259,28 @@ class MovimientoController extends Controller
 
             // Registrar movimiento
             Movimiento::create([
-                'empleado' => $empleado->apellidos . ' ' . $empleado->nombres,
+                'empleado' => $empleado->apellidos.' '.$empleado->nombres,
                 'dni' => $empleado->dni,
                 'fecha_movimiento' => now()->format('d-m-Y'),
                 'motivo' => $request->motivo,
                 'tipo_movimiento' => $request->tipo_movimiento,
                 'empleados_id' => $empleado->id,
 
-                'ultima_fecha_cese' =>  Carbon::parse($registro_cese),
+                'ultima_fecha_cese' => Carbon::parse($registro_cese),
                 'ultima_fecha_activacion' => Carbon::parse($registro_activacion),
 
-                'fecha_cese_actual' =>  Carbon::parse($empleado->fecha_cese),
+                'fecha_cese_actual' => Carbon::parse($empleado->fecha_cese),
                 'fecha_activacion_actual' => Carbon::parse($empleado->fecha_ingreso),
             ]);
 
             // Redirigir con mensaje flash para Inertia
             return Redirect::route('empleados.index')->with('success', "Empleado {$request->tipo_movimiento} exitosamente.");
         } catch (Exception $e) {
-            Log::error('Error al cambiar estado del empleado: ' . $e->getMessage());
+            Log::error('Error al cambiar estado del empleado: '.$e->getMessage());
 
             return Redirect::back()->withErrors([
                 'message' => 'Ocurrió un error al procesar la solicitud.',
             ]);
         }
-    }
-
-
-
-
-
-
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(Movimiento $movimiento)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Movimiento $movimiento)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Movimiento $movimiento)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Movimiento $movimiento)
-    {
-        //
     }
 }

@@ -8,13 +8,13 @@ use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\HorarioController;
 use App\Http\Controllers\MarcacionController;
 use App\Http\Controllers\MemorandumController;
+use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\SuspensionController;
 use App\Http\Controllers\UsuarioController;
-use App\Http\Controllers\MovimientoController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -32,8 +32,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/empleados/{id}/modal', [EmpleadoController::class, 'mostrarEmpleadoModal'])
         ->name('empleados.modal');
 
-
-    //movimientos
+    // movimientos
     /*
         incluso si no rendiriza una vista, necesito definir la ruta en web.php
         1. la ruta desde la cual viene la peticion
@@ -43,10 +42,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/movimiento/toggle', [MovimientoController::class, 'toggleEstadoInertia'])
         ->name('movimiento.toggle');
 
+    Route::post('/movimiento/toggle_usuarios', [MovimientoController::class, 'toggleEstadoUsuariosInertia'])
+        ->name('movimiento.toggle_usuarios');
+
     Route::get('/movimientos', [MovimientoController::class, 'indexInertia'])->name('movimientos.index');
-
-
-
 
     // Areas
     Route::resource('areas', AreaController::class)->except(['show']);
@@ -131,4 +130,5 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';
+

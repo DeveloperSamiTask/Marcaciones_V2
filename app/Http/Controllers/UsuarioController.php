@@ -17,12 +17,23 @@ class UsuarioController extends Controller
 {
     public function index(Request $request): Response
     {
+        $filters = $request->validate([
+            'estado' => 'nullable|boolean',
+        ]);
+
+        $estado = isset($filters['estado']) ? boolval($filters['estado']) : true; // Default to true (activos)
+
         $usuarios = User::with(['empleado', 'rol'])
-            ->where('estado', $request->archivado ? false : true)
+            ->when(! is_null($estado), function ($query) use ($estado) {
+                return $query->where('estado', $estado);
+            })
+            ->orderBy('id')
             ->get();
 
         return Inertia::render('usuarios/index', [
-            'usuarios' => $usuarios
+            'usuarios' => $usuarios,
+            'filters' => ['estado' => $estado],
+            'csrf_token' => csrf_token(),
         ]);
     }
 
@@ -30,6 +41,7 @@ class UsuarioController extends Controller
     {
         $empleados = Empleado::whereNull('fecha_cese')->orderBy('apellidos')->get();
         $roles = Role::where('estado', 1)->get();
+
         return Inertia::render('usuarios/create', [
             'empleados' => $empleados,
             'roles' => $roles,
@@ -40,13 +52,14 @@ class UsuarioController extends Controller
     public function store(StoreUserRequest $request)
     {
         $data = $request->validated();
-        try{
+        try {
             DB::transaction(function () use ($data) {
                 User::create($data);
             });
+
             return to_route('usuarios.index')->withSuccess(['message' => 'Usuario creado exitosamente!']);
         } catch (Exception $e) {
-            return back()->withErrors([ 'message' => $e->getMessage()])->withInput();
+            return back()->withErrors(['message' => $e->getMessage()])->withInput();
         }
 
     }
@@ -55,6 +68,7 @@ class UsuarioController extends Controller
     {
         $empleados = Empleado::whereNull('fecha_cese')->orderBy('apellidos')->get();
         $roles = Role::where('estado', 1)->get();
+
         return Inertia::render('usuarios/create', [
             'usuario' => $usuario,
             'empleados' => $empleados,
@@ -66,20 +80,21 @@ class UsuarioController extends Controller
     public function update(UpdateUserRequest $request, User $usuario)
     {
         $data = $request->validated();
-        try{
+        try {
             DB::transaction(function () use ($data, $usuario) {
                 $usuario->name = $data['name'];
                 $usuario->email = $data['email'];
                 $usuario->rol_id = $data['rol_id'];
                 $usuario->empleado_id = $data['empleado_id'];
-                if($data['password']){
+                if ($data['password']) {
                     $usuario->password = $data['password'];
                 }
                 $usuario->save();
             });
+
             return to_route('usuarios.index')->withSuccess(['message' => 'Usuario actualizado exitosamente!']);
         } catch (Exception $e) {
-            return back()->withErrors([ 'message' => $e->getMessage()])->withInput();
+            return back()->withErrors(['message' => $e->getMessage()])->withInput();
         }
 
     }
