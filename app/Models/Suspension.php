@@ -2,10 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Suspension extends Model
 {
@@ -16,6 +14,7 @@ class Suspension extends Model
         'codigo_asociado',
         'tipo',
         'fecha',
+        'fecha_fin',
         'fecha_print',
         'hora',
         'motivo',
@@ -28,6 +27,7 @@ class Suspension extends Model
     {
         return [
             'fecha' => 'date',
+            'fecha_fin' => 'date',
             'fecha_print' => 'date',
             'hora' => 'datetime:H:i',
         ];
@@ -35,12 +35,11 @@ class Suspension extends Model
 
     public function empleado(): BelongsTo
     {
-      return $this->belongsTo(Empleado::class);
+        return $this->belongsTo(Empleado::class);
     }
 
     public function user(): BelongsTo
     {
-      return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class);
     }
-
 }

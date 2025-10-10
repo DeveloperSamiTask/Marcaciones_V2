@@ -38,14 +38,14 @@
         }
 
         h2 {
-            font-size: 16px;
+            font-size: 15px;
             text-align: center;
             text-decoration: underline;
         }
 
         p,
         li {
-            font-size: 14px;
+            font-size: 13px;
             text-align: justify;
             margin: 5px 0;
         }
@@ -63,7 +63,7 @@
         }
 
         .lineas td {
-            font-size: 12px;
+            font-size: 11px;
             text-align: center;
         }
     </style>

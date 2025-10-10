@@ -10,7 +10,6 @@ import EditMarcacion from './edit';
 import { Checkbox } from '@/components/ui/checkbox';
 import UploadMarcacion from './upload';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-
 const estadoBadgeVariants = {
     L: { label: 'LABORAL', variant: 'success' },
     D: { label: 'DESCANSO', variant: 'info' },
@@ -21,7 +20,9 @@ const estadoBadgeVariants = {
     FL: { label: 'FER. LABORAL', variant: 'warning' },
     SP: { label: 'SIN PROGRAMACION', variant: 'destructive' },
     V: { label: 'VACACIONES', variant: 'info' },
+
     M: { label: 'D. MEDICO', variant: 'warning' },
+
     S: { label: 'SUSPENSION', variant: 'destructive' },
     SN: { label: 'S. NEGLIGENCIA', variant: 'destructive' },
     SFI: { label: 'S. FALTA INJ.', variant: 'destructive' },
@@ -37,7 +38,6 @@ const estadoBadgeVariants = {
     HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
 } as const;
-
 
 
 

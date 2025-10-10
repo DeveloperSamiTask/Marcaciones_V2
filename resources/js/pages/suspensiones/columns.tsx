@@ -25,7 +25,7 @@ export const columns: ColumnDef<Suspension>[] = [
     {
         accessorKey: 'codigo',
         header: 'CODIGO',
-        cell: ({ row }) => <span className='text-violet-500 font-semibold'> { row.original.codigo } </span>
+        cell: ({ row }) => <span className='text-violet-500 font-semibold'> {row.original.codigo} </span>
     },
     {
         accessorKey: 'nombre',
@@ -69,7 +69,7 @@ export const columns: ColumnDef<Suspension>[] = [
         cell: ({ row }) => {
             const tipo = row.original.tipo.toUpperCase() as keyof typeof estadoBadgeVariants;
             const badgeConfig = estadoBadgeVariants[tipo] || { variant: "outline", label: tipo };
-            return(<Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>)
+            return (<Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>)
         },
     },
     {
@@ -85,10 +85,10 @@ export const columns: ColumnDef<Suspension>[] = [
         cell: ({ row }) => {
             const estado = row.original.estado as keyof typeof estadoBadgeVariants;
             const badgeConfig = estadoBadgeVariants[estado] || { variant: "outline", label: estado };
-            return(<Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>)
+            return (<Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>)
         },
     },
-        {
+    {
         accessorKey: 'fecha_print',
         header: ({ column }) => {
             return (
@@ -114,14 +114,15 @@ export const columns: ColumnDef<Suspension>[] = [
                 <div className="flex items-center gap-2">
 
                     {suspension.codigo[0] == 'S' && suspension.tipo != 'falta injustificada' && suspension.tipo != 'negligencia' &&
-                    <Button variant="info" key={`show-suspension-${suspension.id}`} asChild size="sm">
-                        <Link href={route('suspensiones.show', suspension.id)} prefetch>
-                            <Search />
-                        </Link>
-                    </Button>}
+                        <Button variant="info" key={`show-suspension-${suspension.id}`} asChild size="sm">
+                            <Link href={route('suspensiones.show', suspension.id)} prefetch>
+                                <Search />
+                            </Link>
+                        </Button>}
 
+                    {/* Imprimir en esta parte debe estar el calendario */}
                     {(suspension.codigo[0] == 'S' || suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && auth.user.rol_id != 4 &&
-                    <PrintSuspension key={`print-suspension${suspension.id}`} suspension={suspension} isPrint={suspension.estado_print} />}
+                        <PrintSuspension key={`print-suspension${suspension.id}`} suspension={suspension} isPrint={suspension.estado_print} />}
 
                     {suspension.sustento ?
                         <Button variant="secondary" asChild key={`download-suspension-${suspension.id}`} size="sm">

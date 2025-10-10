@@ -27,6 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Empleados
     Route::resource('empleados', EmpleadoController::class)->except(['show']);
+
     Route::post('empleados/download', [EmpleadoController::class, 'download'])->name('empleados.download');
 
     Route::get('/empleados/{id}/modal', [EmpleadoController::class, 'mostrarEmpleadoModal'])
@@ -131,4 +132,3 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/auth.php';
-

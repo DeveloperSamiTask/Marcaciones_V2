@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('codigo_asociado')->nullable();
             $table->string('tipo');
             $table->date('fecha')->nullable(); // fecha aplicada
+            $table->date('fecha_fin')->nullable();
             $table->time('hora')->nullable();
             $table->boolean('estado')->default(1);
             $table->timestamps();

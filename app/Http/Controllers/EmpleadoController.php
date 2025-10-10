@@ -132,6 +132,11 @@ class EmpleadoController extends Controller
         }
     }
 
+
+
+
+
+
     public function download(Request $request)
     {
         $data = $request->validate([
@@ -140,4 +145,7 @@ class EmpleadoController extends Controller
 
         return Excel::download(new EmpleadoExport($data), 'empleados.xlsx');
     }
+
+
+
 }

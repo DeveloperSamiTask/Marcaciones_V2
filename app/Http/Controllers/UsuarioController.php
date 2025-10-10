@@ -12,6 +12,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Models\AsistenciaDetalle;
+use App\Models\Horario;
+use Carbon\Carbon;
+
 
 class UsuarioController extends Controller
 {

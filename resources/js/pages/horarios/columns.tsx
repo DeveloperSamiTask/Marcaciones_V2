@@ -19,7 +19,9 @@ const estadoBadgeVariants = {
     FL: { label: 'FER. LABORAL', variant: 'warning' },
     SP: { label: 'SIN PROGRAMACION', variant: 'destructive' },
     V: { label: 'VACACIONES', variant: 'info' },
+
     M: { label: 'D. MEDICO', variant: 'warning' },
+    
     S: { label: 'SUSPENSION', variant: 'destructive' },
     SN: { label: 'S. NEGLIGENCIA', variant: 'destructive' },
     SFI: { label: 'S. FALTA INJ.', variant: 'destructive' },

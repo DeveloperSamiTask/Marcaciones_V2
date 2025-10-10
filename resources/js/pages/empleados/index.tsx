@@ -3,13 +3,13 @@ import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
 import { Head, Link, usePage } from "@inertiajs/react";
 import { Empleado } from "@/types/empleados";
-import { columns } from "./columns";
+import { columns} from "./columns";
 import { DataTable } from "@/components/data-table";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus } from "lucide-react";
 import DownloadEmpleado from "./download";
 import { router } from "@inertiajs/react";
-
+import ModalEmpleado from './deleteModal';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -25,9 +25,6 @@ export default function IndexEmpleado({
     empleados: Empleado[];
     filters: { cesado?: boolean };
 }) {
-
-
-    // 0.
     const verCesados = () => {
         router.get(route("empleados.index"), { cesado: 1 }, { preserveScroll: true });
     };
@@ -36,7 +33,7 @@ export default function IndexEmpleado({
         router.get(route("empleados.index"), { cesado: 0 }, { preserveScroll: true });
     };
 
-    // 1. const cesado = filters.cesado;
+    //const cesado = filters.cesado;
     const cesado = Number(filters?.cesado ?? 0);
 
     return (
@@ -49,8 +46,6 @@ export default function IndexEmpleado({
                             {cesado === 1 ? "Empleados cesados" : "Empleados activos"}
                         </h2>
 
-
-                        {/*   2. llamar al index y devolver el listado de filtrados */}
                         <div className="flex items-center gap-3">
                             <Button
                                 onClick={verActivos}
@@ -83,7 +78,6 @@ export default function IndexEmpleado({
 
                     <Card>
                         <CardContent>
-                            {/*   3. mandar un no se que al columns , supongo que el estado de cesado o no  */}
                             <DataTable columns={columns(Number(filters.cesado ?? 0))} data={empleados} />
                         </CardContent>
                     </Card>

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\CrearNotificacion;
 use App\Jobs\CrearNotificacionSuspension;
 use App\Models\Empleado;
 use App\Models\Empresa;
@@ -13,6 +12,7 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -28,20 +28,20 @@ class SuspensionController extends Controller
         ]);
 
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
         $lista = Suspension::whereHas('empleado', function ($query) use ($request) {
             $query->when($request->encargado, fn ($q) => $q->where('jefe_id', $request->encargado)) // muestra segun el valor seleccionado en la vista (para administradores o rrhh)
                 ->where('empresa_id', $request->empresa)
                 ->whereNull('fecha_cese');
         })
-        ->with('empleado')
-        ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-        ->whereNull('codigo_asociado')
-        ->orderBy('fecha', 'desc')
-        ->get()
-        ->groupBy(function($item) {
-            return str_starts_with($item->codigo, 'S') ? 'suspensiones' : 'amonestaciones';
-        });
+            ->with('empleado')
+            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->whereNull('codigo_asociado')
+            ->orderBy('fecha', 'desc')
+            ->get()
+            ->groupBy(function ($item) {
+                return str_starts_with($item->codigo, 'S') ? 'suspensiones' : 'amonestaciones';
+            });
 
         session(['suspensiones_url' => $request->fullUrl()]);
 
@@ -58,7 +58,7 @@ class SuspensionController extends Controller
     {
         $isJefe = $request->user()->rol_id == 4;
         $empleados = Empleado::whereNull('fecha_cese')
-            ->when($isJefe, fn($query) => $query->where('jefe_id', $request->user()->empleado_id))
+            ->when($isJefe, fn ($query) => $query->where('jefe_id', $request->user()->empleado_id))
             ->orderBy('apellidos')
             ->get(['id', 'jornada_id', 'apellidos', 'nombres']);
 
@@ -71,7 +71,7 @@ class SuspensionController extends Controller
     public function store(Request $request)
     {
 
-        if($request->has('motivo')){
+        if ($request->has('motivo')) {
             $data = $request->validate([
                 'empleado_id' => 'required|exists:empleados,id',
                 'fecha' => 'required|date',
@@ -79,30 +79,30 @@ class SuspensionController extends Controller
                 'tipo' => 'required|string|in:AM,S',
                 'razon' => 'required|string|in:tardanza,falta injustificada,incumplimiento,negligencia',
             ]);
-        }else{
+        } else {
             $data = $request->validate([
                 'marcacion_id' => 'required|exists:marcacions,id',
                 'tipo' => 'required|string|in:tardanza,incompleto,refrigerio,incumplimiento',
             ]);
         }
 
-        try{
-            DB::transaction( function () use ($data, $request){
+        try {
+            DB::transaction(function () use ($data, $request) {
 
-                if($request->has('motivo')){
+                if ($request->has('motivo')) {
                     $amonestacion = Suspension::create([
                         'user_id' => $request->user()->id,
                         'empleado_id' => $data['empleado_id'],
                         'fecha' => now(),
-                        'motivo' => 'En la fecha ' . $data['fecha'] . $data['motivo'],
+                        'motivo' => 'En la fecha '.$data['fecha'].$data['motivo'],
                         'tipo' => $data['razon'],
                     ]);
 
-                    $amonestacion->update(['codigo' => $data['tipo'] . now()->format('dmY') . $amonestacion->id]); // verificar que se guarde con estado 0
+                    $amonestacion->update(['codigo' => $data['tipo'].now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
                     CrearNotificacionSuspension::dispatch($amonestacion);
-                }else{
+                } else {
                     $marcacion = Marcacion::with(['empleado.horarios'])->findOrFail($data['marcacion_id']);
-                    $minutos = match($data['tipo']) { // se obtiene la hora segun el tipo del memorandum
+                    $minutos = match ($data['tipo']) { // se obtiene la hora segun el tipo del memorandum
                         'tardanza' => $marcacion->tardanza,
                         'refrigerio' => $marcacion->refrigerio,
                         default => null
@@ -118,26 +118,26 @@ class SuspensionController extends Controller
                         'tipo' => $data['tipo'],
                     ]);
 
-                    $amonestacion->update(['codigo' => 'AM' . now()->format('dmY') . $amonestacion->id]); // verificar que se guarde con estado 0
+                    $amonestacion->update(['codigo' => 'AM'.now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
                 }
 
             });
 
-            if($request->has('motivo')){
+            if ($request->has('motivo')) {
                 return to_route('suspensiones.index')->withSuccess(['message' => 'Suspension creado exitosamente!']);
             }
 
-        }catch(Exception $e){
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+        } catch (Exception $e) {
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
     public function show(Suspension $suspensione): Response
     {
         $amonestaciones = Suspension::with('empleado')
-        ->where('codigo_asociado', $suspensione->codigo)
-        ->orderBy('fecha', 'desc')
-        ->get();
+            ->where('codigo_asociado', $suspensione->codigo)
+            ->orderBy('fecha', 'desc')
+            ->get();
 
         return Inertia::render('suspensiones/show', [
             'suspension' => $suspensione,
@@ -146,29 +146,69 @@ class SuspensionController extends Controller
         ]);
     }
 
+    // {/* Imprimir en esta parte debe estar el calendario */}
     public function print(Request $request, Suspension $suspension)
     {
+        // DEBUG: Ver qué llega en el request
+
+
         $suspension->load(['empleado.area', 'empleado.empresa']);
-        $suspension->update(['estado_print' => 1, 'fecha_print' => $request->fecha ?? null, 'motivo' => $request->motivo]);
+        $suspension->update(['estado_print' => 1, 'motivo' => $request->motivo]);
         $fechaMemo = now()->format('m-Y');
 
-        $fecha = Carbon::parse($suspension->fecha_print)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
+        // VALIDACIÓN DE FECHAS Y CÁLCULO DE DÍAS
+        $fecha = null;
+        $fechaFin = null;
+        $diasSuspension = 1; // Por defecto 1 día
+
+        if ($request->fecha_inicio && $request->fecha_fin) {
+            // SI SON DOS FECHAS: usar ambas y calcular días
+            $fecha = Carbon::parse($request->fecha_inicio)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
+            $fechaFin = Carbon::parse($request->fecha_fin)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
+
+            // CALCULAR DÍAS: diferencia + 1 (incluyendo ambos días)
+            $inicio = Carbon::parse($request->fecha_inicio);
+            $fin = Carbon::parse($request->fecha_fin);
+            $diasSuspension = $inicio->diffInDays($fin) + 1;
+
+            // DEBUG: Ver cálculo de días
+
+
+        } elseif ($request->fecha) {
+            // SI ES SOLO UNA FECHA: usar la misma para ambas (1 día)
+            $fecha = Carbon::parse($request->fecha)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
+            $fechaFin = $fecha; // misma fecha
+            $diasSuspension = 1; // Un solo día
+
+
+
+        } else {
+            // SI NO HAY FECHAS: usar fecha actual (1 día)
+            $fecha = now()->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
+            $fechaFin = $fecha;
+            $diasSuspension = 1; // Un solo día
+
+        }
+
+        // DEBUG: Valores finales que se envían a la vista
+
         $articulo = $request->articulo;
 
         if ($suspension->tipo == 'incumplimiento') {
-            return view('exports.pdf.suspension.incumplimiento', compact('suspension', 'articulo', 'fecha', 'fechaMemo'));
+            return view('exports.pdf.suspension.incumplimiento', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
         if ($suspension->tipo == 'falta injustificada') {
-            return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaMemo'));
+            return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
-        if($suspension->tipo == 'negligencia'){
-            return view('exports.pdf.suspension.negligencia', compact('suspension', 'articulo', 'fecha', 'fechaMemo'));
+        if ($suspension->tipo == 'negligencia') {
+            return view('exports.pdf.suspension.negligencia', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
         $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
-        return view('exports.pdf.suspension.suspension', compact('suspension', 'amonestaciones', 'fecha', 'fechaMemo'));
+
+        return view('exports.pdf.suspension.suspension', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
     }
 
     public function upload(Request $request, Suspension $suspension)
@@ -200,16 +240,15 @@ class SuspensionController extends Controller
                             'fecha' => $terceraSuspension->fecha,
                             'estado' => 0,
                         ]);
-                        $suspensionAsociada->update(['codigo' => 'S' . now()->format('dmY') . $suspensionAsociada->id]);
+                        $suspensionAsociada->update(['codigo' => 'S'.now()->format('dmY').$suspensionAsociada->id]);
                         $amonestaciones->update(['codigo_asociado' => $suspensionAsociada->codigo]);
                     }
 
                 }
             });
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
-
 
     }
 }

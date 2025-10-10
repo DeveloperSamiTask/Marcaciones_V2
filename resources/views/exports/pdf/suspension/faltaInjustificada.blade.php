@@ -38,7 +38,7 @@
         <div style="page-break-inside: avoid;">
             <div style="text-align: center;">
                 <h2 style="font-size:16px; text-align:center; margin-left: 50px;">
-                <u>&nbsp;MEMORANDUM {{ $fechaMemo }}-RRHH/GVS&nbsp;</u>
+                    <u>&nbsp;MEMORANDUM {{ $fechaMemo }}-RRHH/GVS&nbsp;</u>
                 </h2>
                 <p style="font-size:14px; text-align:left; margin-left: 50px;">
                     DE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
@@ -65,7 +65,8 @@
                         FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
                 </p>
                 <li style="margin-left: 150px; margin-right: 230px;">
-                    Por faltar injustificadamente a su centro de labores el dia {{ $suspension->fecha->format('d/m/Y') }}
+                    Por faltar injustificadamente a su centro de labores el dia
+                    {{ $suspension->fecha->format('d/m/Y') }}
                 </li>
 
                 <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
@@ -78,14 +79,25 @@
                     obligación inherente a su contrato de trabajo, constituyendo además su inobservancia una manifiesta
                     contravención del Reglamento Interno de Trabajo de la empresa, cuyas disposiciones son obligatorias
                     y plenamente conocidas por todo el personal que labora para la empresa. </p>
-                <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                    Por esta razón, la empresa ha decidido proceder s sancionarlo con (1) días de <strong>Suspensión sin
-                        goce de
-                        Haber</strong>, fecha que será efectiva el dia <strong>{{ $fecha }}</strong>
-                    Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomaran
-                    medidas pertinentes al respecto, siendo de su entera responsabilidad.
-
-                </p>
+                @if ($fecha == $fechaFin)
+                    <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
+                        Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día
+                        de
+                        <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día
+                        <strong>{{ $fecha }}</strong>.
+                        Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                        medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                    </p>
+                @else
+                    <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
+                        Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días
+                        de
+                        <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el
+                        <strong>{{ $fecha }}</strong> hasta el <strong>{{ $fechaFin }}</strong>.
+                        Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                        medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                    </p>
+                @endif
                 <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
 
                 <table style="width:100%;">
@@ -115,7 +127,7 @@
             <br>
             <div style="text-align: center;">
                 <h2 style="font-size:16px; text-align:center; margin-left: 50px;">
-                <u>&nbsp;MEMORANDUM {{ $fechaMemo }}-RRHH/GVS&nbsp;</u>
+                    <u>&nbsp;MEMORANDUM {{ $fechaMemo }}-RRHH/GVS&nbsp;</u>
                 </h2>
                 <p style="font-size:14px; text-align:left; margin-left: 50px;">
                     DE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:
@@ -142,7 +154,8 @@
                         FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
                 </p>
                 <li style="margin-left: 150px; margin-right: 230px;">
-                    Por faltar injustificadamente a su centro de labores el dia {{ $suspension->fecha->format('d/m/Y') }}
+                    Por faltar injustificadamente a su centro de labores el dia
+                    {{ $suspension->fecha->format('d/m/Y') }}
                 </li>
 
 
@@ -156,12 +169,26 @@
                     obligación inherente a su contrato de trabajo, constituyendo además su inobservancia una manifiesta
                     contravención del Reglamento Interno de Trabajo de la empresa, cuyas disposiciones son obligatorias
                     y plenamente conocidas por todo el personal que labora para la empresa. </p>
-                <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
-                    Por esta razón, la empresa ha decidido proceder s sancionarlo con (1) días de <strong>Suspensión sin
-                        goce de
-                        Haber</strong>, fecha que será efectiva el dia <strong>{{ $fecha }}</strong>
-                    Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomaran
-                    medidas pertinentes al respecto, siendo de su entera responsabilidad.
+
+                @if ($fecha == $fechaFin)
+                    <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
+                        Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día
+                        de
+                        <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día
+                        <strong>{{ $fecha }}</strong>.
+                        Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                        medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                    </p>
+                @else
+                    <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
+                        Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días
+                        de
+                        <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el
+                        <strong>{{ $fecha }}</strong> hasta el <strong>{{ $fechaFin }}</strong>.
+                        Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                        medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                    </p>
+                @endif
 
                 </p>
                 <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
