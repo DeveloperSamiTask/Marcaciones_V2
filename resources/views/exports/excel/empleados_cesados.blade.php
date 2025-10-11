@@ -19,7 +19,7 @@
             <th>TALLA</th>
             <th>HORAS</th>
             <th>INGRESO</th>
-
+            <th>CESE</th>
             <th>ESTADO</th>
         </tr>
     </thead>
@@ -41,7 +41,7 @@
                 <td> {{ $item->talla }} </td>
                 <td> {{ $item->horas }} </td>
                 <td> {{ \Carbon\Carbon::parse($item->fecha_ingreso)->format('d/m/Y') }} </td>
-
+                <td> {{ \Carbon\Carbon::parse($item->fecha_cese)->format('d/m/Y') }} </td>
                 <td> {{ !$item->fecha_cese ? 'ACTIVO' : 'INACTIVO' }} </td>
             </tr>
         @endforeach

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\EmpleadoExport;
+use App\Exports\EmpleadoCesadosExport;
 use App\Http\Requests\EmpleadoRequest;
 use App\Models\Area;
 use App\Models\Empleado;
@@ -13,6 +14,7 @@ use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
@@ -21,7 +23,7 @@ class EmpleadoController extends Controller
 {
     public function index(Request $request)
     {
-        if (!$request->has('cesado')) {
+        if (! $request->has('cesado')) {
             return redirect()->route('empleados.index', ['cesado' => 0]);
         }
 
@@ -32,7 +34,7 @@ class EmpleadoController extends Controller
         $cesado = isset($filters['cesado']) ? boolval($filters['cesado']) : null;
 
         $empleados = Empleado::with(['empresa', 'area', 'jefe', 'jornada'])
-            ->when(!is_null($cesado), function ($query) use ($cesado) {
+            ->when(! is_null($cesado), function ($query) use ($cesado) {
                 return $cesado
                     ? $query->whereNotNull('fecha_cese')
                     : $query->whereNull('fecha_cese');
@@ -47,7 +49,6 @@ class EmpleadoController extends Controller
         ]);
     }
 
-
     public function mostrarEmpleadoModal($id)
     {
         $empleado = Empleado::findOrFail($id);
@@ -57,13 +58,11 @@ class EmpleadoController extends Controller
         ]);
     }
 
-
-
     public function create(): Response
     {
         $empresas = Empresa::where('estado', true)->orderBy('razonsocial')->get(['id', 'razonsocial']);
         $jornadas = Jornada::get(['id', 'nombre']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
         $areas = Area::get(['id', 'nombre', 'empresa_id']);
 
         return Inertia::render('empleados/create', [
@@ -81,6 +80,7 @@ class EmpleadoController extends Controller
             DB::transaction(function () use ($data) {
                 Empleado::create($data);
             });
+
             return to_route('empleados.index')->withSuccess(['message' => 'Empleado creada exitosamente!']);
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()])->withInput();
@@ -91,7 +91,7 @@ class EmpleadoController extends Controller
     {
         $empresas = Empresa::where('estado', true)->orderBy('razonsocial')->get(['id', 'razonsocial']);
         $jornadas = Jornada::get(['id', 'nombre']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
         $areas = Area::get(['id', 'nombre', 'empresa_id']);
 
         return Inertia::render('empleados/create', [
@@ -110,6 +110,7 @@ class EmpleadoController extends Controller
             DB::transaction(function () use ($data, $empleado) {
                 $empleado->update($data);
             });
+
             return to_route('empleados.index')->withSuccess(['message' => 'Empleado actualizada exitosamente!']);
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()])->withInput();
@@ -126,16 +127,12 @@ class EmpleadoController extends Controller
                 $empleado->update(['fecha_cese' => $data['fecha_cese']]);
                 User::where('empleado_id', $empleado->id)->delete();
             });
+
             return to_route('empleados.index')->withSuccess(['message' => 'Empleado cesado correctamente!']);
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()])->withInput();
         }
     }
-
-
-
-
-
 
     public function download(Request $request)
     {
@@ -146,6 +143,25 @@ class EmpleadoController extends Controller
         return Excel::download(new EmpleadoExport($data), 'empleados.xlsx');
     }
 
+    public function downloadCesados(Request $request)
+    {
+        try {
+
+            $data = $request->validate([
+                'empleados' => 'required',
+            ]);
+
+            return Excel::download(new EmpleadoCesadosExport($data), 'empleados_cesados.xlsx');
+
+        } catch (\Exception $e) {
 
 
+            // ✅ DEVOLVER ERROR JSON EN LUGAR DE EXCEPCIÓN
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'debug' => 'Revisar logs de Laravel',
+            ], 500);
+        }
+    }
 }

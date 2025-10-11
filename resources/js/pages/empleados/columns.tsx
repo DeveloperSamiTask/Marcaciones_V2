@@ -86,6 +86,30 @@ export const columns = (cesado: number): ColumnDef<Empleado>[] => [
         },
         cell: ({ row }) => format(row.original.fecha_ingreso, 'dd/MM/yyyy')
     },
+
+    // COLUMNA CESE - SOLO CUANDO cesado = 1
+    ...(cesado === 1 ? [{
+        accessorKey: "fecha_cese",
+        header: ({ column }) => {
+            return (
+                <Button
+                    variant="ghost"
+                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                >
+                    CESE
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+            );
+        },
+        cell: ({ row }) => {
+            const fechaCese = row.original.fecha_cese;
+            if (!fechaCese) {
+                return null;
+            }
+            return format(fechaCese, 'dd/MM/yyyy');
+        }
+    }] : []),
+
     {
         accessorKey: "jefe",
         header: "JEFE",

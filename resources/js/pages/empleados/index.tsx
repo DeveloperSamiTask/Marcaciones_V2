@@ -3,7 +3,7 @@ import AppLayout from "@/layouts/app-layout";
 import { BreadcrumbItem } from "@/types";
 import { Head, Link, usePage } from "@inertiajs/react";
 import { Empleado } from "@/types/empleados";
-import { columns} from "./columns";
+import { columns } from "./columns";
 import { DataTable } from "@/components/data-table";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus } from "lucide-react";
@@ -11,13 +11,13 @@ import DownloadEmpleado from "./download";
 import { router } from "@inertiajs/react";
 import ModalEmpleado from './deleteModal';
 
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: "Empleados",
         href: "/empleados",
     },
 ];
-
 export default function IndexEmpleado({
     empleados,
     filters,
@@ -68,12 +68,8 @@ export default function IndexEmpleado({
                                 </Link>
                             </Button>
 
-                            <DownloadEmpleado disabled={empleados.length <= 0} empleados={empleados} />
+                            <DownloadEmpleado disabled={empleados.length <= 0} empleados={empleados} cesado={cesado} />
                         </div>
-
-
-
-
                     </div>
 
                     <Card>

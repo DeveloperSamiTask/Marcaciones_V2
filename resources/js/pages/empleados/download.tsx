@@ -5,18 +5,35 @@ import { DownloadIcon, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-export default function DownloadEmpleado({ disabled, empleados }: { disabled: boolean; empleados: Empleado[] }) {
-    const { csrf_token } = usePage().props;
-    const [processing, setProcessing] = useState(false); // para la carga
 
-    const download = async () => {
+
+
+export default function DownloadEmpleado({ disabled, empleados, cesado }: {
+    disabled: boolean;
+    empleados: Empleado[];
+    cesado: number;
+}) {
+
+    const { csrf_token } = usePage().props;
+    const [processing, setProcessing] = useState(false);
+
+    const download = async (e) => {
+        e?.preventDefault();  // ← IMPORTANTE: Prevenir comportamiento por defecto
+
         try {
             setProcessing(true);
             const params = {
                 empleados: JSON.stringify(empleados),
             };
 
-            const response = await fetch(route('empleados.download'), {
+            // ✅ DECIDIR RUTA SEGÚN CESADO
+            const ruta = cesado === 1
+                ? route('empleados.download-cesados')
+                : route('empleados.download');
+
+            console.log('🔗 RUTA COMPLETA:', ruta);
+
+            const response = await fetch(ruta, {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/vnd.ms-excel',

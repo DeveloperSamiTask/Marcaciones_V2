@@ -28,7 +28,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Empleados
     Route::resource('empleados', EmpleadoController::class)->except(['show']);
 
+
     Route::post('empleados/download', [EmpleadoController::class, 'download'])->name('empleados.download');
+
+
+    Route::post('empleados/download-cesados', [EmpleadoController::class, 'downloadCesados'])->name('empleados.download-cesados');
+
+
 
     Route::get('/empleados/{id}/modal', [EmpleadoController::class, 'mostrarEmpleadoModal'])
         ->name('empleados.modal');
