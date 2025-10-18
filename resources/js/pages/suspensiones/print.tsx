@@ -32,8 +32,7 @@ export default function PrintSuspension({ suspension, isPrint }: { suspension: S
         const printUrl = `${route('suspensiones.imprimir', suspension.id)}?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&motivo=${motivo}&articulo=${articulo}`;
         const printWindow = window.open(printUrl, '_blank', 'width=800,height=600');
 
-        console.log('📅 Fecha Inicio:', fechaInicio);
-        console.log('📅 Fecha Fin:', fechaFin);
+
 
         if (printWindow) {
 

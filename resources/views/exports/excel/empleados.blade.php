@@ -19,7 +19,6 @@
             <th>TALLA</th>
             <th>HORAS</th>
             <th>INGRESO</th>
-
             <th>ESTADO</th>
         </tr>
     </thead>
@@ -29,10 +28,11 @@
                 <td> {{ $item->id }} </td>
                 <td> {{ $item->dni }} </td>
                 <td> {{ $item->apellidos }} {{ $item->nombres }} </td>
-                <td> {{ $item->empresa->razonsocial }} </td>
-                <td>{{ $empleado->area->nombre ?? 'SIN ÁREA' }}</td>
-                <td> {{ $item->jornada->nombre }} </td>
-                <td> {{ $item->jefe_id ? $item->jefe->apellidos : '' }} {{ $item->jefe_id ? $item->jefe->nombres : '' }} </td>
+                <td> {{ $item->empresa->razonsocial ?? 'SIN EMPRESA' }} </td>
+                <td> {{ $item->area->nombre ?? 'SIN ÁREA' }}</td> {{-- ← AQUÍ ESTABA EL ERROR --}}
+                <td> {{ $item->jornada->nombre ?? 'SIN JORNADA' }} </td>
+                <td> {{ $item->jefe_id ? $item->jefe->apellidos : '' }} {{ $item->jefe_id ? $item->jefe->nombres : '' }}
+                </td>
                 <td> {{ $item->cargo }} </td>
                 <td> {{ $item->email }} </td>
                 <td> {{ $item->sexo }} </td>
@@ -41,7 +41,6 @@
                 <td> {{ $item->talla }} </td>
                 <td> {{ $item->horas }} </td>
                 <td> {{ \Carbon\Carbon::parse($item->fecha_ingreso)->format('d/m/Y') }} </td>
-
                 <td> {{ !$item->fecha_cese ? 'ACTIVO' : 'INACTIVO' }} </td>
             </tr>
         @endforeach
