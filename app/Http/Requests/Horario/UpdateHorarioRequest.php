@@ -26,7 +26,7 @@ class UpdateHorarioRequest extends FormRequest
             'ingreso' => ['required'],
             'salida' => ['required'],
             'descripcion' => ['nullable', 'string', 'max:255'],
-            'estado' => ['required', 'in:L,D,C,AHE,HE,CA,CHE,F,FL,SP,V,M,SN,ST,SFI,HE,,FI,FJ,LCG,LSG,LP,LM,LF'],
+            'estado' => ['required', 'in:L,D,C,AHE,HE,CA,CHE,F,FL,SP,V,M,SN,ST,SFI,HE,,FI,FJ,LCG,LSG,LP,LM,LF,TD'],
             'extras' => 'nullable',
             // 'comprobante' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:2048',
         ];

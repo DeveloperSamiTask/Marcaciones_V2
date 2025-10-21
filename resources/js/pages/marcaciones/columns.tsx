@@ -351,11 +351,11 @@ export const columns: ColumnDef<Marcacion>[] = [
                     const totalHoras = table.getRowModel().rows.reduce((sum, row) => {
                         return sum + (row.original.horas || 0);
                     }, 0);
-                    //console.log('=== TOTAL HORAS DEL DÍA ===');
+                    console.log('=== TOTAL HORAS DEL DÍA ===');
                     //console.log('Total minutos:', totalHoras);
-                    //console.log('Total horas:', formatMinutes(totalHoras));
-                    //console.log('Número de registros:', table.getRowModel().rows.length);
-                    //console.log('========================');
+                    console.log('Total horas:', formatMinutes(totalHoras));
+                    console.log('Número de registros:', table.getRowModel().rows.length);
+                    console.log('========================');
 
                 }, 0);
             }

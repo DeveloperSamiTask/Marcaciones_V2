@@ -51,6 +51,8 @@ const estadoOptions = [
     { value: 'LM', label: 'LICENCIA POR MATERNIDAD' },
     { value: 'LF', label: 'LICENCIA POR FALLECIMIENTO' },
     { value: 'PE', label: 'PENDIENTE' },
+
+    { value: 'TD', label: 'TRABAJO DIA DESCANSO' },
 ];
 
 type HorarioForm = {
@@ -65,12 +67,12 @@ type HorarioForm = {
 };
 
 const formatHours = (hours: number | false): string => {
-  if (typeof hours !== 'number') return '-';
+    if (typeof hours !== 'number') return '-';
 
-  const wholeHours = Math.floor(hours);
-  const minutes = Math.round((hours - wholeHours) * 60);
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
 
-  return `${String(wholeHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    return `${String(wholeHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
 const formatMinutes = (minutes: number | false): string => {
@@ -146,13 +148,20 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
     });
 
     const handleEstadoChange = (value: string) => {
+
+        // Validar que TD solo sea para full time
+        if (value === 'TD' && horario.empleado.jornada_id !== 1) {
+            toast.error('Esta opción solo aplica para personal full time');
+            return;
+        }
+
         setExcedente(false);
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
 
         const horas = empleado.jornada_id == 1 ? 2880 : 1410; // si es full 48 horas semanalas, si es part 23.5(23:30) horas en numeros | valores en minutos
         // 8 horas laborables si es full, se resta 8 horas o 4 horas por la razon de que no se debe contabilizar las horas que estan en los impputs y solo contar la diferencia
-        const total = (differenceInMinutes(salidaDate, ingresoDate) -  60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
+        const total = (differenceInMinutes(salidaDate, ingresoDate) - 60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
         const total_semanal = empleado.horas_semanal_trabajadas ?? 0;
         let extras = '';
 
@@ -190,7 +199,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         // 2880 => 48 horas y 1410 => 23.5
         const horas = empleado.jornada_id == 1 ? 2880 : 1410; // si es full 48 horas semanalas, si es part 23.5(23:30) horas en numeros | valores en minutos
         // 8 horas laborables si es full, se resta 8 horas o 4 horas por la razon de que no se debe contabilizar las horas que estan en los impputs y solo contar la diferencia
-        const total = (differenceInMinutes(salidaDate, ingresoDate) -  60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
+        const total = (differenceInMinutes(salidaDate, ingresoDate) - 60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
         const total_semanal = empleado.horas_semanal_trabajadas ?? 0;
 
         setExcedente(false);
@@ -234,7 +243,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                 <div className="flex items-center justify-between gap-3">
                     <Button variant="ghost" asChild className='text-xl'>
                         <Link href={url} prefetch>
-                            <ArrowLeft/>
+                            <ArrowLeft />
                             Regresar
                         </Link>
                     </Button>
@@ -358,7 +367,13 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                                 <SelectValue placeholder="SELECCIONAR ESTADO" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {estadoOptions.filter(option => option.value !== 'SP' || horario.empleado.jornada_id === 2).map((option) => (
+                                                {estadoOptions.filter(option => {
+                                                    // Ocultar 'SP' para full time
+                                                    if (option.value === 'SP' && horario.empleado.jornada_id === 1) return false;
+                                                    // Ocultar 'TD' para part time
+                                                    if (option.value === 'TD' && horario.empleado.jornada_id !== 1) return false;
+                                                    return true;
+                                                }).map((option) => (
                                                     <SelectItem key={option.value} value={option.value} disabled={option.value === 'PE' || data.estado == 'E'}>
                                                         {option.label}
                                                     </SelectItem>

@@ -120,6 +120,7 @@ export const columns: ColumnDef<Suspension>[] = [
                             </Link>
                         </Button>}
 
+                     {/* Estado print es si ya esta impreso o no */}
                     {/* Imprimir en esta parte debe estar el calendario */}
                     {(suspension.codigo[0] == 'S' || suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && auth.user.rol_id != 4 &&
                         <PrintSuspension key={`print-suspension${suspension.id}`} suspension={suspension} isPrint={suspension.estado_print} />}

@@ -21,7 +21,7 @@ const estadoBadgeVariants = {
     V: { label: 'VACACIONES', variant: 'info' },
 
     M: { label: 'D. MEDICO', variant: 'warning' },
-    
+
     S: { label: 'SUSPENSION', variant: 'destructive' },
     SN: { label: 'S. NEGLIGENCIA', variant: 'destructive' },
     SFI: { label: 'S. FALTA INJ.', variant: 'destructive' },
@@ -36,6 +36,8 @@ const estadoBadgeVariants = {
     PE: { label: 'PENDIENTE', variant: 'warning' },
     HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
+
+    TD: { label: 'TRABAJO DIA DESCANSO', variant: 'secondary' },
 } as const;
 
 export const columns: ColumnDef<Horario>[] = [

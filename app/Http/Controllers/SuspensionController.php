@@ -12,7 +12,6 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -71,6 +70,7 @@ class SuspensionController extends Controller
     public function store(Request $request)
     {
 
+        // 1. cuando viene un motivo -> suspension manual
         if ($request->has('motivo')) {
             $data = $request->validate([
                 'empleado_id' => 'required|exists:empleados,id',
@@ -79,6 +79,8 @@ class SuspensionController extends Controller
                 'tipo' => 'required|string|in:AM,S',
                 'razon' => 'required|string|in:tardanza,falta injustificada,incumplimiento,negligencia',
             ]);
+
+            // 2. cuando no viene motivo
         } else {
             $data = $request->validate([
                 'marcacion_id' => 'required|exists:marcacions,id',
@@ -98,9 +100,12 @@ class SuspensionController extends Controller
                         'tipo' => $data['razon'],
                     ]);
 
+                    // 3. genera codigo unico : S15012024325
                     $amonestacion->update(['codigo' => $data['tipo'].now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
                     CrearNotificacionSuspension::dispatch($amonestacion);
                 } else {
+
+                    // 4. Amonestación Automática por Marcación
                     $marcacion = Marcacion::with(['empleado.horarios'])->findOrFail($data['marcacion_id']);
                     $minutos = match ($data['tipo']) { // se obtiene la hora segun el tipo del memorandum
                         'tardanza' => $marcacion->tardanza,
@@ -108,6 +113,7 @@ class SuspensionController extends Controller
                         default => null
                     };
 
+                    // 5 Convierte minutos a hora (ej: 30 min → 00:30:00)
                     $hora = $minutos ? Carbon::now()->startOfDay()->addMinutes($minutos)->format('H:i:s') : null;
 
                     $amonestacion = Suspension::create([
@@ -118,6 +124,7 @@ class SuspensionController extends Controller
                         'tipo' => $data['tipo'],
                     ]);
 
+                    // 6 Código para amonestación: "AM15012024325"
                     $amonestacion->update(['codigo' => 'AM'.now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
                 }
 
@@ -151,9 +158,12 @@ class SuspensionController extends Controller
     {
         // DEBUG: Ver qué llega en el request
 
-
         $suspension->load(['empleado.area', 'empleado.empresa']);
-        $suspension->update(['estado_print' => 1, 'motivo' => $request->motivo]);
+        $suspension->update([
+            'estado_print' => 1,
+            'motivo' => $request->motivo,
+            'fecha_print' => $request->fecha_inicio,
+        ]);
         $fechaMemo = now()->format('m-Y');
 
         // VALIDACIÓN DE FECHAS Y CÁLCULO DE DÍAS
@@ -173,14 +183,11 @@ class SuspensionController extends Controller
 
             // DEBUG: Ver cálculo de días
 
-
         } elseif ($request->fecha) {
             // SI ES SOLO UNA FECHA: usar la misma para ambas (1 día)
             $fecha = Carbon::parse($request->fecha)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
             $fechaFin = $fecha; // misma fecha
             $diasSuspension = 1; // Un solo día
-
-
 
         } else {
             // SI NO HAY FECHAS: usar fecha actual (1 día)
@@ -219,36 +226,52 @@ class SuspensionController extends Controller
 
         try {
             DB::transaction(function () use ($suspension, $request) {
-                if ($request->hasFile('sustento')) { // verificamos que haya un archivo comrpobante
+                if ($request->hasFile('sustento')) {
                     $file = $request->file('sustento');
-                    // $path = Storage::put('comprobantes', $file);
-                    $path = $file->store('suspensiones/'.$suspension->id, 'public'); // Almacenar el archivo en la carpeta public del storage
+                    $path = $file->store('suspensiones/'.$suspension->id, 'public');
                     $suspension->update(['sustento' => "storage/$path", 'estado' => 1]);
 
-                    // creamos suspensiones cuando llegue a 3 amonestaciones
+                    // Obtener todas las amonestaciones del mismo tipo con sustento (incluyendo la actual)
                     $amonestaciones = Suspension::where('empleado_id', $suspension->empleado_id)
-                        ->whereNull('codigo_asociado')
+                        ->whereNull('codigo_asociado') // que no estén ya asociadas a una suspensión
                         ->where('tipo', $suspension->tipo)
                         ->where('codigo', 'like', 'A%')
-                        ->whereNotNull('sustento');
+                        ->where('estado', 1)
+                        ->whereNotNull('sustento')
+                        ->orderBy('fecha', 'asc')
+                        ->get();
 
-                    if ($amonestaciones->count() == 3) {
-                        $terceraSuspension = $amonestaciones->orderBy('fecha', 'desc')->first(); // se obtiene la tercera amonestacion para guardar la fecha en la suspension
+                    // Verificar si completamos 3 amonestaciones
+                    if ($amonestaciones->count() >= 3) {
+                        // Tomar solo las primeras 3 amonestaciones
+                        $tresAmonestaciones = $amonestaciones->take(3);
+                        $terceraSuspension = $tresAmonestaciones->last();
+
+                        // Crear la suspensión asociada
                         $suspensionAsociada = Suspension::create([
                             'empleado_id' => $suspension->empleado_id,
                             'tipo' => $suspension->tipo,
                             'fecha' => $terceraSuspension->fecha,
                             'estado' => 0,
                         ]);
-                        $suspensionAsociada->update(['codigo' => 'S'.now()->format('dmY').$suspensionAsociada->id]);
-                        $amonestaciones->update(['codigo_asociado' => $suspensionAsociada->codigo]);
-                    }
 
+                        $codigoSuspension = 'S'.now()->format('dmY').$suspensionAsociada->id;
+                        $suspensionAsociada->update(['codigo' => $codigoSuspension]);
+
+                        // Asociar el código de suspensión SOLO a las 3 amonestaciones
+                        foreach ($tresAmonestaciones as $amonestacion) {
+                            $amonestacion->update(['codigo_asociado' => $codigoSuspension]);
+                        }
+                    }
                 }
             });
+
+            return back()->with('success', 'Sustento subido correctamente');
+
         } catch (Exception $e) {
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
-
     }
+
+
 }
