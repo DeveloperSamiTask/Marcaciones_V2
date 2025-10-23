@@ -67,7 +67,8 @@ class SuspensionController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    /*
+ public function store(Request $request)
     {
 
         // 1. cuando viene un motivo -> suspension manual
@@ -128,6 +129,85 @@ class SuspensionController extends Controller
                     $amonestacion->update(['codigo' => 'AM'.now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
                 }
 
+            });
+
+            if ($request->has('motivo')) {
+                return to_route('suspensiones.index')->withSuccess(['message' => 'Suspension creado exitosamente!']);
+            }
+
+        } catch (Exception $e) {
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
+        }
+    }
+    */
+
+    public function store(Request $request)
+    {
+        // 1. cuando viene un motivo -> suspension manual
+        if ($request->has('motivo')) {
+            $data = $request->validate([
+                'empleado_id' => 'required|exists:empleados,id',
+                'fecha' => 'required|date',
+                'motivo' => 'required|string',
+                'tipo' => 'required|string|in:AM,S',
+                'razon' => 'required|string|in:tardanza,falta injustificada,incumplimiento,negligencia',
+            ]);
+
+            // ✅ NUEVA LÓGICA: Validar días de semana vs fin de semana
+            $tipoFinal = $data['tipo'];
+            $fechaFalta = Carbon::parse($data['fecha']);
+
+            // Si es SUSPENSIÓN pero es día de semana (lunes a viernes)
+            if ($data['tipo'] === 'S' && ! $fechaFalta->isWeekend()) {
+                $tipoFinal = 'AM'; // Forzar a amonestación
+            }
+
+        } else {
+            $data = $request->validate([
+                'marcacion_id' => 'required|exists:marcacions,id',
+                'tipo' => 'required|string|in:tardanza,incompleto,refrigerio,incumplimiento',
+            ]);
+        }
+
+        try {
+            // ✅ CORREGIDO: Pasar $tipoFinal solo si existe
+            $tipoParam = $tipoFinal ?? ($data['tipo'] ?? null);
+            DB::transaction(function () use ($data, $request, $tipoParam) {
+
+                if ($request->has('motivo')) {
+                    $amonestacion = Suspension::create([
+                        'user_id' => $request->user()->id,
+                        'empleado_id' => $data['empleado_id'],
+                        'fecha' => now(),
+                        'motivo' => 'En la fecha '.$data['fecha'].$data['motivo'],
+                        'tipo' => $data['razon'],
+                    ]);
+
+                    $codigoTipo = $tipoParam ?? $data['tipo'];
+                    $amonestacion->update(['codigo' => $codigoTipo.now()->format('dmY').$amonestacion->id]);
+
+                    CrearNotificacionSuspension::dispatch($amonestacion);
+                } else {
+                    // ... (el resto del código se mantiene igual)
+                    $marcacion = Marcacion::with(['empleado.horarios'])->findOrFail($data['marcacion_id']);
+                    $minutos = match ($data['tipo']) {
+                        'tardanza' => $marcacion->tardanza,
+                        'refrigerio' => $marcacion->refrigerio,
+                        default => null
+                    };
+
+                    $hora = $minutos ? Carbon::now()->startOfDay()->addMinutes($minutos)->format('H:i:s') : null;
+
+                    $amonestacion = Suspension::create([
+                        'user_id' => $request->user()->id,
+                        'empleado_id' => $marcacion->empleado_id,
+                        'fecha' => $marcacion->fecha,
+                        'hora' => $hora,
+                        'tipo' => $data['tipo'],
+                    ]);
+
+                    $amonestacion->update(['codigo' => 'AM'.now()->format('dmY').$amonestacion->id]);
+                }
             });
 
             if ($request->has('motivo')) {
@@ -272,6 +352,4 @@ class SuspensionController extends Controller
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
-
-
 }
