@@ -112,8 +112,8 @@ export const columns: ColumnDef<Suspension>[] = [
 
             return (
                 <div className="flex items-center gap-2">
-
-                    {suspension.codigo[0] == 'S' && suspension.tipo != 'falta injustificada' && suspension.tipo != 'negligencia' &&
+                    {/* && suspension.tipo != 'falta injustificada' */}
+                    {suspension.codigo[0] == 'S' &&
                         <Button variant="info" key={`show-suspension-${suspension.id}`} asChild size="sm">
                             <Link href={route('suspensiones.show', suspension.id)} prefetch>
                                 <Search />

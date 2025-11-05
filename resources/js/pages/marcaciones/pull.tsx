@@ -28,7 +28,7 @@ export default function PullMarcacion({ empresaId }: { empresaId: number | null 
             fecha: '',
         });
     }, [empresaId]);
-    
+
     const pullMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
 

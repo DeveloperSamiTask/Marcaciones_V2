@@ -109,7 +109,7 @@ class ReporteController extends Controller
                     /* */ $horasTrabajadas = max(0, $horario->ingreso->diffInMinutes($empleado->jornada_id == 2 ? $horario->salida : $marcacion->salida, false));
 
 
-                    
+
                     $horasTardanza = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false)); // si es negativo devuelve 0
                     $horasExtras = $marcacion->estado_horas_extra == 1 ? $horario->salida->diffInMinutes($marcacion->salida, false) : 0;
                     $horasAnticipado = max(0, $marcacion->salida->diffInMinutes($horario->salida, false)); // hora antes de su salida programado considerar 20 min si es su salida programada 11 o 11:30

@@ -155,6 +155,8 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
             return;
         }
 
+
+
         setExcedente(false);
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
@@ -180,10 +182,15 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         setData('feriado', '');
         setData('extras', extras);
 
+        const getFeriadoMasAntiguo = (feriados: Feriado[]) => {
+            return [...feriados]
+                .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())[0];
+        };
+
         // Actualizar feriado automáticamente según el estado
         const feriadoMap = {
-            C: feriadoDisponible[0],
-            CA: feriadoFuturo[0],
+            C: getFeriadoMasAntiguo(feriadoDisponible),  // ← Ahora sí el más antiguo
+            CA: getFeriadoMasAntiguo(feriadoFuturo),     // ← Ahora sí el más antiguo
         };
 
         const selectedFeriado = feriadoMap[value as keyof typeof feriadoMap];
@@ -298,7 +305,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                             type="time"
                                             className="mt-1 block w-full"
                                             value={data.ingreso}
-                                            disabled={auth.user.rol_id == 4}
+                                            //disabled={auth.user.rol_id == 4}
                                             tabIndex={4}
                                             onChange={(e) => {
                                                 if (data.salida && e.target.value > data.salida) {
@@ -322,7 +329,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                             type="time"
                                             className="mt-1 block w-full"
                                             value={data.salida}
-                                            disabled={auth.user.rol_id == 4}
+                                            //disabled={auth.user.rol_id == 4}
                                             tabIndex={5}
                                             onChange={(e) => {
                                                 if (data.ingreso && e.target.value < data.ingreso) {
@@ -385,7 +392,13 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                     </div>
 
                                     {(data.estado === 'C' || data.estado === 'CA') && (
-                                        <FeriadoInfo feriado={data.estado === 'C' ? feriadoDisponible : feriadoFuturo} tipo={data.estado} />
+                                        <FeriadoInfo
+                                            feriado={data.estado === 'C'
+                                                ? [...feriadoDisponible].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                                : [...feriadoFuturo].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                            }
+                                            tipo={data.estado}
+                                        />
                                     )}
                                 </div>
                                 <div className="flex items-center gap-4">

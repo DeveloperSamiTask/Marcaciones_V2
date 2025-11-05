@@ -9,7 +9,6 @@ use App\Models\Empresa;
 use App\Models\Extra;
 use App\Models\Feriado;
 use App\Models\Horario;
-use App\Models\Marcacion;
 use App\Models\Permiso;
 use App\Models\PermisoTipo;
 use Carbon\Carbon;
@@ -17,9 +16,7 @@ use Carbon\CarbonPeriod;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
-use stdClass;
 
 class HorarioController extends Controller
 {
@@ -32,6 +29,7 @@ class HorarioController extends Controller
         ]);
 
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
         $horarios = Horario::whereHas('empleado', function ($query) use ($request) {
             $query->where('empresa_id', $request->empresa)->whereNull('fecha_cese')
                 ->when($request->user()->rol_id == 4, function ($q) use ($request) {
@@ -49,7 +47,7 @@ class HorarioController extends Controller
         return Inertia::render('horarios/index', [
             'horarios' => $horarios,
             'empresas' => $empresas,
-            'filters' => $filters
+            'filters' => $filters,
         ]);
     }
 
@@ -57,7 +55,7 @@ class HorarioController extends Controller
     {
         $isJefe = $request->user()->rol_id == 4;
         $empleados = Empleado::whereNull('fecha_cese')
-            ->when($isJefe, fn($query) => $query->where('jefe_id', $request->user()->empleado_id))
+            ->when($isJefe, fn ($query) => $query->where('jefe_id', $request->user()->empleado_id))
             ->orderBy('apellidos')
             ->get(['id', 'jornada_id', 'apellidos', 'nombres']);
 
@@ -67,7 +65,21 @@ class HorarioController extends Controller
         ]);
     }
 
-    /*Crea horarios para un empleado en un rango de fechas.*/
+    public function create_2(Request $request)
+    {
+        $isJefe = $request->user()->rol_id == 4;
+        $empleados = Empleado::whereNull('fecha_cese')
+            ->when($isJefe, fn ($query) => $query->where('jefe_id', $request->user()->empleado_id))
+            ->orderBy('apellidos')
+            ->get(['id', 'jornada_id', 'apellidos', 'nombres']);
+
+        return Inertia::render('horarios/create-2', [
+            'empleados' => $empleados,
+            'url' => session('horarios_url', route('horarios.index')),
+        ]);
+    }
+
+    /* Crea horarios para un empleado en un rango de fechas. */
     public function store(StoreHorarioRequest $request)
     {
         $data = $request->validated();
@@ -92,12 +104,11 @@ class HorarioController extends Controller
                     }
                 }
 
-
                 foreach (CarbonPeriod::create($fechaIngreso, $fechaFin) as $fecha) {
                     $horario = Horario::firstOrCreate(
                         [
                             'empleado_id' => $data['empleado_id'], // Condición de búsqueda: empleado y fecha solo crear los registros que no haya coincidencia
-                            'fecha' => $fecha
+                            'fecha' => $fecha,
                         ],
                         [
                             'ingreso' => $data['ingreso'],
@@ -106,7 +117,6 @@ class HorarioController extends Controller
                             'estado' => $data['estado'] != 'L' ? 'PE' : 'L', // al crear un horario por defecto debe ser "L" => laboral o "V" => Vacaciones
                         ]
                     );
-
                     // $horasSemanal += $horario->ingreso->diffInMinutes($horario->salida) - 60; // se resta la hora de refrigerio
 
                     // solo para parttime que superen las 23:30 horas semanales o fulltime que superen las 48 horas semanales
@@ -117,7 +127,7 @@ class HorarioController extends Controller
                             ->where('estado', '!=', 2) // que no este rechazado
                             ->exists();
 
-                        if (!$permisoExistente) { // evita que se actualicen todos los horarios a pendiente
+                        if (! $permisoExistente) { // evita que se actualicen todos los horarios a pendiente
                             $horario->update(['estado' => 'PE']);
                             Permiso::create([ // creamos el permiso para poder autorizar o rechazar el cambio del horario
                                 'empleado_id' => $data['empleado_id'],
@@ -128,7 +138,6 @@ class HorarioController extends Controller
                             ]);
                         }
                     }
-
                     // si el estado es diferente a LABORAL, se crea un permiso para que el jefe lo apruebe o rechace
                     if ($data['estado'] != 'L') {
                         // obtenemos el tipo del permiso para poder crear un permiso con el mismo tipo
@@ -139,7 +148,7 @@ class HorarioController extends Controller
                             ->where('estado', '!=', 2) // que no este rechazado
                             ->exists();
 
-                        if (!$permisoExistente) {
+                        if (! $permisoExistente) {
 
                             Permiso::create([ // creamos el permiso para poder autorizar o rechazar el cambio del horario
                                 'empleado_id' => $data['empleado_id'],
@@ -152,12 +161,13 @@ class HorarioController extends Controller
                     }
                 }
 
-
                 if ($data['estado'] == 'L' && (($empleado->jornada_id == 2 && $horasSemanal > 1410) || ($empleado->jornada_id == 1 && $horasSemanal > 2880))) {
                     return 'Algunos horarios se enviaron a aprobación por exceder sus horas programadas';
                 }
+
                 return 'Horario creado exitosamente!';
             });
+
             return redirect()->to(session('horarios_url', route('horarios.index')))->withSuccess(['message' => $queryMessage]);
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
@@ -189,7 +199,7 @@ class HorarioController extends Controller
             $horarioLaborado = $empleado->horarios->where('fecha', $fecha)->where('estado', 'L')->first();
             $marcacionLaborado = $empleado->marcaciones->firstWhere('fecha', $fecha);
             if ($horarioLaborado && $marcacionLaborado && $marcacionLaborado->ingreso_refri) {
-                $partTime = $empleado->jornada_id == 2 && !$marcacionLaborado->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
+                $partTime = $empleado->jornada_id == 2 && ! $marcacionLaborado->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
                 $horasTrabajadas = max(0, $horarioLaborado->ingreso->diffInMinutes($horarioLaborado->salida, false));
                 $horas += $horasTrabajadas - ($partTime ? 0 : 60); // no se descuenta la hora de refrigerio si es parttime y no tomo refrigerio
             }
@@ -221,13 +231,12 @@ class HorarioController extends Controller
         $feriadoFuturo = Feriado::query() // feriados futuros para COMPENSA ADELANTADA
             ->whereYear('fecha', now()->year)
             ->whereDate('fecha', '>=', now())
-            ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $horario->empleado_id))
+            ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
             ->select(['id', 'fecha', 'nombre'])
             ->get();
 
-
         $feriadoDisponible = Feriado::query() // feriados en los que los empleados tienen estado L, antes de la fecha actual para "COMPENSACION"
-            ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $horario->empleado_id))
+            ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->get();
@@ -266,7 +275,7 @@ class HorarioController extends Controller
                         $permisoExistente->whereDate('fecha', $horario->fecha);
                     }
 
-                    if (!$permisoExistente->exists() || $data['estado'] == 'HE' || $data['estado'] == 'SP') {
+                    if (! $permisoExistente->exists() || $data['estado'] == 'HE' || $data['estado'] == 'SP') {
 
                         $permiso = Permiso::create([ // creamos el permiso para poder autorizar o rechazar el cambio del horario
                             'empleado_id' => $data['empleado_id'],
@@ -283,11 +292,11 @@ class HorarioController extends Controller
                         // ]);
 
                         // validamos si se trata de una compensa o compensa adelantada para poder guardarlo
-                        if ($data['estado'] === 'C' ||  $data['estado'] === 'CA') {
+                        if ($data['estado'] === 'C' || $data['estado'] === 'CA') {
                             $feriado = Feriado::find($data['feriado']); // obtenemos la tabla feriado
                             $existe = $horario->feriados()->where('horario_id', $horario->id)->exists(); // verificamos si existe en la tabla pivot
-                            if (!$existe) {
-                                $permiso->update(['motivo' => $tipoPermiso->nombre . ' del ' . $feriado->fecha->format('d/m/Y')]);
+                            if (! $existe) {
+                                $permiso->update(['motivo' => $tipoPermiso->nombre.' del '.$feriado->fecha->format('d/m/Y')]);
                                 $horario->feriados()->attach($data['feriado']); // se registra el feriado en el horario indicado
                             }
                         }
@@ -297,6 +306,7 @@ class HorarioController extends Controller
                     }
                 }
             });
+
             return redirect()->to(session('horarios_url', route('horarios.index')))->withSuccess(['message' => 'Horario creado exitosamente!']);
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);

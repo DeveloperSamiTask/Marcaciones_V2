@@ -28,13 +28,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Empleados
     Route::resource('empleados', EmpleadoController::class)->except(['show']);
 
-
     Route::post('empleados/download', [EmpleadoController::class, 'download'])->name('empleados.download');
 
-
     Route::post('empleados/download-cesados', [EmpleadoController::class, 'downloadCesados'])->name('empleados.download-cesados');
-
-
 
     Route::get('/empleados/{id}/modal', [EmpleadoController::class, 'mostrarEmpleadoModal'])
         ->name('empleados.modal');
@@ -64,6 +60,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Horarios
     Route::resource('horarios', HorarioController::class)->except(['show', 'destroy']);
+
+    Route::get('/horarios/nuevo', [HorarioController::class, 'create_2'])->name('horarios.create-2');
+    //Route::get('/horarios/nuevo', HorarioController::class ()
+
 
     // Permisos
     Route::resource('permisos', PermisoController::class)->except(['show']);
@@ -136,5 +136,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('appearance');
     });
 });
+
+// routes/web.php
 
 require __DIR__.'/auth.php';
