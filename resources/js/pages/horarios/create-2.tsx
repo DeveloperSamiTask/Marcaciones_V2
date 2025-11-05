@@ -13,11 +13,15 @@ import { toast } from 'sonner';
 import { Toaster } from '../../components-new/ui-new/sonner';
 import { SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
-export default function App() {
+
+
+export default function App({ empleados, empresas, url }) {
 
     //informacion del usuario
     const { auth } = usePage<SharedData>().props;
     const user = auth.user;
+   const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(null);
+
 
     // Estados principales
     const [currentSupervisorId] = useState('sup1'); // Simular supervisor actual (Granja Villa)
@@ -208,12 +212,11 @@ export default function App() {
                 <div className="space-y-4">
 
                     {/* Selector de Empresa */}
-
                     {(user.rol_id === 1 || user.rol_id === 2) && (
                         <CompanySelector
-                            companies={mockCompanies}
-                            selectedCompanyId={selectedCompanyId}
-                            onCompanyChange={setSelectedCompanyId}
+                            companies={empresas}
+                            selectedCompanyId={selectedEmpresa}
+                            onCompanyChange={setSelectedEmpresa}
                         />
                     )}
 

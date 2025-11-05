@@ -65,8 +65,10 @@ class HorarioController extends Controller
         ]);
     }
 
+    
     public function create_2(Request $request)
     {
+        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
         $isJefe = $request->user()->rol_id == 4;
         $empleados = Empleado::whereNull('fecha_cese')
             ->when($isJefe, fn ($query) => $query->where('jefe_id', $request->user()->empleado_id))
@@ -75,6 +77,7 @@ class HorarioController extends Controller
 
         return Inertia::render('horarios/create-2', [
             'empleados' => $empleados,
+            'empresas' => $empresas,
             'url' => session('horarios_url', route('horarios.index')),
         ]);
     }
