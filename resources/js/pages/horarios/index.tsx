@@ -106,7 +106,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                     <div className="flex items-center justify-between">
                         <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Lista de horarios</h2>
                         <Button key="nuevo-horario" asChild>
-                            <Link href={route('horarios.create-2')} prefetch>
+                            <Link href={route('horarios.create')} prefetch>
                                 <Plus/>
                                 <span className="hidden sm:inline">Nuevo horario</span>
                             </Link>

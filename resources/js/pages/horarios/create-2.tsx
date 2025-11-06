@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, Calendar } from 'lucide-react';
 import { Button } from '../../components-new/ui-new/button';
 import { CompanySelector } from '../../components-new/create-horario/CompanySelector';
@@ -20,7 +20,7 @@ export default function App({ empleados, empresas, url }) {
     //informacion del usuario
     const { auth } = usePage<SharedData>().props;
     const user = auth.user;
-   const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(null);
+    const [selectedEmpresa, setSelectedEmpresa] = useState<number | null>(null);
 
 
     // Estados principales
@@ -187,6 +187,13 @@ export default function App({ empleados, empresas, url }) {
         toast.success(`✅ ${entries.length} horarios guardados exitosamente`);
     };
 
+    useEffect(() => {
+        if (user.rol_id === 4 && user.empleado?.empresa_id) {
+            setSelectedEmpresa(user.empleado.empresa_id);
+        }
+    }, [user]);
+
+
     return (
         <div className="min-h-screen bg-gray-50">
             <Toaster />
@@ -227,7 +234,8 @@ export default function App({ empleados, empresas, url }) {
                             onWeekChange={setCurrentWeekStart}
                         />
 
-                        <BaseScheduleManager
+                        {/*
+                            <BaseScheduleManager
                             companyId={selectedCompanyId}
                             companyName={selectedCompany?.name || ''}
                             modality={selectedModality}
@@ -236,6 +244,25 @@ export default function App({ empleados, empresas, url }) {
                             onBaseScheduleChange={handleBaseScheduleChange}
                             onApplyToAll={handleApplyBaseToAll}
                         />
+                        */}
+
+                        {selectedEmpresa && (
+                            <BaseScheduleManager
+                                companyId={Number(selectedEmpresa)} // ✅ corregido
+                                companyName={
+                                    empresas.find((e) => e.id === selectedEmpresa)?.razonsocial || ''
+                                }
+                                modality={selectedModality}
+                                weekStart={currentWeekStart}
+                                baseSchedule={{
+                                    entryTime: '',
+                                    exitTime: '',
+                                    breaks: [],
+                                }} // ✅ corregido
+                                onBaseScheduleChange={() => { }}
+                                onApplyToAll={() => { }}
+                            />
+                        )}
                     </div>
 
                     {/* Selector de Modalidad */}

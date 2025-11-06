@@ -3,6 +3,9 @@
 namespace App\Http\Requests\Horario;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
+use App\Models\Empleado;
 
 class StoreHorarioRequest extends FormRequest
 {
@@ -30,5 +33,29 @@ class StoreHorarioRequest extends FormRequest
             'descripcion' => ['nullable', 'string', 'max:255'],
             'estado' => ['required', 'in:L,V,SP'],
         ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $fechaInicio = Carbon::parse($this->fechaInicio);
+            $empleado = Empleado::find($this->empleado_id);
+
+            if (! $empleado) {
+                return;
+            }
+
+            // Usar fecha_ingreso del empleado
+            $fechaIngresoEmpleado = Carbon::parse($empleado->fecha_ingreso);
+
+            // Verificar que la fechaInicio no sea anterior al ingreso del empleado
+            if ($fechaInicio->lt($fechaIngresoEmpleado)) {
+                $fechaFormateada = $fechaIngresoEmpleado->format('d/m/Y');
+                $validator->errors()->add(
+                    'fechaInicio',
+                    "No se pueden crear horarios para fechas anteriores al ingreso del empleado ($fechaFormateada)"
+                );
+            }
+        });
     }
 }

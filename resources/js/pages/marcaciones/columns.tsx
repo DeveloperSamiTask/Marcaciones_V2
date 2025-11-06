@@ -10,6 +10,8 @@ import EditMarcacion from './edit';
 import { Checkbox } from '@/components/ui/checkbox';
 import UploadMarcacion from './upload';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
+
 const estadoBadgeVariants = {
     L: { label: 'LABORAL', variant: 'success' },
     D: { label: 'DESCANSO', variant: 'info' },
@@ -144,10 +146,34 @@ export const columns: ColumnDef<Marcacion>[] = [
         },
         cell: ({ row }) => {
             const estado = row.original.horario?.estado as keyof typeof estadoBadgeVariants;
-            const badgeConfig = estadoBadgeVariants[estado] || { variant: 'destructive', label: 'NO REGISTRADO' };
+            const badgeConfig = estadoBadgeVariants[estado];
             return <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>;
         },
     },
+    /*
+        {
+        accessorKey: 'horario.estado',
+        header: ({ column }) => {
+            return (
+                <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+                    ESTADO
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+            );
+        },
+        cell: ({ row }) => {
+            // VERIFICAR SI EXISTE HORARIO
+            if (!row.original.horario) {
+                return null; // ← No mostrar nada
+                // O alternativamente:
+                // return <Badge variant="outline">SIN HORARIO</Badge>;
+            }
+            const estado = row.original.horario.estado as keyof typeof estadoBadgeVariants;
+            const badgeConfig = estadoBadgeVariants[estado] || { variant: 'destructive', label: 'NO REGISTRADO' };
+            return <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>;
+        }
+    },
+    */
     {
         accessorKey: 'ingreso', // ingreso de la marcacion
         header: 'HI',

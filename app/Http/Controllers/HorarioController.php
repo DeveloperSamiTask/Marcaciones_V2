@@ -65,7 +65,6 @@ class HorarioController extends Controller
         ]);
     }
 
-    
     public function create_2(Request $request)
     {
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
@@ -92,6 +91,12 @@ class HorarioController extends Controller
                 $fechaFin = Carbon::parse($data['fechaFin']);
                 $empleado = Empleado::find($data['empleado_id']);
                 $horasSemanal = 0;
+
+                $fechaIngresoEmpleado = Carbon::parse($empleado->fecha_ingreso);
+                if ($fechaIngreso->lt($fechaIngresoEmpleado)) {
+                    $fechaFormateada = $fechaIngresoEmpleado->format('d/m/Y');
+                    throw new Exception("No se pueden crear horarios para fechas anteriores al ingreso del empleado ($fechaFormateada)");
+                }
 
                 $inicioSemana = $fechaIngreso->copy()->startOfWeek(Carbon::MONDAY); // lunes
                 $finSemana = $fechaIngreso->copy()->endOfWeek(Carbon::SUNDAY); // domingo

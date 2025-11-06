@@ -33,7 +33,7 @@ type Filters = {
     fechaFin?: string;
 };
 
-export default function IndexMarcacion({ marcaciones, empresas, encargados, filters }:{ marcaciones: Marcacion[]; empresas: Empresa[]; encargados: Encargado[]; filters: Filters }) {
+export default function IndexMarcacion({ marcaciones, empresas, encargados, filters }: { marcaciones: Marcacion[]; empresas: Empresa[]; encargados: Encargado[]; filters: Filters }) {
     const { auth } = usePage<SharedData>().props;
     const dataTableRef = useRef<DataTableRef>(null);
 
@@ -44,9 +44,9 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -74,7 +74,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
 
     // carga automatica en tiempo real
     useEffect(() => {
-        if(!selectedEmpresa || !dateRange?.to){
+        if (!selectedEmpresa || !dateRange?.to) {
             setSelectedEncargado(null);
         }
 
@@ -112,6 +112,14 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
 
     // Determinar si se deben mostrar los datos
     const showData = selectedEmpresa && dateRange?.from && dateRange?.to;
+
+    const marcacionesConHorario = marcaciones.filter(marcacion =>
+        marcacion.horario !== null &&
+        marcacion.horario !== undefined
+    );
+
+
+
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -172,7 +180,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                             ) : isFiltering ? (
                                 <LoadingSkeleton />
                             ) : (
-                                <DataTable key="datatable-marcaciones" columns={columns} data={marcaciones} ref={dataTableRef} />
+                                <DataTable key="datatable-marcaciones" columns={columns} data={marcacionesConHorario} ref={dataTableRef} />
                             )}
                         </CardContent>
                     </Card>
