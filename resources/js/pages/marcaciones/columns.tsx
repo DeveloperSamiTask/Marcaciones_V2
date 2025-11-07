@@ -146,33 +146,13 @@ export const columns: ColumnDef<Marcacion>[] = [
         },
         cell: ({ row }) => {
             const estado = row.original.horario?.estado as keyof typeof estadoBadgeVariants;
-            const badgeConfig = estadoBadgeVariants[estado];
-            return <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>;
-        },
-    },
-    /*
-        {
-        accessorKey: 'horario.estado',
-        header: ({ column }) => {
-            return (
-                <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-                    ESTADO
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-            );
-        },
-        cell: ({ row }) => {
-            // VERIFICAR SI EXISTE HORARIO
-            if (!row.original.horario) {
-                return null; // ← No mostrar nada
-                // O alternativamente:
-                // return <Badge variant="outline">SIN HORARIO</Badge>;
-            }
-            const estado = row.original.horario.estado as keyof typeof estadoBadgeVariants;
             const badgeConfig = estadoBadgeVariants[estado] || { variant: 'destructive', label: 'NO REGISTRADO' };
             return <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>;
         }
     },
+    /*
+import { sendSomething } from "./send";
+
     */
     {
         accessorKey: 'ingreso', // ingreso de la marcacion
@@ -397,7 +377,14 @@ export const columns: ColumnDef<Marcacion>[] = [
         }
     },
     // ELIMINA completamente la columna horas_log
-
+    {
+        accessorKey: 'tardanza', // tardanza
+        header: 'TARDANZA',
+        cell: ({ row }) => {
+            const tardanza = row.original.tardanza;
+            return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
+        }
+    },
     {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',

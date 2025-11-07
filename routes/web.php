@@ -62,8 +62,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('horarios', HorarioController::class)->except(['show', 'destroy']);
 
     Route::get('/horarios/nuevo', [HorarioController::class, 'create_2'])->name('horarios.create-2');
-    //Route::get('/horarios/nuevo', HorarioController::class ()
 
+    Route::get('/horarios/empleados', [HorarioController::class, 'empleadosPorEmpresa'])
+        ->name('horarios.empleados');
+    // Route::get('/horarios/nuevo', HorarioController::class ()
 
     // Permisos
     Route::resource('permisos', PermisoController::class)->except(['show']);

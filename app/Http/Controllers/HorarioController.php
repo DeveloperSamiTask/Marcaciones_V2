@@ -81,6 +81,49 @@ class HorarioController extends Controller
         ]);
     }
 
+    public function empleadosPorEmpresa(Request $request)
+    {
+        $user = $request->user();
+        $empresaId = $request->get('empresa_id');
+
+        $query = Empleado::whereNull('fecha_cese');
+
+        if ($user->rol_id == 4) {
+            $query->where('jefe_id', $user->empleado_id);
+        } elseif (in_array($user->rol_id, [1, 2])) {
+            if ($empresaId) {
+                $query->where('empresa_id', $empresaId);
+            }
+        }
+
+        $empleados = $query
+            ->orderBy('apellidos')
+            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id']);
+
+        return response()->json($empleados);
+    }
+
+    public function empleados(Request $request)
+    {
+        $user = $request->user();
+
+        $query = Empleado::with('area')
+            ->whereNull('fecha_cese');
+
+        if ($user->rol_id === 4) {
+            // Supervisor -> sus empleados
+            $query->where('jefe_id', $user->empleado_id);
+        } else {
+            // Admin o RRHH -> todos los empleados de la empresa seleccionada
+            $empresaId = $request->get('empresa_id');
+            if ($empresaId) {
+                $query->where('empresa_id', $empresaId);
+            }
+        }
+
+        return response()->json($query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']));
+    }
+
     /* Crea horarios para un empleado en un rango de fechas. */
     public function store(StoreHorarioRequest $request)
     {

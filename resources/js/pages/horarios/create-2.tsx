@@ -21,6 +21,45 @@ export default function App({ empleados, empresas, url }) {
     const { auth } = usePage<SharedData>().props;
     const user = auth.user;
     const [selectedEmpresa, setSelectedEmpresa] = useState<number | null>(null);
+    const [empleadosList, setEmpleadosList] = useState<Empleado[]>([]);
+
+    useEffect(() => {
+        if (user.rol_id === 4 && user.empleado?.empresa_id) {
+            setSelectedEmpresa(user.empleado.empresa_id);
+        }
+    }, [user]);
+
+    useEffect(() => {
+        if (selectedEmpresa || user.rol_id === 4) {
+            const empresaParam = selectedEmpresa ?? user.empleado?.empresa_id;
+
+            fetch(`/horarios/empleados?empresa_id=${empresaParam}`)
+                .then(res => res.json())
+                .then(data => setEmpleadosList(data))
+                .catch(err => console.error("Error cargando empleados:", err));
+        }
+    }, [selectedEmpresa, user]);
+
+    useEffect(() => {
+        let empresaParam: number | null = null;
+
+        // Si es supervisor
+        if (user.rol_id === 4 && user.empleado?.empresa_id) {
+            empresaParam = user.empleado.empresa_id;
+        }
+
+        // Si es admin o RRHH
+        else if ((user.rol_id === 1 || user.rol_id === 2) && selectedEmpresa) {
+            empresaParam = selectedEmpresa;
+        }
+
+        if (empresaParam) {
+            fetch(`/horarios/empleados?empresa_id=${empresaParam}`)
+                .then((res) => res.json())
+                .then((data) => setEmpleadosList(data))
+                .catch((err) => console.error("Error cargando empleados:", err));
+        }
+    }, [selectedEmpresa, user]);
 
 
     // Estados principales
@@ -187,11 +226,7 @@ export default function App({ empleados, empresas, url }) {
         toast.success(`✅ ${entries.length} horarios guardados exitosamente`);
     };
 
-    useEffect(() => {
-        if (user.rol_id === 4 && user.empleado?.empresa_id) {
-            setSelectedEmpresa(user.empleado.empresa_id);
-        }
-    }, [user]);
+
 
 
     return (
@@ -222,7 +257,7 @@ export default function App({ empleados, empresas, url }) {
                     {(user.rol_id === 1 || user.rol_id === 2) && (
                         <CompanySelector
                             companies={empresas}
-                            selectedCompanyId={selectedEmpresa}
+                            selectedCompanyId={selectedEmpresa ?? 0}
                             onCompanyChange={setSelectedEmpresa}
                         />
                     )}
@@ -248,19 +283,13 @@ export default function App({ empleados, empresas, url }) {
 
                         {selectedEmpresa && (
                             <BaseScheduleManager
-                                companyId={Number(selectedEmpresa)} // ✅ corregido
-                                companyName={
-                                    empresas.find((e) => e.id === selectedEmpresa)?.razonsocial || ''
-                                }
+                                companyId={selectedEmpresa}
+                                companyName={empresas.find((e) => e.id === selectedEmpresa)?.razonsocial || ''}
                                 modality={selectedModality}
                                 weekStart={currentWeekStart}
-                                baseSchedule={{
-                                    entryTime: '',
-                                    exitTime: '',
-                                    breaks: [],
-                                }} // ✅ corregido
-                                onBaseScheduleChange={() => { }}
-                                onApplyToAll={() => { }}
+                                baseSchedule={currentBaseSchedule}
+                                onBaseScheduleChange={handleBaseScheduleChange}
+                                onApplyToAll={handleApplyBaseToAll}
                             />
                         )}
                     </div>
@@ -275,7 +304,7 @@ export default function App({ empleados, empresas, url }) {
 
                     {/* Lista de Empleados */}
                     <EmployeeList
-                        employees={filteredEmployees}
+                        employees={empleadosList}
                         modality={selectedModality}
                         expandedEmployees={expandedEmployees}
                         onToggleEmployee={handleToggleEmployee}
@@ -285,7 +314,6 @@ export default function App({ empleados, empresas, url }) {
                         defaultEntryTime={currentBaseSchedule.entryTime}
                         defaultExitTime={currentBaseSchedule.exitTime}
                     />
-
                     {/* Botones de Acción */}
                     <div className="flex justify-center gap-4 py-4">
                         <Button

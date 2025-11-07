@@ -113,6 +113,30 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
     // Determinar si se deben mostrar los datos
     const showData = selectedEmpresa && dateRange?.from && dateRange?.to;
 
+
+    console.log('=== DEBUG OPERACIONES ===');
+    console.log('Total marcaciones:', marcaciones.length);
+
+    const marcacionesOperaciones = marcaciones.filter(m =>
+        m.empleado?.area_id === 2
+    );
+    console.log('Marcaciones de OPERACIONES:', marcacionesOperaciones.length);
+
+    const marcacionesOperacionesSinHorario = marcacionesOperaciones.filter(m => !m.horario);
+    console.log('Operaciones SIN horario:', marcacionesOperacionesSinHorario.length);
+
+    // Mostrar detalles de los empleados afectados
+    marcacionesOperacionesSinHorario.forEach(marcacion => {
+        console.log('Empleado sin horario:', {
+            id: marcacion.empleado?.id,
+            nombre: `${marcacion.empleado?.nombres} ${marcacion.empleado?.apellidos}`,
+            area: marcacion.empleado?.area?.nombre,
+            jornada: marcacion.empleado?.jornada?.nombre,
+            fecha: marcacion.fecha
+        });
+    });
+
+
     const marcacionesConHorario = marcaciones.filter(marcacion =>
         marcacion.horario !== null &&
         marcacion.horario !== undefined
@@ -180,7 +204,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                             ) : isFiltering ? (
                                 <LoadingSkeleton />
                             ) : (
-                                <DataTable key="datatable-marcaciones" columns={columns} data={marcacionesConHorario} ref={dataTableRef} />
+                                <DataTable key="datatable-marcaciones" columns={columns} data={marcaciones} ref={dataTableRef} />
                             )}
                         </CardContent>
                     </Card>

@@ -15,13 +15,16 @@ export interface Supervisor {
 }
 
 export interface Employee {
-  id: string;
-  name: string;
-  modality: Modality;
-  position: string;
-  area: string;
-  supervisorId: string;
-  companyId: number;
+ id: number;
+  nombres: string;
+  apellidos: string;
+  cargo: string;
+  area?: {
+    id: number;
+    nombre: string;
+  };
+  empresa_id: number;
+  jefe_id?: number;
 }
 
 export interface ScheduleEntry {
