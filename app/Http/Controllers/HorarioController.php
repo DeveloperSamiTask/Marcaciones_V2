@@ -98,7 +98,7 @@ class HorarioController extends Controller
 
         $empleados = $query
             ->orderBy('apellidos')
-            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id']);
+            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id' , 'jornada_id' , 'cargo']);
 
         return response()->json($empleados);
     }

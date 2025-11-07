@@ -19,6 +19,7 @@ export interface Employee {
   nombres: string;
   apellidos: string;
   cargo: string;
+  jornada_id: number;
   area?: {
     id: number;
     nombre: string;

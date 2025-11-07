@@ -35,10 +35,14 @@ export default function App({ empleados, empresas, url }) {
 
             fetch(`/horarios/empleados?empresa_id=${empresaParam}`)
                 .then(res => res.json())
-                .then(data => setEmpleadosList(data))
+                .then(data => {
+                    console.log("🧠 Empleados cargados:", data); // 👈 revisa aquí
+                    setEmpleadosList(data);
+                })
                 .catch(err => console.error("Error cargando empleados:", err));
         }
     }, [selectedEmpresa, user]);
+
 
     useEffect(() => {
         let empresaParam: number | null = null;
@@ -62,12 +66,18 @@ export default function App({ empleados, empresas, url }) {
     }, [selectedEmpresa, user]);
 
 
+
+
     // Estados principales
     const [currentSupervisorId] = useState('sup1'); // Simular supervisor actual (Granja Villa)
     const supervisor = mockSupervisors.find(s => s.id === currentSupervisorId);
     const [selectedCompanyId, setSelectedCompanyId] = useState<number>(supervisor?.companyId || 1);
     const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getWeekStart(new Date()));
-    const [selectedModality, setSelectedModality] = useState<Modality>('Full Time');
+    const [selectedModality, setSelectedModality] = useState<'Full Time' | 'Part Time'>('Full Time');
+    const [employees, setEmployees] = useState<Employee[]>([]);
+
+    const fullTimeEmployees = employees.filter(emp => emp.jornada_id === 1);
+    const partTimeEmployees = employees.filter(emp => emp.jornada_id === 2);
 
     // Horarios base por modalidad
     const [baseSchedules, setBaseSchedules] = useState<{ [key: string]: BaseSchedule }>({
@@ -87,20 +97,18 @@ export default function App({ empleados, empresas, url }) {
 
     // Filtrar empleados por empresa del supervisor y modalidad
     const selectedCompany = mockCompanies.find(c => c.id === selectedCompanyId);
-    const filteredEmployees = mockEmployees.filter(
-        emp => emp.companyId === selectedCompanyId && emp.modality === selectedModality
-    );
+    const filteredEmployees = empleadosList.filter(emp => {
+        if (selectedModality === "Full Time") return Number(emp.jornada_id) === 1;
+        if (selectedModality === "Part Time") return Number(emp.jornada_id) === 2;
+        return false;
+    });
 
     const weekDates = getWeekDates(currentWeekStart);
     const currentBaseSchedule = baseSchedules[selectedModality];
 
     // Contar empleados por modalidad para la empresa seleccionada
-    const fullTimeCount = mockEmployees.filter(
-        e => e.companyId === selectedCompanyId && e.modality === 'Full Time'
-    ).length;
-    const partTimeCount = mockEmployees.filter(
-        e => e.companyId === selectedCompanyId && e.modality === 'Part Time'
-    ).length;
+    const fullTimeCount = empleadosList.filter(emp => Number(emp.jornada_id) === 1).length;
+    const partTimeCount = empleadosList.filter(emp => Number(emp.jornada_id) === 2).length;
 
     // Handlers
     const handleBaseScheduleChange = (schedule: BaseSchedule) => {
@@ -304,7 +312,7 @@ export default function App({ empleados, empresas, url }) {
 
                     {/* Lista de Empleados */}
                     <EmployeeList
-                        employees={empleadosList}
+                        employees={filteredEmployees}
                         modality={selectedModality}
                         expandedEmployees={expandedEmployees}
                         onToggleEmployee={handleToggleEmployee}
