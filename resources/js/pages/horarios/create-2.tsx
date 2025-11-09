@@ -13,6 +13,20 @@ import { toast } from 'sonner';
 import { Toaster } from '../../components-new/ui-new/sonner';
 import { SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
+import AppLayout from '@/layouts/app-layout';
+import { BreadcrumbItem } from '@/types';
+
+
+const breadcrumbs: BreadcrumbItem[] = [
+    {
+        title: 'Horarios',
+        href: route('horarios.index'),
+    },
+    {
+        title: 'Crear',
+        href: route('horarios.create-2'),
+    },
+];
 
 
 export default function App({ empleados, empresas, url }) {
@@ -237,47 +251,51 @@ export default function App({ empleados, empresas, url }) {
 
 
 
-    return (
-        <div className="min-h-screen bg-gray-50">
-            <Toaster />
 
-            {/* Header */}
-            <div className="bg-white border-b shadow-sm">
-                <div className="container mx-auto px-4 py-4">
-                    <div className="flex items-center gap-2">
-                        <Calendar className="h-6 w-6 text-blue-600" />
-                        <div>
-                            <h1>Sistema de Gestión de Horarios</h1>
-                            <p className="text-xs text-gray-600">
-                                {supervisor?.name} | {selectedCompany?.name}
-                            </p>
+
+    return (
+
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <div className="min-h-screen bg-gray-50">
+                <Toaster />
+
+                {/* Header */}
+                <div className="bg-white border-b shadow-sm">
+                    <div className="container mx-auto px-4 py-4">
+                        <div className="flex items-center gap-2">
+                            <Calendar className="h-6 w-6 text-blue-600" />
+                            <div>
+                                <h1>Sistema de Gestión de Horarios</h1>
+                                <p className="text-xs text-gray-600">
+                                    {supervisor?.name} | {selectedCompany?.name}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Main Content */}
-            <div className="container mx-auto px-4 py-6">
+                {/* Main Content */}
+                <div className="container mx-auto px-4 py-6">
 
-                <div className="space-y-4">
+                    <div className="space-y-4">
 
-                    {/* Selector de Empresa */}
-                    {(user.rol_id === 1 || user.rol_id === 2) && (
-                        <CompanySelector
-                            companies={empresas}
-                            selectedCompanyId={selectedEmpresa ?? 0}
-                            onCompanyChange={setSelectedEmpresa}
-                        />
-                    )}
+                        {/* Selector de Empresa */}
+                        {(user.rol_id === 1 || user.rol_id === 2) && (
+                            <CompanySelector
+                                companies={empresas}
+                                selectedCompanyId={selectedEmpresa ?? 0}
+                                onCompanyChange={setSelectedEmpresa}
+                            />
+                        )}
 
-                    {/* Fila: Selector de Semana + Gestión de Horarios Base */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <WeekNavigator
-                            currentWeekStart={currentWeekStart}
-                            onWeekChange={setCurrentWeekStart}
-                        />
+                        {/* Fila: Selector de Semana + Gestión de Horarios Base */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <WeekNavigator
+                                currentWeekStart={currentWeekStart}
+                                onWeekChange={setCurrentWeekStart}
+                            />
 
-                        {/*
+                            {/*
                             <BaseScheduleManager
                             companyId={selectedCompanyId}
                             companyName={selectedCompany?.name || ''}
@@ -289,60 +307,63 @@ export default function App({ empleados, empresas, url }) {
                         />
                         */}
 
-                        {selectedEmpresa && (
-                            <BaseScheduleManager
-                                companyId={selectedEmpresa}
-                                companyName={empresas.find((e) => e.id === selectedEmpresa)?.razonsocial || ''}
-                                modality={selectedModality}
-                                weekStart={currentWeekStart}
-                                baseSchedule={currentBaseSchedule}
-                                onBaseScheduleChange={handleBaseScheduleChange}
-                                onApplyToAll={handleApplyBaseToAll}
-                            />
-                        )}
-                    </div>
+                            {selectedEmpresa && (
+                                <BaseScheduleManager
+                                    companyId={selectedEmpresa}
+                                    companyName={empresas.find((e) => e.id === selectedEmpresa)?.razonsocial || ''}
+                                    modality={selectedModality}
+                                    weekStart={currentWeekStart}
+                                    baseSchedule={currentBaseSchedule}
+                                    onBaseScheduleChange={handleBaseScheduleChange}
+                                    onApplyToAll={handleApplyBaseToAll}
+                                />
+                            )}
+                        </div>
 
-                    {/* Selector de Modalidad */}
-                    <ModalitySelector
-                        selectedModality={selectedModality}
-                        onModalityChange={setSelectedModality}
-                        fullTimeCount={fullTimeCount}
-                        partTimeCount={partTimeCount}
-                    />
+                        {/* Selector de Modalidad */}
+                        <ModalitySelector
+                            selectedModality={selectedModality}
+                            onModalityChange={setSelectedModality}
+                            fullTimeCount={fullTimeCount}
+                            partTimeCount={partTimeCount}
+                        />
 
-                    {/* Lista de Empleados */}
-                    <EmployeeList
-                        employees={filteredEmployees}
-                        modality={selectedModality}
-                        expandedEmployees={expandedEmployees}
-                        onToggleEmployee={handleToggleEmployee}
-                        weekDates={weekDates}
-                        scheduleData={scheduleData}
-                        onFieldChange={handleFieldChange}
-                        defaultEntryTime={currentBaseSchedule.entryTime}
-                        defaultExitTime={currentBaseSchedule.exitTime}
-                    />
-                    {/* Botones de Acción */}
-                    <div className="flex justify-center gap-4 py-4">
-                        <Button
-                            variant="outline"
-                            size="lg"
-                            onClick={handleApplyBaseToAll}
-                        >
-                            Aplicar horario base a todos
-                        </Button>
+                        {/* Lista de Empleados */}
+                        <EmployeeList
+                            employees={filteredEmployees}
+                            modality={selectedModality}
+                            expandedEmployees={expandedEmployees}
+                            onToggleEmployee={handleToggleEmployee}
+                            weekDates={weekDates}
+                            scheduleData={scheduleData}
+                            onFieldChange={handleFieldChange}
+                            defaultEntryTime={currentBaseSchedule.entryTime}
+                            defaultExitTime={currentBaseSchedule.exitTime}
+                        />
+                        {/* Botones de Acción */}
+                        <div className="flex justify-center gap-4 py-4">
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={handleApplyBaseToAll}
+                            >
+                                Aplicar horario base a todos
+                            </Button>
 
-                        <Button
-                            size="lg"
-                            onClick={handleSaveSchedules}
-                            className="min-w-[250px]"
-                        >
-                            <Save className="mr-2 h-5 w-5" />
-                            💾 Guardar horarios de la semana
-                        </Button>
+                            <Button
+                                size="lg"
+                                onClick={handleSaveSchedules}
+                                className="min-w-[250px]"
+                            >
+                                <Save className="mr-2 h-5 w-5" />
+                                💾 Guardar horarios de la semana
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </AppLayout>
+
+
     );
 }
