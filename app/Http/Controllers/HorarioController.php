@@ -81,51 +81,8 @@ class HorarioController extends Controller
         ]);
     }
 
-    public function empleadosPorEmpresa(Request $request)
-    {
-        $user = $request->user();
-        $empresaId = $request->get('empresa_id');
-
-        $query = Empleado::whereNull('fecha_cese');
-
-        if ($user->rol_id == 4) {
-            $query->where('jefe_id', $user->empleado_id);
-        } elseif (in_array($user->rol_id, [1, 2])) {
-            if ($empresaId) {
-                $query->where('empresa_id', $empresaId);
-            }
-        }
-
-        $empleados = $query
-            ->orderBy('apellidos')
-            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id' , 'jornada_id' , 'cargo']);
-
-        return response()->json($empleados);
-    }
-
-    public function empleados(Request $request)
-    {
-        $user = $request->user();
-
-        $query = Empleado::with('area')
-            ->whereNull('fecha_cese');
-
-        if ($user->rol_id === 4) {
-            // Supervisor -> sus empleados
-            $query->where('jefe_id', $user->empleado_id);
-        } else {
-            // Admin o RRHH -> todos los empleados de la empresa seleccionada
-            $empresaId = $request->get('empresa_id');
-            if ($empresaId) {
-                $query->where('empresa_id', $empresaId);
-            }
-        }
-
-        return response()->json($query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']));
-    }
-
     /* Crea horarios para un empleado en un rango de fechas. */
-    public function store(StoreHorarioRequest $request)
+    public function store_respaldo(StoreHorarioRequest $request)
     {
         $data = $request->validated();
         try {
@@ -223,6 +180,177 @@ class HorarioController extends Controller
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
         }
+    }
+
+    public function store(StoreHorarioRequest $request)
+    {
+        $data = $request->validated();
+
+        try {
+            $queryMessage = DB::transaction(function () use ($data) {
+                $fechaInicio = Carbon::parse($data['fechaInicio']);
+                $fechaFin = Carbon::parse($data['fechaFin']);
+
+                // Ahora el request debe traer un array de empleados
+                $empleados = Empleado::whereIn('id', $data['empleados_ids'])->get();
+
+                if ($empleados->isEmpty()) {
+                    throw new Exception('No se encontraron empleados válidos para crear horarios.');
+                }
+
+                foreach ($empleados as $empleado) {
+                    $this->crearHorariosParaEmpleado($empleado, $fechaInicio, $fechaFin, $data);
+                }
+
+                return "Horarios creados exitosamente para {$empleados->count()} empleados.";
+            });
+
+            return redirect()->to(session('horarios_url', route('horarios.index')))
+                ->withSuccess(['message' => $queryMessage]);
+
+        } catch (Exception $e) {
+            return back()->withErrors(['message' => $e->getMessage()]);
+        }
+    }
+
+
+    private function crearHorariosParaEmpleado(Empleado $empleado, Carbon $fechaInicio, Carbon $fechaFin, array $data)
+    {
+        $horasSemanal = 0;
+        $fechaIngresoEmpleado = Carbon::parse($empleado->fecha_ingreso);
+
+        if ($fechaInicio->lt($fechaIngresoEmpleado)) {
+            $fechaFormateada = $fechaIngresoEmpleado->format('d/m/Y');
+            throw new Exception("No se pueden crear horarios para fechas anteriores al ingreso del empleado {$empleado->nombre_completo} ($fechaFormateada)");
+        }
+
+        // Calcular horas ya trabajadas esa semana
+        $inicioSemana = $fechaInicio->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemana = $fechaInicio->copy()->endOfWeek(Carbon::SUNDAY);
+
+        foreach (CarbonPeriod::create($inicioSemana, $finSemana) as $fecha) {
+            $horarioLaborado = Horario::where('empleado_id', $empleado->id)
+                ->where('fecha', $fecha)
+                ->where('estado', 'L')
+                ->first();
+
+            if ($horarioLaborado) {
+                $horasSemanal += max(0, $horarioLaborado->ingreso->diffInMinutes($horarioLaborado->salida, false));
+                if ($horasSemanal >= 360) { // si supera 6 horas, se descuenta 60 min de refrigerio
+                    $horasSemanal -= 60;
+                }
+            }
+        }
+
+        // Crear los horarios para cada día del rango
+        foreach (CarbonPeriod::create($fechaInicio, $fechaFin) as $fecha) {
+            $horario = Horario::firstOrCreate(
+                [
+                    'empleado_id' => $empleado->id,
+                    'fecha' => $fecha,
+                ],
+                [
+                    'ingreso' => $data['ingreso'],
+                    'salida' => $data['salida'],
+                    'estado' => $data['estado'] != 'L' ? 'PE' : 'L',
+                ]
+            );
+
+            // --- Lógica de permisos y validaciones (idéntica al flujo viejo) ---
+            if ($data['estado'] == 'L' && (
+                ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
+                ($empleado->jornada_id == 1 && $horasSemanal > 2880)
+            )) {
+                $permisoExistente = Permiso::where('empleado_id', $empleado->id)
+                    ->where('tipo_id', 2)
+                    ->whereDate('fecha', $fecha)
+                    ->where('estado', '!=', 2)
+                    ->exists();
+
+                if (! $permisoExistente) {
+                    $horario->update(['estado' => 'PE']);
+                    Permiso::create([
+                        'empleado_id' => $empleado->id,
+                        'tipo_id' => 2,
+                        'fecha' => $fecha,
+                        'motivo' => 'HORARIO EXTRA',
+                        'estado' => 0,
+                    ]);
+                }
+            }
+
+            if ($data['estado'] != 'L') {
+                $tipoPermiso = PermisoTipo::firstWhere('codigo', $data['estado']);
+                $permisoExistente = Permiso::where('empleado_id', $empleado->id)
+                    ->where('tipo_id', $tipoPermiso->id)
+                    ->whereDate('fecha', $fecha)
+                    ->where('estado', '!=', 2)
+                    ->exists();
+
+                if (! $permisoExistente) {
+                    Permiso::create([
+                        'empleado_id' => $empleado->id,
+                        'tipo_id' => $tipoPermiso->id,
+                        'fecha' => $fecha,
+                        'motivo' => $tipoPermiso->nombre,
+                        'estado' => 0,
+                    ]);
+                }
+            }
+        }
+
+        // Mensaje por exceso semanal
+        if ($data['estado'] == 'L' && (
+            ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
+            ($empleado->jornada_id == 1 && $horasSemanal > 2880)
+        )) {
+            return "Algunos horarios de {$empleado->nombre_completo} se enviaron a aprobación por exceder horas semanales.";
+        }
+
+        return true;
+    }
+
+    public function empleadosPorEmpresa(Request $request)
+    {
+        $user = $request->user();
+        $empresaId = $request->get('empresa_id');
+
+        $query = Empleado::whereNull('fecha_cese');
+
+        if ($user->rol_id == 4) {
+            $query->where('jefe_id', $user->empleado_id);
+        } elseif (in_array($user->rol_id, [1, 2])) {
+            if ($empresaId) {
+                $query->where('empresa_id', $empresaId);
+            }
+        }
+
+        $empleados = $query
+            ->orderBy('apellidos')
+            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id', 'jornada_id', 'cargo']);
+
+        return response()->json($empleados);
+    }
+
+    public function empleados(Request $request)
+    {
+        $user = $request->user();
+
+        $query = Empleado::with('area')
+            ->whereNull('fecha_cese');
+
+        if ($user->rol_id === 4) {
+            // Supervisor -> sus empleados
+            $query->where('jefe_id', $user->empleado_id);
+        } else {
+            // Admin o RRHH -> todos los empleados de la empresa seleccionada
+            $empresaId = $request->get('empresa_id');
+            if ($empresaId) {
+                $query->where('empresa_id', $empresaId);
+            }
+        }
+
+        return response()->json($query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']));
     }
 
     public function edit(Request $request, Horario $horario)

@@ -2,7 +2,7 @@ import { Users } from 'lucide-react';
 import { EmployeeRow } from './EmployeeRow';
 import { Employee, DaySchedule, Modality } from '../../types/schedule';
 import { ScrollArea } from '../ui-new/scroll-area';
-import { useState , useEffect} from 'react';
+import { useState, useEffect } from 'react';
 
 interface EmployeeListProps {
     employees: Employee[];
@@ -40,9 +40,12 @@ export function EmployeeList({
         return Object.values(empSchedule).filter(day => day.status === 'Descanso').length;
     };
 
-    useEffect(() => {
+    /*
+useEffect(() => {
         setCurrentPage(1);
     }, [employees]);
+    */
+
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
@@ -100,6 +103,7 @@ export function EmployeeList({
             {totalPages > 1 && (
                 <div className="flex justify-center items-center gap-2 py-3 border-t bg-gray-50">
                     <button
+                        type="button"
                         onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                         disabled={currentPage === 1}
                         className="px-3 py-1 text-sm border rounded disabled:opacity-50"
@@ -110,6 +114,7 @@ export function EmployeeList({
                         Página {currentPage} de {totalPages}
                     </span>
                     <button
+                        type="button"
                         onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
                         disabled={currentPage === totalPages}
                         className="px-3 py-1 text-sm border rounded disabled:opacity-50"
