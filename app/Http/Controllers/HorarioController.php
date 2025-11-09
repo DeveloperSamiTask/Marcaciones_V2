@@ -16,6 +16,7 @@ use Carbon\CarbonPeriod;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class HorarioController extends Controller
@@ -182,37 +183,108 @@ class HorarioController extends Controller
         }
     }
 
-    public function store(StoreHorarioRequest $request)
+    public function store(Request $request)
     {
-        $data = $request->validated();
+        Log::info('📥 Entró al método store()', $request->all());
+
+        $data = $request->validate([
+            'empleados_ids' => 'required|array',
+            'empleados_ids.*' => 'integer|exists:empleados,id',
+            'fechaInicio' => 'required|date',
+            'fechaFin' => 'required|date|after_or_equal:fechaInicio',
+            'ingreso' => 'required',
+            'salida' => 'required',
+            'estado' => 'required|string',
+        ]);
 
         try {
-            $queryMessage = DB::transaction(function () use ($data) {
+            DB::transaction(function () use ($data) {
                 $fechaInicio = Carbon::parse($data['fechaInicio']);
                 $fechaFin = Carbon::parse($data['fechaFin']);
 
-                // Ahora el request debe traer un array de empleados
-                $empleados = Empleado::whereIn('id', $data['empleados_ids'])->get();
+                // 🔁 recorre todos los empleados
+                foreach ($data['empleados_ids'] as $empleadoId) {
+                    $empleado = Empleado::findOrFail($empleadoId);
 
-                if ($empleados->isEmpty()) {
-                    throw new Exception('No se encontraron empleados válidos para crear horarios.');
-                }
-
-                foreach ($empleados as $empleado) {
+                    // llama a tu función de crear horarios
                     $this->crearHorariosParaEmpleado($empleado, $fechaInicio, $fechaFin, $data);
                 }
-
-                return "Horarios creados exitosamente para {$empleados->count()} empleados.";
             });
 
-            return redirect()->to(session('horarios_url', route('horarios.index')))
-                ->withSuccess(['message' => $queryMessage]);
-
+            return response()->json(['success' => true, 'message' => 'Horarios creados correctamente']);
         } catch (Exception $e) {
-            return back()->withErrors(['message' => $e->getMessage()]);
+            Log::error('❌ Error al crear horarios', ['error' => $e->getMessage()]);
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
+    public function storeMultiple(Request $request)
+    {
+        Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
+
+        $data = $request->validate([
+            'entries' => 'required|array|min:1',
+            'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
+            'entries.*.fecha' => 'required|date',
+            'entries.*.ingreso' => 'required|date_format:H:i',
+            'entries.*.salida' => 'required|date_format:H:i',
+            'entries.*.estado' => 'required|string|in:L,PE,V,F,S',
+        ]);
+
+        // 🔥 VALIDAR QUE NO VENGAN HORARIOS EN 00:00
+        $tieneHorariosInvalidos = collect($data['entries'])->filter(function ($entry) {
+            return $entry['estado'] === 'L' && ($entry['ingreso'] === '00:00' || $entry['salida'] === '00:00');
+        })->count() > 0;
+
+        if ($tieneHorariosInvalidos) {
+            Log::error('❌ Horarios inválidos detectados (00:00)', $data['entries']);
+            throw new Exception('Error: Los horarios no pueden ser 00:00 para días laborables');
+        }
+
+        try {
+            DB::transaction(function () use ($data) {
+                $porEmpleado = collect($data['entries'])->groupBy('empleado_id');
+
+                foreach ($porEmpleado as $empleadoId => $entries) {
+                    $empleado = Empleado::findOrFail($empleadoId);
+
+                    $fechas = collect($entries)->pluck('fecha')->map(fn ($f) => Carbon::parse($f));
+                    $fechaInicio = $fechas->min();
+                    $fechaFin = $fechas->max();
+
+                    $horarioBase = collect($entries)->first();
+
+                    $datosHorario = [
+                        'ingreso' => $horarioBase['ingreso'],
+                        'salida' => $horarioBase['salida'],
+                        'estado' => $horarioBase['estado'],
+                    ];
+
+                    Log::info("✅ Procesando {$empleado->nombre_completo}", [
+                        'rango' => "{$fechaInicio->format('Y-m-d')} al {$fechaFin->format('Y-m-d')}",
+                        'horario' => $datosHorario,
+                        'total_dias' => count($entries),
+                    ]);
+
+                    $this->crearHorariosParaEmpleado($empleado, $fechaInicio, $fechaFin, $datosHorario);
+                }
+            });
+
+            Log::info('✅ HORARIOS GUARDADOS CORRECTAMENTE');
+
+            return redirect()->back()->with('success', '✅ Horarios guardados correctamente');
+
+        } catch (Exception $e) {
+            Log::error('❌ ERROR AL GUARDAR:', [
+                'mensaje' => $e->getMessage(),
+                'archivo' => $e->getFile(),
+                'linea' => $e->getLine(),
+            ]);
+
+            return redirect()->back()->with('error', 'Error: '.$e->getMessage());
+        }
+    }
 
     private function crearHorariosParaEmpleado(Empleado $empleado, Carbon $fechaInicio, Carbon $fechaFin, array $data)
     {
@@ -224,27 +296,28 @@ class HorarioController extends Controller
             throw new Exception("No se pueden crear horarios para fechas anteriores al ingreso del empleado {$empleado->nombre_completo} ($fechaFormateada)");
         }
 
-        // Calcular horas ya trabajadas esa semana
         $inicioSemana = $fechaInicio->copy()->startOfWeek(Carbon::MONDAY);
         $finSemana = $fechaInicio->copy()->endOfWeek(Carbon::SUNDAY);
 
         foreach (CarbonPeriod::create($inicioSemana, $finSemana) as $fecha) {
             $horarioLaborado = Horario::where('empleado_id', $empleado->id)
-                ->where('fecha', $fecha)
+                ->whereDate('fecha', $fecha)
                 ->where('estado', 'L')
                 ->first();
 
             if ($horarioLaborado) {
-                $horasSemanal += max(0, $horarioLaborado->ingreso->diffInMinutes($horarioLaborado->salida, false));
-                if ($horasSemanal >= 360) { // si supera 6 horas, se descuenta 60 min de refrigerio
+                $ingreso = Carbon::parse($horarioLaborado->ingreso);
+                $salida = Carbon::parse($horarioLaborado->salida);
+
+                $horasSemanal += $ingreso->diffInMinutes($salida, false);
+                if ($horasSemanal >= 360) { // más de 6h = descuenta 1h
                     $horasSemanal -= 60;
                 }
             }
         }
 
-        // Crear los horarios para cada día del rango
         foreach (CarbonPeriod::create($fechaInicio, $fechaFin) as $fecha) {
-            $horario = Horario::firstOrCreate(
+            $horario = Horario::updateOrCreate(
                 [
                     'empleado_id' => $empleado->id,
                     'fecha' => $fecha,
@@ -256,7 +329,7 @@ class HorarioController extends Controller
                 ]
             );
 
-            // --- Lógica de permisos y validaciones (idéntica al flujo viejo) ---
+            // Control de permisos
             if ($data['estado'] == 'L' && (
                 ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
                 ($empleado->jornada_id == 1 && $horasSemanal > 2880)
@@ -281,30 +354,31 @@ class HorarioController extends Controller
 
             if ($data['estado'] != 'L') {
                 $tipoPermiso = PermisoTipo::firstWhere('codigo', $data['estado']);
-                $permisoExistente = Permiso::where('empleado_id', $empleado->id)
-                    ->where('tipo_id', $tipoPermiso->id)
-                    ->whereDate('fecha', $fecha)
-                    ->where('estado', '!=', 2)
-                    ->exists();
+                if ($tipoPermiso) {
+                    $permisoExistente = Permiso::where('empleado_id', $empleado->id)
+                        ->where('tipo_id', $tipoPermiso->id)
+                        ->whereDate('fecha', $fecha)
+                        ->where('estado', '!=', 2)
+                        ->exists();
 
-                if (! $permisoExistente) {
-                    Permiso::create([
-                        'empleado_id' => $empleado->id,
-                        'tipo_id' => $tipoPermiso->id,
-                        'fecha' => $fecha,
-                        'motivo' => $tipoPermiso->nombre,
-                        'estado' => 0,
-                    ]);
+                    if (! $permisoExistente) {
+                        Permiso::create([
+                            'empleado_id' => $empleado->id,
+                            'tipo_id' => $tipoPermiso->id,
+                            'fecha' => $fecha,
+                            'motivo' => $tipoPermiso->nombre,
+                            'estado' => 0,
+                        ]);
+                    }
                 }
             }
         }
 
-        // Mensaje por exceso semanal
         if ($data['estado'] == 'L' && (
             ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
             ($empleado->jornada_id == 1 && $horasSemanal > 2880)
         )) {
-            return "Algunos horarios de {$empleado->nombre_completo} se enviaron a aprobación por exceder horas semanales.";
+            return "⚠️ Algunos horarios de {$empleado->nombre_completo} se enviaron a aprobación por exceder horas semanales.";
         }
 
         return true;

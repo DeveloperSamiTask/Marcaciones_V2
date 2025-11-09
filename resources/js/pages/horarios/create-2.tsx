@@ -15,7 +15,7 @@ import { SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-
+import { router } from '@inertiajs/react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -135,6 +135,7 @@ export default function App({ empleados, empresas, url }) {
     const handleApplyBaseToAll = () => {
         const newData: typeof scheduleData = { ...scheduleData };
 
+        // 🔥 USA filteredEmployees COMPLETO, no solo la página actual
         filteredEmployees.forEach(employee => {
             if (!newData[employee.id]) {
                 newData[employee.id] = {};
@@ -145,14 +146,19 @@ export default function App({ empleados, empresas, url }) {
                 newData[employee.id][dateStr] = {
                     entryTime: currentBaseSchedule.entryTime,
                     exitTime: currentBaseSchedule.exitTime,
-                    status: 'Programado',
+                    status: 'Programado', // ← IMPORTANTE: Programado, NO Descanso
                 };
             });
         });
 
+        console.log("✅ Horarios generados:", newData); // ← AGREGA ESTO
+        console.log("📊 Total empleados:", Object.keys(newData).length);
+        console.log("📅 Días por empleado:", Object.keys(newData[Object.keys(newData)[0]]).length);
+
         setScheduleData(newData);
-        toast.success('Horario base aplicado a todos los empleados');
+        toast.success(`Horario base aplicado a ${filteredEmployees.length} empleados`);
     };
+
 
     const handleToggleEmployee = (employeeId: string) => {
         setExpandedEmployees(prev => {
@@ -208,47 +214,71 @@ export default function App({ empleados, empresas, url }) {
         });
     };
 
-    const handleSaveSchedules = () => {
-        const entries: ScheduleEntry[] = [];
 
-        // Validar que cada empleado tenga al menos 1 día de descanso
+
+    const handleSaveSchedules = () => {
+        const entries = [];
         let hasValidationErrors = false;
+
+        console.log('🔍 scheduleData antes de guardar:', scheduleData);
+        console.log('👥 filteredEmployees:', filteredEmployees.length);
 
         filteredEmployees.forEach(employee => {
             const empSchedule = scheduleData[employee.id];
-            if (empSchedule) {
-                const restDays = Object.values(empSchedule).filter(day => day.status === 'Descanso').length;
+            if (!empSchedule) {
+                console.warn(`⚠️ Empleado ${employee.nombres} no tiene horarios`);
+                return;
+            }
 
-                if (restDays < 1) {
-                    toast.error(`${employee.name} debe tener al menos 1 día de descanso`);
-                    hasValidationErrors = true;
+            const restDays = Object.values(empSchedule).filter(day => day.status === 'Descanso').length;
+            if (restDays < 1) {
+                toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
+                hasValidationErrors = true;
+            }
+
+            Object.keys(empSchedule).forEach(date => {
+                const { entryTime, exitTime, status } = empSchedule[date];
+
+                // 🔥 CORRIGE LA LÓGICA DEL ESTADO
+                let estadoFinal = 'L'; // Por defecto Laborable
+
+                if (status === 'Descanso') {
+                    estadoFinal = 'PE'; // Solo si es explícitamente Descanso
                 }
 
-                Object.keys(empSchedule).forEach(date => {
-                    const data = empSchedule[date];
-                    entries.push({
-                        id: `${employee.id}-${date}`,
-                        employeeId: employee.id,
-                        date,
-                        entryTime: data.entryTime,
-                        exitTime: data.exitTime,
-                        isRestDay: data.status === 'Descanso',
-                        status: data.status,
-                    });
+                entries.push({
+                    empleado_id: employee.id,
+                    fecha: date,
+                    ingreso: entryTime || '00:00',
+                    salida: exitTime || '00:00',
+                    estado: estadoFinal,
                 });
-            }
+            });
         });
 
-        if (hasValidationErrors) {
+        if (hasValidationErrors) return;
+        if (entries.length === 0) {
+            toast.error('No hay horarios para guardar. Presiona "Aplicar horario base a todos" primero.');
             return;
         }
 
-        // Aquí se guardarían los datos
-        console.log('Guardando horarios:', entries);
-        toast.success(`✅ ${entries.length} horarios guardados exitosamente`);
+        console.log('🧾 Enviando al backend:', entries);
+        console.log('📊 Total registros:', entries.length);
+        console.table(entries.slice(0, 5)); // Primeros 5
+
+        router.post(route('horarios.store-multiple'), { entries }, {
+            preserveScroll: true,
+            onStart: () => toast.loading('Guardando horarios...'),
+            onSuccess: () => {
+                toast.success('✅ Horarios guardados correctamente');
+            },
+            onError: (errors) => {
+                console.error('❌ Error backend:', errors);
+                toast.error('Error al guardar horarios');
+            },
+            onFinish: () => toast.dismiss(),
+        });
     };
-
-
 
 
 
