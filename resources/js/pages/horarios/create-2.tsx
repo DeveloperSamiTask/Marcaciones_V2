@@ -135,7 +135,6 @@ export default function App({ empleados, empresas, url }) {
     const handleApplyBaseToAll = () => {
         const newData: typeof scheduleData = { ...scheduleData };
 
-        // 🔥 USA filteredEmployees COMPLETO, no solo la página actual
         filteredEmployees.forEach(employee => {
             if (!newData[employee.id]) {
                 newData[employee.id] = {};
@@ -143,18 +142,18 @@ export default function App({ empleados, empresas, url }) {
 
             weekDates.forEach(date => {
                 const dateStr = formatDate(date);
-                newData[employee.id][dateStr] = {
-                    entryTime: currentBaseSchedule.entryTime,
-                    exitTime: currentBaseSchedule.exitTime,
-                    status: 'Programado', // ← IMPORTANTE: Programado, NO Descanso
-                };
+                // 🆕 SOLO CREAR SI NO EXISTE, NO SOBREESCRIBIR
+                if (!newData[employee.id][dateStr]) {
+                    newData[employee.id][dateStr] = {
+                        entryTime: currentBaseSchedule.entryTime,
+                        exitTime: currentBaseSchedule.exitTime,
+                        status: 'L',
+                    };
+                }
             });
         });
 
-        console.log("✅ Horarios generados:", newData); // ← AGREGA ESTO
-        console.log("📊 Total empleados:", Object.keys(newData).length);
-        console.log("📅 Días por empleado:", Object.keys(newData[Object.keys(newData)[0]]).length);
-
+        console.log("✅ Horarios generados:", newData);
         setScheduleData(newData);
         toast.success(`Horario base aplicado a ${filteredEmployees.length} empleados`);
     };
@@ -183,24 +182,40 @@ export default function App({ empleados, empresas, url }) {
             const dayData = employeeData[date] || {
                 entryTime: currentBaseSchedule.entryTime,
                 exitTime: currentBaseSchedule.exitTime,
-                status: 'Programado' as const,
+                status: 'L' as const,
             };
 
-            // Si se cambia a "Descanso", poner horarios en 00:00
-            if (field === 'status' && value === 'Descanso') {
+            // 🆕 MAGIA: Si cambia a VACACIONES o DESCANSO, poner 00:00 automáticamente
+            if (field === 'status' && (value === 'V' || value === 'D')) {
                 return {
                     ...prev,
                     [employeeId]: {
                         ...employeeData,
                         [date]: {
-                            entryTime: '00:00',
-                            exitTime: '00:00',
+                            entryTime: '00:00',  // ← AUTOMÁTICO
+                            exitTime: '00:00',   // ← AUTOMÁTICO
                             status: value as DaySchedule['status'],
                         }
                     }
                 };
             }
 
+            // 🆕 Si cambia de VACACIONES/DESCANSO a LABORAL, restaurar horario base
+            if (field === 'status' && value === 'L' && (dayData.status === 'V' || dayData.status === 'D')) {
+                return {
+                    ...prev,
+                    [employeeId]: {
+                        ...employeeData,
+                        [date]: {
+                            entryTime: currentBaseSchedule.entryTime,  // ← Restaurar entrada
+                            exitTime: currentBaseSchedule.exitTime,    // ← Restaurar salida
+                            status: value as DaySchedule['status'],
+                        }
+                    }
+                };
+            }
+
+            // Comportamiento normal para otros cambios
             return {
                 ...prev,
                 [employeeId]: {
@@ -217,11 +232,13 @@ export default function App({ empleados, empresas, url }) {
 
 
     const handleSaveSchedules = () => {
+
+        console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
+        console.log('👥 EMPLEADOS FILTRADOS:', filteredEmployees.map(e => ({ id: e.id, nombre: e.nombres })));
+
+
         const entries = [];
         let hasValidationErrors = false;
-
-        console.log('🔍 scheduleData antes de guardar:', scheduleData);
-        console.log('👥 filteredEmployees:', filteredEmployees.length);
 
         filteredEmployees.forEach(employee => {
             const empSchedule = scheduleData[employee.id];
@@ -230,32 +247,28 @@ export default function App({ empleados, empresas, url }) {
                 return;
             }
 
-            const restDays = Object.values(empSchedule).filter(day => day.status === 'Descanso').length;
-            if (restDays < 1) {
-                toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
+            const employeeSchedule = scheduleData[employee.id] || {};
+            const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
+            const tieneDescanso = Object.values(employeeSchedule).some(day => day.status === 'D');
+            const necesitaDescanso = !tieneVacaciones && !tieneDescanso;
+
+            if (necesitaDescanso) {
+                toast.error(`${employee.nombres} debe tener al menos 1 día de descanso (no tiene vacaciones)`);
                 hasValidationErrors = true;
             }
 
             Object.keys(empSchedule).forEach(date => {
                 const { entryTime, exitTime, status } = empSchedule[date];
 
-                // 🔥 CORRIGE LA LÓGICA DEL ESTADO
-                let estadoFinal = 'L'; // Por defecto Laborable
-
-                if (status === 'Descanso') {
-                    estadoFinal = 'PE'; // Solo si es explícitamente Descanso
-                }
-
                 entries.push({
                     empleado_id: employee.id,
                     fecha: date,
                     ingreso: entryTime || '00:00',
                     salida: exitTime || '00:00',
-                    estado: estadoFinal,
+                    estado: status, // ← Enviar 'F' en handleSaveSchedules handleSaveSchedules lugar de 'D'
                 });
             });
         });
-
         if (hasValidationErrors) return;
         if (entries.length === 0) {
             toast.error('No hay horarios para guardar. Presiona "Aplicar horario base a todos" primero.');

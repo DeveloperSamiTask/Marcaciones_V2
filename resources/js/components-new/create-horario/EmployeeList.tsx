@@ -80,20 +80,29 @@ useEffect(() => {
                                 No hay empleados para esta modalidad
                             </div>
                         ) : (
-                            paginatedEmployees.map(employee => (
-                                <EmployeeRow
-                                    key={employee.id}
-                                    employee={employee}
-                                    isExpanded={expandedEmployees.has(employee.id)}
-                                    onToggle={onToggleEmployee}
-                                    weekDates={weekDates}
-                                    scheduleData={scheduleData[employee.id] || {}}
-                                    onFieldChange={onFieldChange}
-                                    defaultEntryTime={defaultEntryTime}
-                                    defaultExitTime={defaultExitTime}
-                                    hasRestDayValidationError={expandedEmployees.has(employee.id) && getRestDayCount(employee.id) < 1}
-                                />
-                            ))
+                            paginatedEmployees.map(employee => {
+                                // 🆕 CALCULAR SI TIENE VACACIONES O DESCANSO
+                                const employeeSchedule = scheduleData[employee.id] || {};
+                                const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
+                                const tieneDescanso = Object.values(employeeSchedule).some(day => day.status === 'D');
+                                const necesitaDescanso = !tieneVacaciones && !tieneDescanso;
+
+                                return (
+                                    <EmployeeRow
+                                        key={employee.id}
+                                        employee={employee}
+                                        isExpanded={expandedEmployees.has(employee.id)}
+                                        onToggle={onToggleEmployee}
+                                        weekDates={weekDates}
+                                        scheduleData={employeeSchedule}
+                                        onFieldChange={onFieldChange}
+                                        defaultEntryTime={defaultEntryTime}
+                                        defaultExitTime={defaultExitTime}
+                                        // 🆕 SOLO ERROR si: está expandido + necesita descanso + no tiene descanso
+                                        hasRestDayValidationError={expandedEmployees.has(employee.id) && necesitaDescanso}
+                                    />
+                                );
+                            })
                         )}
                     </div>
                 </ScrollArea>

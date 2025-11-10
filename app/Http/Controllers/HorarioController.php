@@ -185,42 +185,6 @@ class HorarioController extends Controller
 
     public function store(Request $request)
     {
-        Log::info('📥 Entró al método store()', $request->all());
-
-        $data = $request->validate([
-            'empleados_ids' => 'required|array',
-            'empleados_ids.*' => 'integer|exists:empleados,id',
-            'fechaInicio' => 'required|date',
-            'fechaFin' => 'required|date|after_or_equal:fechaInicio',
-            'ingreso' => 'required',
-            'salida' => 'required',
-            'estado' => 'required|string',
-        ]);
-
-        try {
-            DB::transaction(function () use ($data) {
-                $fechaInicio = Carbon::parse($data['fechaInicio']);
-                $fechaFin = Carbon::parse($data['fechaFin']);
-
-                // 🔁 recorre todos los empleados
-                foreach ($data['empleados_ids'] as $empleadoId) {
-                    $empleado = Empleado::findOrFail($empleadoId);
-
-                    // llama a tu función de crear horarios
-                    $this->crearHorariosParaEmpleado($empleado, $fechaInicio, $fechaFin, $data);
-                }
-            });
-
-            return response()->json(['success' => true, 'message' => 'Horarios creados correctamente']);
-        } catch (Exception $e) {
-            Log::error('❌ Error al crear horarios', ['error' => $e->getMessage()]);
-
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-    }
-
-    public function storeMultiple(Request $request)
-    {
         Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
 
         $data = $request->validate([
@@ -229,7 +193,7 @@ class HorarioController extends Controller
             'entries.*.fecha' => 'required|date',
             'entries.*.ingreso' => 'required|date_format:H:i',
             'entries.*.salida' => 'required|date_format:H:i',
-            'entries.*.estado' => 'required|string|in:L,PE,V,F,S',
+            'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D', // 🆕 AGREGAR 'D'
         ]);
 
         // 🔥 VALIDAR QUE NO VENGAN HORARIOS EN 00:00
@@ -286,6 +250,65 @@ class HorarioController extends Controller
         }
     }
 
+    public function storeMultiple(Request $request)
+    {
+        Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
+
+        $data = $request->validate([
+            'entries' => 'required|array|min:1',
+            'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
+            'entries.*.fecha' => 'required|date',
+            'entries.*.ingreso' => 'required|date_format:H:i',
+            'entries.*.salida' => 'required|date_format:H:i',
+            'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D',
+        ]);
+
+        try {
+            DB::transaction(function () use ($data) {
+                $porEmpleado = collect($data['entries'])->groupBy('empleado_id');
+
+                foreach ($porEmpleado as $empleadoId => $entries) {
+                    $empleado = Empleado::findOrFail($empleadoId);
+
+                    // 🆕 AGRUPAR POR ESTADO para respetar tu lógica
+                    $porEstado = collect($entries)->groupBy('estado');
+
+                    foreach ($porEstado as $estado => $entriesDelEstado) {
+                        $fechas = collect($entriesDelEstado)->pluck('fecha')->map(fn ($f) => Carbon::parse($f));
+                        $fechaInicio = $fechas->min();
+                        $fechaFin = $fechas->max();
+
+                        $horarioBase = collect($entriesDelEstado)->first();
+
+                        $datosHorario = [
+                            'ingreso' => $horarioBase['ingreso'],
+                            'salida' => $horarioBase['salida'],
+                            'estado' => $estado, // 🆕 ESTADO ESPECÍFICO DEL GRUPO
+                        ];
+
+                        Log::info("✅ Procesando {$empleado->nombre_completo} - Estado: {$estado}", [
+                            'rango' => "{$fechaInicio->format('Y-m-d')} al {$fechaFin->format('Y-m-d')}",
+                            'horario' => $datosHorario,
+                            'dias' => count($entriesDelEstado),
+                        ]);
+
+                        // 🆕 LLAMAR POR CADA GRUPO DE ESTADO
+                        $this->crearHorariosParaEmpleado($empleado, $fechaInicio, $fechaFin, $datosHorario);
+                    }
+                }
+            });
+
+            Log::info('✅ HORARIOS GUARDADOS CORRECTAMENTE');
+
+            return redirect()->back()->with('success', '✅ Horarios guardados correctamente');
+
+        } catch (Exception $e) {
+            Log::error('❌ ERROR AL GUARDAR:', ['mensaje' => $e->getMessage()]);
+
+            return redirect()->back()->with('error', 'Error: '.$e->getMessage());
+        }
+    }
+
     private function crearHorariosParaEmpleado(Empleado $empleado, Carbon $fechaInicio, Carbon $fechaFin, array $data)
     {
         $horasSemanal = 0;
@@ -325,7 +348,7 @@ class HorarioController extends Controller
                 [
                     'ingreso' => $data['ingreso'],
                     'salida' => $data['salida'],
-                    'estado' => $data['estado'] != 'L' ? 'PE' : 'L',
+                    'estado' => $data['estado'],
                 ]
             );
 
