@@ -261,43 +261,57 @@ export default function App({ empleados, empresas, url }) {
         filteredEmployees.forEach(employee => {
             const empSchedule = scheduleData[employee.id];
             if (!empSchedule) {
-                console.warn(`⚠️ Empleado ${employee.nombres} no tiene horarios`);
+                toast.error(`${employee.nombres} no tiene horarios configurados`);
+                hasValidationErrors = true;
                 return;
             }
 
-            // 🆕 VALIDACIÓN 1: Descanso obligatorio
             const employeeSchedule = scheduleData[employee.id] || {};
+            const diasDescanso = Object.values(employeeSchedule).filter(day => day.status === 'D').length;
             const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
-            const tieneDescanso = Object.values(employeeSchedule).some(day => day.status === 'D');
-            const necesitaDescanso = !tieneVacaciones && !tieneDescanso;
 
-            if (necesitaDescanso) {
-                toast.error(`${employee.nombres} debe tener al menos 1 día de descanso (no tiene vacaciones)`);
+            // 🆕 VALIDACIÓN 1: MÁXIMO 1 DESCANSO
+            if (diasDescanso > 1) {
+                toast.error(`${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
                 hasValidationErrors = true;
-                return; // ← Saltar ESTE EMPLEADO completo
+                return;
             }
 
-            // 🆕 VALIDACIÓN 2: Horarios 00:00 en días laborales
+            // 🆕 VALIDACIÓN 2: MÍNIMO 1 DESCANSO (si no tiene vacaciones)
+            if (diasDescanso === 0 && !tieneVacaciones) {
+                toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
+                hasValidationErrors = true;
+                return;
+            }
+
+            // 🆕 VALIDACIÓN 3: VERIFICAR QUE TODOS LOS DÍAS TIENEN HORARIOS VÁLIDOS
+            let tieneHorariosInvalidos = false;
+
             Object.keys(empSchedule).forEach(date => {
                 const { entryTime, exitTime, status } = empSchedule[date];
 
+                // Días laborales no pueden tener 00:00
                 if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
                     toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
-                    hasValidationErrors = true;
-                    return; // ← Saltar solo este DÍA
+                    tieneHorariosInvalidos = true;
                 }
 
-                entries.push({
-                    empleado_id: employee.id,
-                    fecha: date,
-                    ingreso: entryTime,
-                    salida: exitTime,
-                    estado: status,
-                });
+                if (!tieneHorariosInvalidos) {
+                    entries.push({
+                        empleado_id: employee.id,
+                        fecha: date,
+                        ingreso: entryTime,
+                        salida: exitTime,
+                        estado: status,
+                    });
+                }
             });
 
-
+            if (tieneHorariosInvalidos) {
+                hasValidationErrors = true;
+            }
         });
+
         if (hasValidationErrors) return;
         if (entries.length === 0) {
             toast.error('No hay horarios para guardar. Presiona "Aplicar horario base a todos" primero.');
