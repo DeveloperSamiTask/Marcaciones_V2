@@ -76,7 +76,7 @@ export function WeekScheduleTable({
                                     <Input
                                         type="time"
                                         // 🆕 VACACIONES también pone 00:00 automáticamente
-                                        value={isHorarioBloqueado ? '00:00' : (dayData?.entryTime || defaultEntryTime)}
+                                        value={isHorarioBloqueado ? '00:00' : (dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
                                         // 🆕 BLOQUEAR tanto para Vacaciones como Descanso
                                         disabled={isHorarioBloqueado}
@@ -89,7 +89,7 @@ export function WeekScheduleTable({
                                     <Input
                                         type="time"
                                         // 🆕 VACACIONES también pone 00:00 automáticamente
-                                        value={isHorarioBloqueado ? '00:00' : (dayData?.exitTime || defaultExitTime)}
+                                        value={isHorarioBloqueado ? '00:00' : (dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
                                         // 🆕 BLOQUEAR tanto para Vacaciones como Descanso
                                         disabled={isHorarioBloqueado}

@@ -198,8 +198,8 @@ export default function App({ empleados, empresas, url }) {
         setScheduleData(prev => {
             const employeeData = prev[employeeId] || {};
             const dayData = employeeData[date] || {
-                entryTime: currentBaseSchedule.entryTime,
-                exitTime: currentBaseSchedule.exitTime,
+                entryTime: '00:00', //currentBaseSchedule.entryTime,
+                exitTime: '00:00', //currentBaseSchedule.exitTime,
                 status: 'L' as const,
             };
 
@@ -265,6 +265,7 @@ export default function App({ empleados, empresas, url }) {
                 return;
             }
 
+            // 🆕 VALIDACIÓN 1: Descanso obligatorio
             const employeeSchedule = scheduleData[employee.id] || {};
             const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
             const tieneDescanso = Object.values(employeeSchedule).some(day => day.status === 'D');
@@ -273,19 +274,29 @@ export default function App({ empleados, empresas, url }) {
             if (necesitaDescanso) {
                 toast.error(`${employee.nombres} debe tener al menos 1 día de descanso (no tiene vacaciones)`);
                 hasValidationErrors = true;
+                return; // ← Saltar ESTE EMPLEADO completo
             }
 
+            // 🆕 VALIDACIÓN 2: Horarios 00:00 en días laborales
             Object.keys(empSchedule).forEach(date => {
                 const { entryTime, exitTime, status } = empSchedule[date];
+
+                if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
+                    toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
+                    hasValidationErrors = true;
+                    return; // ← Saltar solo este DÍA
+                }
 
                 entries.push({
                     empleado_id: employee.id,
                     fecha: date,
-                    ingreso: entryTime || '00:00',
-                    salida: exitTime || '00:00',
-                    estado: status, // ← Enviar 'F' en handleSaveSchedules handleSaveSchedules lugar de 'D'
+                    ingreso: entryTime,
+                    salida: exitTime,
+                    estado: status,
                 });
             });
+
+
         });
         if (hasValidationErrors) return;
         if (entries.length === 0) {
