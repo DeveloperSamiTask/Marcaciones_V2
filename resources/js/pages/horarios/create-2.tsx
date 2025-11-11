@@ -94,10 +94,18 @@ export default function App({ empleados, empresas, url }) {
     const partTimeEmployees = employees.filter(emp => emp.jornada_id === 2);
 
     // Horarios base por modalidad
-    const [baseSchedules, setBaseSchedules] = useState<{ [key: string]: BaseSchedule }>({
+    /*
+        const [baseSchedules, setBaseSchedules] = useState<{ [key: string]: BaseSchedule }>({
         'Full Time': { entryTime: '09:00', exitTime: '18:00' },
         'Part Time': { entryTime: '13:00', exitTime: '17:00' },
     });
+    */
+
+    const [baseSchedules, setBaseSchedules] = useState<{
+        [weekKey: string]: { [modality: string]: BaseSchedule }
+    }>({});
+
+
 
     // Empleados expandidos
     const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
@@ -118,7 +126,12 @@ export default function App({ empleados, empresas, url }) {
     });
 
     const weekDates = getWeekDates(currentWeekStart);
-    const currentBaseSchedule = baseSchedules[selectedModality];
+    const currentWeekKey = `${currentWeekStart.getFullYear()}-W${Math.ceil((currentWeekStart.getDate() + 1) / 7)}`;
+    const currentWeekBaseSchedules = baseSchedules[currentWeekKey] || {
+        'Full Time': { entryTime: '09:00', exitTime: '18:00' },
+        'Part Time': { entryTime: '13:00', exitTime: '17:00' },
+    };
+    const currentBaseSchedule = currentWeekBaseSchedules[selectedModality];
 
     // Contar empleados por modalidad para la empresa seleccionada
     const fullTimeCount = empleadosList.filter(emp => Number(emp.jornada_id) === 1).length;
@@ -128,7 +141,10 @@ export default function App({ empleados, empresas, url }) {
     const handleBaseScheduleChange = (schedule: BaseSchedule) => {
         setBaseSchedules(prev => ({
             ...prev,
-            [selectedModality]: schedule
+            [currentWeekKey]: {
+                ...prev[currentWeekKey],
+                [selectedModality]: schedule  // ← Guardar en la semana actual
+            }
         }));
     };
 
@@ -295,7 +311,12 @@ export default function App({ empleados, empresas, url }) {
         });
     };
 
+    useEffect(() => {
+        console.log("🔄 Reseteando validaciones - semana o empresa cambió");
+        setExpandedEmployees(new Set());
 
+        setScheduleData({});
+    }, [currentWeekStart, selectedEmpresa, selectedModality]);
 
 
     return (
