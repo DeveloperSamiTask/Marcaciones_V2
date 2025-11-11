@@ -134,26 +134,28 @@ export default function App({ empleados, empresas, url }) {
 
     const handleApplyBaseToAll = () => {
         const newData: typeof scheduleData = { ...scheduleData };
+        const newExpanded = new Set<string>();
 
         filteredEmployees.forEach(employee => {
+            newExpanded.add(employee.id); // Expandir
+
             if (!newData[employee.id]) {
                 newData[employee.id] = {};
             }
 
             weekDates.forEach(date => {
                 const dateStr = formatDate(date);
-                // 🆕 SOLO CREAR SI NO EXISTE, NO SOBREESCRIBIR
-                if (!newData[employee.id][dateStr]) {
-                    newData[employee.id][dateStr] = {
-                        entryTime: currentBaseSchedule.entryTime,
-                        exitTime: currentBaseSchedule.exitTime,
-                        status: 'L',
-                    };
-                }
+
+                // 🆕 SIEMPRE ACTUALIZAR, NO SOLO CREAR
+                newData[employee.id][dateStr] = {
+                    entryTime: currentBaseSchedule.entryTime,
+                    exitTime: currentBaseSchedule.exitTime,
+                    status: newData[employee.id][dateStr]?.status || 'L', // 🆕 Respetar estado existente
+                };
             });
         });
 
-        console.log("✅ Horarios generados:", newData);
+        setExpandedEmployees(newExpanded);
         setScheduleData(newData);
         toast.success(`Horario base aplicado a ${filteredEmployees.length} empleados`);
     };
