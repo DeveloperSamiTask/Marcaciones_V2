@@ -258,22 +258,18 @@ export default function App({ empleados, empresas, url }) {
         hoy.setHours(0, 0, 0, 0); // Inicio del día de hoy
 
         // 🆕 Validar que no hay fechas pasadas
-        const tieneFechasPasadas = filteredEmployees.some(employee => {
-            const empSchedule = scheduleData[employee.id];
-            if (!empSchedule) return false;
+        const inicioSemanaActual = new Date(hoy);
+        const dayOfWeek = hoy.getDay(); // domingo=0, lunes=1, ...
+        const diffToMonday = (dayOfWeek + 6) % 7;
+        inicioSemanaActual.setDate(hoy.getDate() - diffToMonday);
+        inicioSemanaActual.setHours(0, 0, 0, 0);
 
-            return Object.keys(empSchedule).some(fechaStr => {
-                const fecha = new Date(fechaStr);
-                fecha.setHours(0, 0, 0, 0);
-                return fecha < hoy;
-            });
-        });
-
-        if (tieneFechasPasadas) {
-            toast.error('No se pueden guardar horarios para fechas pasadas');
+        // Si la semana seleccionada es anterior a la actual → bloquear
+        if (currentWeekStart < inicioSemanaActual) {
+            toast.error('❌ No se pueden crear ni editar horarios de semanas anteriores');
             return;
         }
-        
+
         const entries = [];
         let hasValidationErrors = false;
 

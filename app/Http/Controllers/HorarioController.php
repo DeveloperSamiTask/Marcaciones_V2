@@ -405,10 +405,17 @@ class HorarioController extends Controller
         $horasSemanal = 0;
         $fechaIngresoEmpleado = Carbon::parse($empleado->fecha_ingreso);
 
-        if ($fechaInicio->lt($fechaIngresoEmpleado)) {
+        $inicioSemanaActual = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        if ($fechaCarbon->lt($inicioSemanaActual)) {
+            throw new Exception("No se pueden modificar horarios de la semana pasada. Fecha: {$fechaCarbon->format('d/m/Y')}");
+        }
+
+        /*
+         if ($fechaInicio->lt($fechaIngresoEmpleado)) {
             $fechaFormateada = $fechaIngresoEmpleado->format('d/m/Y');
             throw new Exception("No se pueden crear horarios para fechas anteriores al ingreso del empleado {$empleado->nombre_completo} ($fechaFormateada)");
         }
+        */
 
         $inicioSemana = $fechaInicio->copy()->startOfWeek(Carbon::MONDAY);
         $finSemana = $fechaInicio->copy()->endOfWeek(Carbon::SUNDAY);
@@ -511,9 +518,9 @@ class HorarioController extends Controller
         }
 
         // 🆕 2. Validar que no se modifiquen fechas pasadas
-        $hoy = Carbon::now()->startOfDay();
-        if ($fechaCarbon->lt($hoy)) {
-            throw new Exception("No se pueden modificar horarios de fechas pasadas. Fecha: {$fechaCarbon->format('d/m/Y')}");
+        $inicioSemanaActual = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        if ($fechaCarbon->lt($inicioSemanaActual)) {
+            throw new Exception("No se pueden crear o modificar horarios de semanas anteriores a la actual ({$fechaCarbon->format('d/m/Y')}).");
         }
 
         // 2. Calcular horas semanales existentes
