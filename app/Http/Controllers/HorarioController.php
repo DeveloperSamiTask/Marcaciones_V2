@@ -510,6 +510,12 @@ class HorarioController extends Controller
             throw new Exception("No se pueden crear horarios para fechas anteriores al ingreso del empleado {$empleado->nombre_completo} ($fechaFormateada)");
         }
 
+        // 🆕 2. Validar que no se modifiquen fechas pasadas
+        $hoy = Carbon::now()->startOfDay();
+        if ($fechaCarbon->lt($hoy)) {
+            throw new Exception("No se pueden modificar horarios de fechas pasadas. Fecha: {$fechaCarbon->format('d/m/Y')}");
+        }
+
         // 2. Calcular horas semanales existentes
         $inicioSemana = $fechaCarbon->copy()->startOfWeek(Carbon::MONDAY);
         $finSemana = $fechaCarbon->copy()->endOfWeek(Carbon::SUNDAY);

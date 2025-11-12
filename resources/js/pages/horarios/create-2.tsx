@@ -254,7 +254,26 @@ export default function App({ empleados, empresas, url }) {
         console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
         console.log('👥 EMPLEADOS FILTRADOS:', filteredEmployees.map(e => ({ id: e.id, nombre: e.nombres })));
 
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0); // Inicio del día de hoy
 
+        // 🆕 Validar que no hay fechas pasadas
+        const tieneFechasPasadas = filteredEmployees.some(employee => {
+            const empSchedule = scheduleData[employee.id];
+            if (!empSchedule) return false;
+
+            return Object.keys(empSchedule).some(fechaStr => {
+                const fecha = new Date(fechaStr);
+                fecha.setHours(0, 0, 0, 0);
+                return fecha < hoy;
+            });
+        });
+
+        if (tieneFechasPasadas) {
+            toast.error('No se pueden guardar horarios para fechas pasadas');
+            return;
+        }
+        
         const entries = [];
         let hasValidationErrors = false;
 
