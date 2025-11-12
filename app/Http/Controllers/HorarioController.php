@@ -123,7 +123,7 @@ class HorarioController extends Controller
                             'ingreso' => $data['ingreso'],
                             'salida' => $data['salida'],
                             'descripcion' => $data['descripcion'],
-                            'estado' => (in_array($data['estado'], ['L', 'D'])) ? $data['estado'] : 'PE', // al crear un horario por defecto debe ser "L" => laboral o "V" => Vacaciones
+                            'estado' => (in_array($data['estado'], ['L'])) ? $data['estado'] : 'PE', // al crear un horario por defecto debe ser "L" => laboral o "V" => Vacaciones
                         ]
                     );
                     // $horasSemanal += $horario->ingreso->diffInMinutes($horario->salida) - 60; // se resta la hora de refrigerio
@@ -542,6 +542,37 @@ class HorarioController extends Controller
                 'estado' => ($estado === 'L') ? 'L' : 'PE',  // ← Aquí SÍ es $estado (parámetro del método)
             ]
         );
+
+        $estadosQueGeneranPermisos = ['V', 'F', 'S']; // Estados no-laborales que generan permisos
+
+        // CASO 1: Si el estado actual es LABORAL, eliminar permisos de estados no-laborales
+        if ($estado === 'L') {
+            $tiposPermisosNoLaborales = PermisoTipo::whereIn('codigo', $estadosQueGeneranPermisos)
+                ->pluck('id');
+
+            Permiso::where('empleado_id', $empleadoId)
+                ->whereDate('fecha', $fechaCarbon)
+                ->whereIn('tipo_id', $tiposPermisosNoLaborales)
+                ->where('estado', '!=', 2) // No eliminar los rechazados
+                ->delete();
+
+            Log::info("🧹 Permisos no-laborales eliminados para empleado $empleadoId, fecha $fecha");
+        }
+
+        // CASO 2: Si el estado actual es no-laboral, eliminar permisos de OTROS estados no-laborales
+        else {
+            $otrosEstados = array_diff($estadosQueGeneranPermisos, [$estado]);
+            $tiposOtrosEstados = PermisoTipo::whereIn('codigo', $otrosEstados)
+                ->pluck('id');
+
+            Permiso::where('empleado_id', $empleadoId)
+                ->whereDate('fecha', $fechaCarbon)
+                ->whereIn('tipo_id', $tiposOtrosEstados)
+                ->where('estado', '!=', 2) // No eliminar los rechazados
+                ->delete();
+
+            Log::info("🧹 Permisos de otros estados eliminados para empleado $empleadoId, fecha $fecha");
+        }
 
         // 4. Control de permisos automáticos
         // Horarios laborales con exceso de horas
