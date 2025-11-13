@@ -556,7 +556,8 @@ class HorarioController extends Controller
             ]
         );
 
-        $estadosQueGeneranPermisos = ['V', 'F', 'S']; // Estados no-laborales que generan permisos
+        //busca permisos para eliminar
+        $estadosQueGeneranPermisos = ['V', 'F', 'S' , 'D']; // Estados no-laborales que generan permisos
 
         // CASO 1: Si el estado actual es LABORAL, eliminar permisos de estados no-laborales
         if ($estado === 'L') {
