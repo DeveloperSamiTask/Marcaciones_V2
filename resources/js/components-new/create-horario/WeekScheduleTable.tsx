@@ -11,12 +11,57 @@ interface WeekScheduleTableProps {
     defaultEntryTime: string;
     defaultExitTime: string;
 }
+const estadoOptions = [
+    { value: 'L', label: 'LABORAL' },
+    { value: 'D', label: 'DESCANSO SEMANAL' },
+    { value: 'AHE', label: 'HORAS EXTRAS' },
+    { value: 'C', label: 'COMPENSACION' },
+    { value: 'CA', label: 'COMPENSACION ADELANTADA' },
+    { value: 'CHE', label: 'COMPENSA HORAS EXTRAS' },
+    { value: 'F', label: 'FERIADO' },
+    { value: 'FL', label: 'FERIADO LABORADO' },
+    { value: 'SP', label: 'SIN PROGRAMACION' },
+    { value: 'V', label: 'VACACIONES' },
+    { value: 'M', label: 'DESCANSO MEDICO' },
+    { value: 'SN', label: 'SUSPENSIÓN POR NEGLIGENCIA' },
+    { value: 'ST', label: 'SUSP. POR ACUMULACION DE TARDANZAS' },
+    { value: 'SFI', label: 'SUSP. POR FALTA INJUSTIFICADA' },
+    { value: 'FI', label: 'FALTA INJUSTIFICADA' },
+    { value: 'FJ', label: 'FALTA JUSTIFICADA' },
+    { value: 'LCG', label: 'LICENCIA CON GOCE DE HABER' },
+    { value: 'LSG', label: 'LICENCIA SIN GOCE DE HABER' },
+    { value: 'LP', label: 'LICENCIA POR PATERNIDAD' },
+    { value: 'LM', label: 'LICENCIA POR MATERNIDAD' },
+    { value: 'LF', label: 'LICENCIA POR FALLECIMIENTO' },
+    { value: 'PE', label: 'PENDIENTE' },
+    { value: 'TD', label: 'TRABAJO DIA DESCANSO' },
+];
+
 
 const estadoBadgeVariants = {
     L: { label: "LABORAL" },
-    D: { label: "DESCANSO" },
+    D: { label: "DESCANSO SEMANAL" },
+    AHE: { label: "HORAS EXTRAS" },
+    C: { label: "COMPENSACION" },
+    CA: { label: "COMPENSACION ADELANTADA" },
+    CHE: { label: "COMPENSA HORAS EXTRAS" },
+    F: { label: "FERIADO" },
+    FL: { label: "FERIADO LABORADO" },
+    SP: { label: "SIN PROGRAMACION" },
     V: { label: "VACACIONES" },
-    // ❌ ELIMINAR todos los demás comentados
+    M: { label: "DESCANSO MEDICO" },
+    SN: { label: "SUSPENSIÓN POR NEGLIGENCIA" },
+    ST: { label: "SUSP. POR ACUMULACION DE TARDANZAS" },
+    SFI: { label: "SUSP. POR FALTA INJUSTIFICADA" },
+    FI: { label: "FALTA INJUSTIFICADA" },
+    FJ: { label: "FALTA JUSTIFICADA" },
+    LCG: { label: "LICENCIA CON GOCE DE HABER" },
+    LSG: { label: "LICENCIA SIN GOCE DE HABER" },
+    LP: { label: "LICENCIA POR PATERNIDAD" },
+    LM: { label: "LICENCIA POR MATERNIDAD" },
+    LF: { label: "LICENCIA POR FALLECIMIENTO" },
+    PE: { label: "PENDIENTE" },
+    TD: { label: "TRABAJO DIA DESCANSO" },
 } as const;
 
 const statusColors: { [key in ScheduleStatus]: string } = {
@@ -109,9 +154,11 @@ export function WeekScheduleTable({
                                             </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="L">LABORAL</SelectItem>
-                                            <SelectItem value="D">DESCANSO</SelectItem>
-                                            <SelectItem value="V">VACACIONES</SelectItem>
+                                            {estadoOptions.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </td>
