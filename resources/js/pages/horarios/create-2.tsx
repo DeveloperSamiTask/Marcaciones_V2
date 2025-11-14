@@ -203,8 +203,7 @@ export default function App({ empleados, empresas, url }) {
                 status: 'L' as const,
             };
 
-            // 🆕 MAGIA: Si cambia a VACACIONES o DESCANSO, poner 00:00 automáticamente
-            if (field === 'status' && (value === 'V' || value === 'D')) {
+            if (field === 'status' && value !== 'L') {
                 return {
                     ...prev,
                     [employeeId]: {
@@ -218,8 +217,7 @@ export default function App({ empleados, empresas, url }) {
                 };
             }
 
-            // 🆕 Si cambia de VACACIONES/DESCANSO a LABORAL, restaurar horario base
-            if (field === 'status' && value === 'L' && (dayData.status === 'V' || dayData.status === 'D')) {
+            if (field === 'status' && value === 'L' && dayData.status !== 'L') {
                 return {
                     ...prev,
                     [employeeId]: {
@@ -278,12 +276,15 @@ export default function App({ empleados, empresas, url }) {
                 const employeeSchedule = scheduleData[employee.id] || {};
                 const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
 
+                /*
                 // 47 horas = 2820 minutos, 48 horas = 2880 minutos
                 if (horasSemanales < 2820) {
                     toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas)`);
                     hasValidationErrors = true;
                     return;
                 }
+                */
+
 
                 if (horasSemanales > 2880) {
                     toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas)`);

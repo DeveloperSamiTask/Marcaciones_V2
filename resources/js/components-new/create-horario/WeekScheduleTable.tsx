@@ -102,7 +102,7 @@ export function WeekScheduleTable({
                         // 🆕 DETECTAR SI ES VACACIONES O DESCANSO
                         const isVacaciones = dayData?.status === 'V';
                         const isRestDay = dayData?.status === 'D';
-                        const isHorarioBloqueado = isVacaciones || isRestDay; // ← Ambos bloquean horarios
+                        const isHorarioBloqueado = dayData?.status !== 'L';
 
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">

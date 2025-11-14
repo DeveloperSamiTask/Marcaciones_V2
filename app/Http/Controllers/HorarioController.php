@@ -352,7 +352,7 @@ class HorarioController extends Controller
             'entries.*.fecha' => 'required|date',
             'entries.*.ingreso' => 'required|date_format:H:i',
             'entries.*.salida' => 'required|date_format:H:i',
-            'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D',
+            'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D,AHE,C,CA,CHE,FL,SP,M,SN,ST,SFI,FI,FJ,LCG,LSG,LP,LM,LF,TD',
         ]);
 
         // 🔥 VALIDAR HORARIOS 00:00
@@ -567,7 +567,11 @@ class HorarioController extends Controller
         );
 
         // busca permisos para eliminar
-        $estadosQueGeneranPermisos = ['V', 'F', 'S', 'D']; // Estados no-laborales que generan permisos
+        $estadosQueGeneranPermisos = [
+            'D', 'C', 'CA', 'AHE', 'CHE', 'F', 'FL', 'SP', 'V', 'M', 'SN', 'ST',
+            'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'PE', 'TD',
+        ];
+        // Estados no-laborales que generan permisos
 
         // CASO 1: Si el estado actual es LABORAL, eliminar permisos de estados no-laborales
         if ($estado === 'L') {
@@ -602,24 +606,17 @@ class HorarioController extends Controller
         // Horarios laborales con exceso de horas
 
         // Para descanso o vacaciones
-        if (in_array($estado, ['D', 'V'])) {
+        // 🆕 GENERAR PERMISO PARA CUALQUIER ESTADO QUE NO SEA 'L'
+        if ($estado !== 'L') {
             $tipoPermiso = PermisoTipo::firstWhere('codigo', $estado);
             if ($tipoPermiso) {
-                $permisoExistente = Permiso::where('empleado_id', $empleadoId)
-                    ->where('tipo_id', $tipoPermiso->id)
-                    ->whereDate('fecha', $fechaCarbon)
-                    ->where('estado', '!=', 2)
-                    ->exists();
-
-                if (! $permisoExistente) {
-                    Permiso::create([
-                        'empleado_id' => $empleadoId,
-                        'tipo_id' => $tipoPermiso->id,
-                        'fecha' => $fechaCarbon,
-                        'motivo' => $tipoPermiso->nombre,
-                        'estado' => 0,
-                    ]);
-                }
+                Permiso::create([
+                    'empleado_id' => $empleadoId,
+                    'tipo_id' => $tipoPermiso->id,
+                    'fecha' => $fechaCarbon,
+                    'motivo' => $tipoPermiso->nombre,
+                    'estado' => 0,
+                ]);
             }
         }
 
