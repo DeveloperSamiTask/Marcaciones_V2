@@ -600,27 +600,6 @@ class HorarioController extends Controller
 
         // 4. Control de permisos automáticos
         // Horarios laborales con exceso de horas
-        if ($estado === 'L' && (
-            ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
-            ($empleado->jornada_id == 1 && $horasSemanal > 2880)
-        )) {
-            $permisoExistente = Permiso::where('empleado_id', $empleadoId)
-                ->where('tipo_id', 2)
-                ->whereDate('fecha', $fechaCarbon)
-                ->where('estado', '!=', 2)
-                ->exists();
-
-            if (! $permisoExistente) {
-                $horario->update(['estado' => 'PE']);
-                Permiso::create([
-                    'empleado_id' => $empleadoId,
-                    'tipo_id' => 2,
-                    'fecha' => $fechaCarbon,
-                    'motivo' => 'HORARIO EXTRA',
-                    'estado' => 0,
-                ]);
-            }
-        }
 
         // Para descanso o vacaciones
         if (in_array($estado, ['D', 'V'])) {
