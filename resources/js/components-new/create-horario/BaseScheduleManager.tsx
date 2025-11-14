@@ -33,7 +33,7 @@ export function BaseScheduleManager({
         // Granja Villa (id = 1)
         if (companyId === 1) {
             return (
-                <BaseScheduleGranjaVilla
+                <BaseScheduleStandard  // ← CAMBIAR A STANDARD
                     modality={modality}
                     baseSchedule={baseSchedule}
                     onBaseScheduleChange={onBaseScheduleChange}
