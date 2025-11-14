@@ -274,6 +274,28 @@ export default function App({ empleados, empresas, url }) {
         let hasValidationErrors = false;
 
         filteredEmployees.forEach(employee => {
+            if (employee.jornada_id === 1) { // Solo Full Time
+                const employeeSchedule = scheduleData[employee.id] || {};
+                const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
+
+                // 47 horas = 2820 minutos, 48 horas = 2880 minutos
+                if (horasSemanales < 2820) {
+                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas)`);
+                    hasValidationErrors = true;
+                    return;
+                }
+
+                if (horasSemanales > 2880) {
+                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas)`);
+                    hasValidationErrors = true;
+                    return;
+                }
+            }
+        });
+
+        if (hasValidationErrors) return;
+
+        filteredEmployees.forEach(employee => {
             const empSchedule = scheduleData[employee.id];
             if (!empSchedule) {
                 toast.error(`${employee.nombres} no tiene horarios configurados`);
@@ -350,6 +372,40 @@ export default function App({ empleados, empresas, url }) {
             onFinish: () => toast.dismiss(),
         });
     };
+
+
+    const calcularHorasSemanalesFrontend = (employeeSchedule) => {
+        let totalMinutos = 0;
+
+        Object.values(employeeSchedule).forEach(dia => {
+            if (dia.status === 'L' && dia.entryTime && dia.exitTime && dia.entryTime !== '00:00') {
+                const entradaMin = tiempoAMinutos(dia.entryTime);
+                const salidaMin = tiempoAMinutos(dia.exitTime);
+                let minutosDia = salidaMin - entradaMin;
+
+                // Restar 1h (60min) si trabaja más de 6h por día
+                if (minutosDia > 360) {
+                    minutosDia -= 60;
+                }
+
+                totalMinutos += minutosDia;
+            }
+        });
+
+        return totalMinutos;
+    };
+
+    const tiempoAMinutos = (tiempo) => {
+        const [horas, minutos] = tiempo.split(':').map(Number);
+        return horas * 60 + minutos;
+    };
+
+    const formatearHoras = (minutos) => {
+        const horas = Math.floor(minutos / 60);
+        const mins = minutos % 60;
+        return `${horas}h ${mins}m`;
+    };
+
 
     useEffect(() => {
         console.log("🔄 Reseteando validaciones - semana o empresa cambió");
