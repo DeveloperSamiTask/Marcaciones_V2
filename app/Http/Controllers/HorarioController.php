@@ -542,6 +542,16 @@ class HorarioController extends Controller
             }
         }
 
+        $permisosHSeliminados = Permiso::where('empleado_id', $empleadoId)
+            ->where('tipo_id', 2) // Solo permisos de horas extras
+            ->whereDate('fecha', $fechaCarbon)
+            ->where('estado', '!=', 2) // No eliminar los rechazados
+            ->delete();
+
+        if ($permisosHSeliminados > 0) {
+            Log::info("🧹 ELIMINADOS $permisosHSeliminados permisos de HS - empleado $empleadoId, fecha $fecha");
+        }
+
         // 3. Crear o actualizar horario
         $horario = Horario::updateOrCreate(
             [
@@ -556,8 +566,8 @@ class HorarioController extends Controller
             ]
         );
 
-        //busca permisos para eliminar
-        $estadosQueGeneranPermisos = ['V', 'F', 'S' , 'D']; // Estados no-laborales que generan permisos
+        // busca permisos para eliminar
+        $estadosQueGeneranPermisos = ['V', 'F', 'S', 'D']; // Estados no-laborales que generan permisos
 
         // CASO 1: Si el estado actual es LABORAL, eliminar permisos de estados no-laborales
         if ($estado === 'L') {
