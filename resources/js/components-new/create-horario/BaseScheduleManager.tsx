@@ -25,15 +25,20 @@ export function BaseScheduleManager({
     onBaseScheduleChange,
     onApplyToAll
 }: BaseScheduleManagerProps) {
+
+     console.log('🔍 BaseScheduleManager - companyId:', companyId);
+    console.log('🔍 BaseScheduleManager - companyName:', companyName);
+    console.log('🔍 BaseScheduleManager - esGranjaVilla?:', companyId === 1);
+
     const [viewMode, setViewMode] = useState<'granja' | 'standard'>('standard');
     const weekEnd = getWeekEnd(weekStart);
 
-    // Determinar qué componente mostrar según el ID de empresa
+    //Determinar qué componente mostrar según el ID de empresa
     const renderScheduleComponent = () => {
         // Granja Villa (id = 1)
         if (companyId === 1) {
             return (
-                <BaseScheduleStandard  // ← CAMBIAR A STANDARD
+                <BaseScheduleGranjaVilla  // ← CAMBIAR A STANDARD
                     modality={modality}
                     baseSchedule={baseSchedule}
                     onBaseScheduleChange={onBaseScheduleChange}
