@@ -344,7 +344,7 @@ class HorarioController extends Controller
 
     public function storeMultiple(Request $request)
     {
-        //Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
+        // Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
 
         $data = $request->validate([
             'entries' => 'required|array|min:1',
@@ -353,7 +353,7 @@ class HorarioController extends Controller
             'entries.*.ingreso' => 'required|date_format:H:i',
             'entries.*.salida' => 'required|date_format:H:i',
             'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D,AHE,C,CA,CHE,FL,SP,M,SN,ST,SFI,FI,FJ,LCG,LSG,LP,LM,LF,TD',
-             'entries.*.feriado_id' => 'nullable|integer|exists:feriados,id',
+            'entries.*.feriado' => 'nullable|integer|exists:feriados,id',
         ]);
 
         // 🔥 VALIDAR HORARIOS 00:00
@@ -362,7 +362,7 @@ class HorarioController extends Controller
         })->count() > 0;
 
         if ($tieneHorariosInvalidos) {
-            //Log::error('❌ Horarios inválidos detectados (00:00)', $data['entries']);
+            // Log::error('❌ Horarios inválidos detectados (00:00)', $data['entries']);
             throw new Exception('Error: Los horarios no pueden ser 00:00 para días laborables');
         }
 
@@ -378,15 +378,14 @@ class HorarioController extends Controller
                         $entry['fecha'],
                         $entry['ingreso'],
                         $entry['salida'],
-                        $entry['estado']
+                        $entry['estado'],
+                        '',
+                        $entry['feriado'] ?? null
                     );
 
                     $contador++;
                 }
             });
-
-            //Log::info("✅ TOTAL PROCESADO: {$contador} registros");
-            //Log::info('🎉 HORARIOS MASIVOS GUARDADOS CORRECTAMENTE');
 
             return redirect()->back()->with('success', "✅ {$contador} horarios guardados correctamente");
 
@@ -506,7 +505,8 @@ class HorarioController extends Controller
         return true;
     }
 
-    private function procesarUnDia($empleadoId, $fecha, $ingreso, $salida, $estado, $descripcion = '')
+    private function procesarUnDia($empleadoId, $fecha, $ingreso, $salida, $estado, $descripcion = '',
+        $feriado = null)
     {
         $empleado = Empleado::findOrFail($empleadoId);
         $fechaCarbon = Carbon::parse($fecha);
@@ -603,9 +603,40 @@ class HorarioController extends Controller
             Log::info("🧹 Permisos de otros estados eliminados para empleado $empleadoId, fecha $fecha");
         }
 
+        // 🆕 LIMPIAR RELACIÓN CON FERIADOS SI YA NO ES C/CA
+        if ($estado !== 'C' && $estado !== 'CA') {
+            $horario->feriados()->detach();
+        }
+
+        // 🆕 ASOCIAR FERIADO SI ES C/CA
+        if (($estado === 'C' || $estado === 'CA') && $feriado) {
+            $feriado = Feriado::find($feriado);
+            if ($feriado) {
+
+                // ✅ VALIDAR QUE NO EXISTA LA RELACIÓN (igual que el otro método)
+                $existe = $horario->feriados()->where('feriado_id', $feriado)->exists();
+                if (! $existe) {
+
+                    // Buscar el permiso C/CA recién creado y actualizar motivo
+                    $permiso = Permiso::where('empleado_id', $empleadoId)
+                        ->whereDate('fecha', $fechaCarbon)
+                        ->where('estado', 0)
+                        ->first();
+
+                    if ($permiso) {
+                        $permiso->update([
+                            'motivo' => $permiso->motivo.' del '.$feriado->fecha->format('d/m/Y'),
+                        ]);
+                    }
+
+                    // ✅ USAR attach EN VEZ DE sync (para ser consistentes)
+                    $horario->feriados()->attach($feriado);
+                }
+            }
+        }
+
         // 4. Control de permisos automáticos
         // Horarios laborales con exceso de horas
-
         // Para descanso o vacaciones
         // 🆕 GENERAR PERMISO PARA CUALQUIER ESTADO QUE NO SEA 'L'
         if ($estado !== 'L') {

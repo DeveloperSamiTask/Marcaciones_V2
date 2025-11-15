@@ -31,6 +31,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function App({ empleados, empresas, url }) {
 
+
+    const [feriadosData, setFeriadosData] = useState<{
+        [employeeId: string]: {
+            feriadoDisponible: any[];
+            feriadoFuturo: any[];
+        };
+    }>({});
+
     //informacion del usuario
     const { auth } = usePage<SharedData>().props;
     const user = auth.user;
@@ -93,18 +101,10 @@ export default function App({ empleados, empresas, url }) {
     const fullTimeEmployees = employees.filter(emp => emp.jornada_id === 1);
     const partTimeEmployees = employees.filter(emp => emp.jornada_id === 2);
 
-    // Horarios base por modalidad
-    /*
-        const [baseSchedules, setBaseSchedules] = useState<{ [key: string]: BaseSchedule }>({
-        'Full Time': { entryTime: '09:00', exitTime: '18:00' },
-        'Part Time': { entryTime: '13:00', exitTime: '17:00' },
-    });
-    */
 
     const [baseSchedules, setBaseSchedules] = useState<{
         [weekKey: string]: { [modality: string]: BaseSchedule }
     }>({});
-
 
 
     // Empleados expandidos
@@ -198,40 +198,71 @@ export default function App({ empleados, empresas, url }) {
         setScheduleData(prev => {
             const employeeData = prev[employeeId] || {};
             const dayData = employeeData[date] || {
-                entryTime: '00:00', //currentBaseSchedule.entryTime,
-                exitTime: '00:00', //currentBaseSchedule.exitTime,
+                entryTime: '00:00',
+                exitTime: '00:00',
                 status: 'L' as const,
             };
 
+            // 🔥 CASO 1: Cambiar a NO LABORAL (D, V, C, CA, etc.)
             if (field === 'status' && value !== 'L') {
+                const newDayData = {
+                    entryTime: '00:00',
+                    exitTime: '00:00',
+                    status: value as DaySchedule['status'],
+                };
+
+                // 🔥 SI ES C O CA, ASIGNAR FERIADO AUTOMÁTICAMENTE
+                if (value === 'C' || value === 'CA') {
+                    const feriadosDelEmpleado = feriadosData[employeeId];
+
+                    if (feriadosDelEmpleado) {
+                        const tipoFeriado = value === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
+                        const listaFeriados = feriadosDelEmpleado[tipoFeriado] || [];
+
+                        if (listaFeriados.length > 0) {
+                            const feriadosOrdenados = [...listaFeriados].sort(
+                                (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+                            );
+
+                            newDayData.feriado_id = feriadosOrdenados[0].id;
+
+                            console.log('✅ Feriado asignado:', {
+                                empleado: employeeId,
+                                fecha: date,
+                                feriado: feriadosOrdenados[0].nombre,
+                                feriado_id: feriadosOrdenados[0].id
+                            });
+                        }
+                    }
+                }
+
                 return {
                     ...prev,
                     [employeeId]: {
                         ...employeeData,
-                        [date]: {
-                            entryTime: '00:00',  // ← AUTOMÁTICO
-                            exitTime: '00:00',   // ← AUTOMÁTICO
-                            status: value as DaySchedule['status'],
-                        }
+                        [date]: newDayData
                     }
                 };
             }
 
+            // 🔥 CASO 2: Cambiar a LABORAL desde otro estado
             if (field === 'status' && value === 'L' && dayData.status !== 'L') {
                 return {
                     ...prev,
                     [employeeId]: {
                         ...employeeData,
                         [date]: {
-                            entryTime: currentBaseSchedule.entryTime,  // ← Restaurar entrada
-                            exitTime: currentBaseSchedule.exitTime,    // ← Restaurar salida
+                            entryTime: currentBaseSchedule.entryTime,
+                            exitTime: currentBaseSchedule.exitTime,
                             status: value as DaySchedule['status'],
+                            // 🔥 LIMPIAR feriado_id si existía
+                            // No incluimos feriado_id aquí = se borra automáticamente
                         }
                     }
                 };
             }
 
-            // Comportamiento normal para otros cambios
+            // 🔥 CASO 3: Comportamiento normal (cambiar hora en día laboral, etc.)
             return {
                 ...prev,
                 [employeeId]: {
@@ -245,24 +276,30 @@ export default function App({ empleados, empresas, url }) {
         });
     };
 
+    const getFeriadosEmpleado = async (employeeId: string) => {
+        try {
+            const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
+            if (!response.ok) throw new Error('Error al cargar feriados');
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error cargando feriados:', error);
+            return { feriadoDisponible: [], feriadoFuturo: [] };
+        }
+    };
 
-
-    const handleSaveSchedules = () => {
-
+    const handleSaveSchedules = async () => {
         console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
-        console.log('👥 EMPLEADOS FILTRADOS:', filteredEmployees.map(e => ({ id: e.id, nombre: e.nombres })));
 
         const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0); // Inicio del día de hoy
+        hoy.setHours(0, 0, 0, 0);
 
-        // 🆕 Validar que no hay fechas pasadas
         const inicioSemanaActual = new Date(hoy);
-        const dayOfWeek = hoy.getDay(); // domingo=0, lunes=1, ...
+        const dayOfWeek = hoy.getDay();
         const diffToMonday = (dayOfWeek + 6) % 7;
         inicioSemanaActual.setDate(hoy.getDate() - diffToMonday);
         inicioSemanaActual.setHours(0, 0, 0, 0);
 
-        // Si la semana seleccionada es anterior a la actual → bloquear
         if (currentWeekStart < inicioSemanaActual) {
             toast.error('❌ No se pueden crear ni editar horarios de semanas anteriores');
             return;
@@ -271,20 +308,11 @@ export default function App({ empleados, empresas, url }) {
         const entries = [];
         let hasValidationErrors = false;
 
+        // Validaciones de horas semanales (tu código existente)
         filteredEmployees.forEach(employee => {
-            if (employee.jornada_id === 1) { // Solo Full Time
+            if (employee.jornada_id === 1) {
                 const employeeSchedule = scheduleData[employee.id] || {};
                 const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
-
-                /*
-                // 47 horas = 2820 minutos, 48 horas = 2880 minutos
-                if (horasSemanales < 2820) {
-                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas)`);
-                    hasValidationErrors = true;
-                    return;
-                }
-                */
-
 
                 if (horasSemanales > 2880) {
                     toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas)`);
@@ -296,6 +324,26 @@ export default function App({ empleados, empresas, url }) {
 
         if (hasValidationErrors) return;
 
+        // 🔥 CARGAR FERIADOS PARA EMPLEADOS CON C O CA
+        const empleadosConCompensacion = filteredEmployees.filter(emp => {
+            const schedule = scheduleData[emp.id] || {};
+            return Object.values(schedule).some(day => day.status === 'C' || day.status === 'CA');
+        });
+
+        console.log('👥 Empleados con compensación:', empleadosConCompensacion.length);
+
+        // Cargar feriados en paralelo
+        const feriadosMap = {};
+        await Promise.all(
+            empleadosConCompensacion.map(async (emp) => {
+                const feriados = await getFeriadosEmpleado(emp.id);
+                feriadosMap[emp.id] = feriados;
+            })
+        );
+
+        console.log('📦 Feriados cargados:', feriadosMap);
+
+        // Validaciones y construcción de entries
         filteredEmployees.forEach(employee => {
             const empSchedule = scheduleData[employee.id];
             if (!empSchedule) {
@@ -308,30 +356,50 @@ export default function App({ empleados, empresas, url }) {
             const diasDescanso = Object.values(employeeSchedule).filter(day => day.status === 'D').length;
             const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
 
-            // 🆕 VALIDACIÓN 1: MÁXIMO 1 DESCANSO
             if (diasDescanso > 1) {
                 toast.error(`${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
                 hasValidationErrors = true;
                 return;
             }
 
-            // 🆕 VALIDACIÓN 2: MÍNIMO 1 DESCANSO (si no tiene vacaciones)
             if (diasDescanso === 0 && !tieneVacaciones) {
                 toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
                 hasValidationErrors = true;
                 return;
             }
 
-            // 🆕 VALIDACIÓN 3: VERIFICAR QUE TODOS LOS DÍAS TIENEN HORARIOS VÁLIDOS
             let tieneHorariosInvalidos = false;
 
             Object.keys(empSchedule).forEach(date => {
                 const { entryTime, exitTime, status } = empSchedule[date];
 
-                // Días laborales no pueden tener 00:00
                 if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
                     toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
                     tieneHorariosInvalidos = true;
+                }
+
+                // 🔥 ASIGNAR FERIADO_ID PARA C Y CA
+                let feriadoId = null;
+                if (status === 'C' || status === 'CA') {
+                    const feriadosDelEmpleado = feriadosMap[employee.id];
+
+                    if (feriadosDelEmpleado) {
+                        const tipoFeriado = status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
+                        const listaFeriados = feriadosDelEmpleado[tipoFeriado] || [];
+
+                        if (listaFeriados.length > 0) {
+                            // Ordenar por fecha (más antiguo primero)
+                            const feriadosOrdenados = [...listaFeriados].sort(
+                                (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+                            );
+                            feriadoId = feriadosOrdenados[0].id;
+
+                            console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, feriadosOrdenados[0].nombre);
+                        } else {
+                            toast.error(`${employee.nombres}: No tiene feriados ${status === 'C' ? 'disponibles' : 'futuros'}`);
+                            tieneHorariosInvalidos = true;
+                        }
+                    }
                 }
 
                 if (!tieneHorariosInvalidos) {
@@ -341,7 +409,10 @@ export default function App({ empleados, empresas, url }) {
                         ingreso: entryTime,
                         salida: exitTime,
                         estado: status,
+                        feriado: feriadoId, // 🔥 AQUÍ SE ENVÍA AL BACKEND
                     });
+                } else {
+                    hasValidationErrors = true;
                 }
             });
 
@@ -351,6 +422,7 @@ export default function App({ empleados, empresas, url }) {
         });
 
         if (hasValidationErrors) return;
+
         if (entries.length === 0) {
             toast.error('No hay horarios para guardar. Presiona "Aplicar horario base a todos" primero.');
             return;
@@ -358,7 +430,13 @@ export default function App({ empleados, empresas, url }) {
 
         console.log('🧾 Enviando al backend:', entries);
         console.log('📊 Total registros:', entries.length);
-        console.table(entries.slice(0, 5)); // Primeros 5
+
+        // Mostrar solo los que tienen feriado
+        const conFeriado = entries.filter(e => e.feriado);
+        if (conFeriado.length > 0) {
+            console.log('🎯 Registros con feriado:', conFeriado);
+            console.table(conFeriado);
+        }
 
         router.post(route('horarios.store-multiple'), { entries }, {
             preserveScroll: true,

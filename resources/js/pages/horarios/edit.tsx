@@ -409,21 +409,21 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                             tipo={data.estado}
                                         />
                                     )}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                                 </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                                 <div className="flex items-center gap-4">
                                     <Button type='submit' variant={excedente ? 'info' : 'default'} disabled={processing} tabIndex={8}>
                                         {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}

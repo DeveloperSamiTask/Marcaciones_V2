@@ -2,6 +2,7 @@ import { Input } from '../ui-new/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui-new/select';
 import { DaySchedule, ScheduleStatus } from '../../types/schedule';
 import { formatDate } from '../../utils/dateUtils';
+import { useEffect, useState } from 'react';
 
 interface WeekScheduleTableProps {
     employeeId: string;
@@ -80,6 +81,47 @@ export function WeekScheduleTable({
 
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
+    // 🔥 ESTADO PROPIO PARA FERIADOS
+    const [feriadosLocal, setFeriadosLocal] = useState<{
+        feriadoDisponible: any[];
+        feriadoFuturo: any[];
+    } | null>(null);
+
+    const [loading, setLoading] = useState(false);
+
+    // 🔥 CARGAR FERIADOS AL MONTAR O CUANDO CAMBIE EL EMPLEADO
+    useEffect(() => {
+        const cargarFeriados = async () => {
+            setLoading(true);
+            try {
+                console.log('🚀 Cargando feriados para empleado:', employeeId);
+                const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('✅ Feriados cargados:', data);
+
+                setFeriadosLocal(data);
+            } catch (error) {
+                console.error('❌ Error cargando feriados:', error);
+                setFeriadosLocal({
+                    feriadoDisponible: [],
+                    feriadoFuturo: []
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        cargarFeriados();
+    }, [employeeId]);
+
+    // 🔥 USAR feriadosLocal en lugar de feriadosData
+    const feriadosActuales = feriadosLocal || feriadosData;
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full min-w-[800px]">
@@ -97,10 +139,9 @@ export function WeekScheduleTable({
                         const dayData = scheduleData[dateStr];
                         const isHorarioBloqueado = dayData?.status !== 'L';
 
-                        // 🔥 SOLO ESTO IMPORTA
                         const esTipoCompensacion = dayData?.status === 'C' || dayData?.status === 'CA';
                         const tipoFeriado = dayData?.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
-                        const feriadosList = feriadosData?.[tipoFeriado] || [];
+                        const feriadosList = feriadosActuales?.[tipoFeriado] || [];
 
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">
@@ -156,21 +197,27 @@ export function WeekScheduleTable({
                                         </SelectContent>
                                     </Select>
 
-                                    {/* 🔥 MOSTRAR NOMBRES DE FERIADOS - PUNTO */}
+                                    {/* 🔥 TU CÓDIGO QUE SÍ FUNCIONA */}
                                     {esTipoCompensacion && (
-                                        <div>
-                                            <strong>
-                                                {dayData.status === 'C' ? '🟢 Feriados Disponibles' : '🔵 Feriados Futuros'} ({feriadosList.length})
-                                            </strong>
-
-                                            {feriadosList.length > 0 ? (
-                                                feriadosList.map((feriado: any) => (
-                                                    <div key={feriado.id}>
-                                                        • {feriado.nombre} - {new Date(feriado.fecha).toLocaleDateString('es-PE')}
-                                                    </div>
-                                                ))
+                                        <div className="mt-1 text-xs">
+                                            {loading ? (
+                                                <div>⏳ Cargando feriados...</div>
                                             ) : (
-                                                <div>⚠️ No hay feriados {dayData.status === 'C' ? 'disponibles' : 'futuros'}</div>
+                                                <div>
+                                                    <strong>
+                                                        {dayData.status === 'C' ? '🟢 Feriados Disponibles' : '🔵 Feriados Futuros'} ({feriadosList.length})
+                                                    </strong>
+
+                                                    {feriadosList.length > 0 ? (
+                                                        feriadosList.map((feriado: any) => (
+                                                            <div key={feriado.id}>
+                                                                • {feriado.nombre} - {new Date(feriado.fecha).toLocaleDateString('es-PE')}
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div>⚠️ No hay feriados {dayData.status === 'C' ? 'disponibles' : 'futuros'}</div>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     )}

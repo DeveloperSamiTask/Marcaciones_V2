@@ -64,9 +64,18 @@
                     decisión de la empresa de imponerle una sanción disciplinaria consistente en <strong>SUSPENSION POR
                         FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
                 </p>
+                {{-- 1. BUCLE PARA MOSTRAR LAS 3 AMONESTACIONES PREVIAS --}}
+                @foreach ($amonestaciones as $amonestacion)
+                    <li style="margin-left: 150px; margin-right: 230px;">
+                        Amonestación previa por falta injustificada el día
+                        {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.
+                    </li>
+                @endforeach
+
+                {{-- 2. LISTA PARA LA FALTA ACTUAL (CAUSA LA SUSPENSIÓN) --}}
                 <li style="margin-left: 150px; margin-right: 230px;">
-                    Por faltar injustificadamente a su centro de labores el dia
-                    {{ $suspension->fecha->format('d/m/Y') }}
+                    Y en adición, por faltar injustificadamente el día
+                    {{ $suspension->fecha->format('d/m/Y') }}.
                 </li>
 
                 <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">

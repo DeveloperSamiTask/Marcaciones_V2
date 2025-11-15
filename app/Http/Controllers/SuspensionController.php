@@ -286,7 +286,11 @@ class SuspensionController extends Controller
         }
 
         if ($suspension->tipo == 'falta injustificada') {
-            return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
+
+            $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
+
+
+            return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
         }
 
         if ($suspension->tipo == 'negligencia') {
