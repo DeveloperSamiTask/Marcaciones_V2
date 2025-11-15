@@ -1,7 +1,7 @@
 import { Input } from '../ui-new/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui-new/select';
 import { DaySchedule, ScheduleStatus } from '../../types/schedule';
-import { formatDate, getDayName, formatDateDisplay } from '../../utils/dateUtils';
+import { formatDate } from '../../utils/dateUtils';
 
 interface WeekScheduleTableProps {
     employeeId: string;
@@ -15,6 +15,7 @@ interface WeekScheduleTableProps {
         feriadoFuturo: any[];
     } | null;
 }
+
 const estadoOptions = [
     { value: 'L', label: 'LABORAL' },
     { value: 'D', label: 'DESCANSO SEMANAL' },
@@ -40,7 +41,6 @@ const estadoOptions = [
     { value: 'PE', label: 'PENDIENTE' },
     { value: 'TD', label: 'TRABAJO DIA DESCANSO' },
 ];
-
 
 const estadoBadgeVariants = {
     L: { label: "LABORAL" },
@@ -68,15 +68,6 @@ const estadoBadgeVariants = {
     TD: { label: "TRABAJO DIA DESCANSO" },
 } as const;
 
-const statusColors: { [key in ScheduleStatus]: string } = {
-    'Programado': 'bg-blue-50',
-    'Activo': 'bg-green-50',
-    'Completado': 'bg-gray-50',
-    'Ausente': 'bg-red-50',
-    'Cancelado': 'bg-orange-50',
-    'Descanso': 'bg-yellow-50'
-};
-
 export function WeekScheduleTable({
     employeeId,
     weekDates,
@@ -84,8 +75,9 @@ export function WeekScheduleTable({
     onFieldChange,
     defaultEntryTime,
     defaultExitTime,
-     feriadosData // 🆕 NUEVA PROP
+    feriadosData
 }: WeekScheduleTableProps) {
+
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
     return (
@@ -103,51 +95,48 @@ export function WeekScheduleTable({
                     {weekDates.map((date, dayIndex) => {
                         const dateStr = formatDate(date);
                         const dayData = scheduleData[dateStr];
-
-                        // 🆕 DETECTAR SI ES VACACIONES O DESCANSO
-                        const isVacaciones = dayData?.status === 'V';
-                        const isRestDay = dayData?.status === 'D';
                         const isHorarioBloqueado = dayData?.status !== 'L';
+
+                        // 🔥 SOLO ESTO IMPORTA
+                        const esTipoCompensacion = dayData?.status === 'C' || dayData?.status === 'CA';
+                        const tipoFeriado = dayData?.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
+                        const feriadosList = feriadosData?.[tipoFeriado] || [];
 
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">
-                                {/* Día de la semana (igual) */}
+                                {/* Día */}
                                 <td className="p-2">
                                     <div>
-                                        <div className="text-xs">{dayNames[dayIndex]}</div>
+                                        <div className="text-xs font-medium">{dayNames[dayIndex]}</div>
                                         <div className="text-xs text-gray-600">
                                             {date.getDate()}/{date.getMonth() + 1}
                                         </div>
                                     </div>
                                 </td>
 
-                                {/* Hora de entrada */}
+                                {/* Entrada */}
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        // 🆕 VACACIONES también pone 00:00 automáticamente
                                         value={isHorarioBloqueado ? '00:00' : (dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
-                                        // 🆕 BLOQUEAR tanto para Vacaciones como Descanso
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"
                                     />
                                 </td>
 
-                                {/* Hora de salida */}
+                                {/* Salida */}
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        // 🆕 VACACIONES también pone 00:00 automáticamente
                                         value={isHorarioBloqueado ? '00:00' : (dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
-                                        // 🆕 BLOQUEAR tanto para Vacaciones como Descanso
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"
                                     />
                                 </td>
 
-                                {/* Estado del día */}
+                                {/* Estado */}
                                 <td className="p-2">
                                     <Select
                                         value={dayData?.status || 'L'}
@@ -167,12 +156,22 @@ export function WeekScheduleTable({
                                         </SelectContent>
                                     </Select>
 
-                                    {(dayData?.status === 'C' || dayData?.status === 'CA') && (
-                                        <div className="text-xs text-green-600 mt-1">
-                                            {dayData.status === 'C' ? '🟢' : '🔵'}
-                                            Feriados {dayData.status === 'C' ? 'disponibles' : 'futuros'}: {
-                                                feriadosData?.[dayData.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo']?.length || 0
-                                            }
+                                    {/* 🔥 MOSTRAR NOMBRES DE FERIADOS - PUNTO */}
+                                    {esTipoCompensacion && (
+                                        <div>
+                                            <strong>
+                                                {dayData.status === 'C' ? '🟢 Feriados Disponibles' : '🔵 Feriados Futuros'} ({feriadosList.length})
+                                            </strong>
+
+                                            {feriadosList.length > 0 ? (
+                                                feriadosList.map((feriado: any) => (
+                                                    <div key={feriado.id}>
+                                                        • {feriado.nombre} - {new Date(feriado.fecha).toLocaleDateString('es-PE')}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div>⚠️ No hay feriados {dayData.status === 'C' ? 'disponibles' : 'futuros'}</div>
+                                            )}
                                         </div>
                                     )}
                                 </td>
