@@ -10,6 +10,10 @@ interface WeekScheduleTableProps {
     onFieldChange: (employeeId: string, date: string, field: 'entryTime' | 'exitTime' | 'status', value: string) => void;
     defaultEntryTime: string;
     defaultExitTime: string;
+    feriadosData?: {
+        feriadoDisponible: any[];
+        feriadoFuturo: any[];
+    } | null;
 }
 const estadoOptions = [
     { value: 'L', label: 'LABORAL' },
@@ -79,7 +83,8 @@ export function WeekScheduleTable({
     scheduleData,
     onFieldChange,
     defaultEntryTime,
-    defaultExitTime
+    defaultExitTime,
+     feriadosData // 🆕 NUEVA PROP
 }: WeekScheduleTableProps) {
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -161,6 +166,15 @@ export function WeekScheduleTable({
                                             ))}
                                         </SelectContent>
                                     </Select>
+
+                                    {(dayData?.status === 'C' || dayData?.status === 'CA') && (
+                                        <div className="text-xs text-green-600 mt-1">
+                                            {dayData.status === 'C' ? '🟢' : '🔵'}
+                                            Feriados {dayData.status === 'C' ? 'disponibles' : 'futuros'}: {
+                                                feriadosData?.[dayData.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo']?.length || 0
+                                            }
+                                        </div>
+                                    )}
                                 </td>
                             </tr>
                         );

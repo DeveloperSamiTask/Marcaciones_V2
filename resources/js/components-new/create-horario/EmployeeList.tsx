@@ -4,6 +4,16 @@ import { Employee, DaySchedule, Modality } from '../../types/schedule';
 import { ScrollArea } from '../ui-new/scroll-area';
 import { useState, useEffect } from 'react';
 
+// ❌ ELIMINAR ESTO de aquí (está FUERA del componente)
+/*
+const [feriadosData, setFeriadosData] = useState<{
+    [employeeId: string]: {
+        feriadoDisponible: any[];
+        feriadoFuturo: any[];
+    };
+}>({});
+*/
+
 interface EmployeeListProps {
     employees: Employee[];
     modality: Modality;
@@ -32,6 +42,14 @@ export function EmployeeList({
     defaultExitTime
 }: EmployeeListProps) {
 
+    // ✅ MOVER el useState AQUÍ DENTRO del componente
+    const [feriadosData, setFeriadosData] = useState<{
+        [employeeId: string]: {
+            feriadoDisponible: any[];
+            feriadoFuturo: any[];
+        };
+    }>({});
+
     // Validar que cada empleado tenga al menos 1 día de descanso
     const getRestDayCount = (employeeId: string) => {
         const empSchedule = scheduleData[employeeId];
@@ -40,12 +58,29 @@ export function EmployeeList({
         return Object.values(empSchedule).filter(day => day.status === 'Descanso').length;
     };
 
-    /*
-useEffect(() => {
-        setCurrentPage(1);
-    }, [employees]);
-    */
+    const handleToggleWithFeriados = async (employeeId: string) => {
+        // 1. Lógica actual de toggle
+        onToggleEmployee(employeeId);
 
+        // 2. 🆕 SOLO si se está EXPANDIENDO y no tenemos datos
+        const isExpanding = !expandedEmployees.has(employeeId);
+        if (isExpanding && !feriadosData[employeeId]) {
+            try {
+                // Llamada SILENCIOSA
+                const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
+                const data = await response.json();
+
+                // Guardar en estado PERO no mostrar nada
+                setFeriadosData(prev => ({
+                    ...prev,
+                    [employeeId]: data
+                }));
+            } catch (error) {
+                // Silencio - si falla, no pasa nada
+                console.log('Error cargando feriados:', error);
+            }
+        }
+    };
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
@@ -92,7 +127,7 @@ useEffect(() => {
                                         key={employee.id}
                                         employee={employee}
                                         isExpanded={expandedEmployees.has(employee.id)}
-                                        onToggle={onToggleEmployee}
+                                        onToggle={handleToggleWithFeriados} // 🆕 CAMBIAR por el nuevo handle
                                         weekDates={weekDates}
                                         scheduleData={employeeSchedule}
                                         onFieldChange={onFieldChange}
@@ -100,6 +135,7 @@ useEffect(() => {
                                         defaultExitTime={defaultExitTime}
                                         // 🆕 SOLO ERROR si: está expandido + necesita descanso + no tiene descanso
                                         hasRestDayValidationError={expandedEmployees.has(employee.id) && necesitaDescanso}
+                                        feriadosData={feriadosData[employee.id] || null}
                                     />
                                 );
                             })
@@ -134,6 +170,4 @@ useEffect(() => {
             )}
         </div>
     );
-
-
 }

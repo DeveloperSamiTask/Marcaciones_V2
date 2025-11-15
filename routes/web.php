@@ -68,6 +68,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('/horarios/store-multiple', [HorarioController::class, 'storeMultiple'])->name('horarios.store-multiple');
 
+    Route::get('/horarios/getFeriadosEmpleado', [HorarioController::class, 'getFeriadosEmpleado'])->name('horarios.getFeriadosEmpleado');
+
     // Route::get('/horarios/nuevo', HorarioController::class ()
 
     // Permisos

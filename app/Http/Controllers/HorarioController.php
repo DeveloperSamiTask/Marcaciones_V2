@@ -344,7 +344,7 @@ class HorarioController extends Controller
 
     public function storeMultiple(Request $request)
     {
-        Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
+        //Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
 
         $data = $request->validate([
             'entries' => 'required|array|min:1',
@@ -353,6 +353,7 @@ class HorarioController extends Controller
             'entries.*.ingreso' => 'required|date_format:H:i',
             'entries.*.salida' => 'required|date_format:H:i',
             'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D,AHE,C,CA,CHE,FL,SP,M,SN,ST,SFI,FI,FJ,LCG,LSG,LP,LM,LF,TD',
+             'entries.*.feriado_id' => 'nullable|integer|exists:feriados,id',
         ]);
 
         // 🔥 VALIDAR HORARIOS 00:00
@@ -361,7 +362,7 @@ class HorarioController extends Controller
         })->count() > 0;
 
         if ($tieneHorariosInvalidos) {
-            Log::error('❌ Horarios inválidos detectados (00:00)', $data['entries']);
+            //Log::error('❌ Horarios inválidos detectados (00:00)', $data['entries']);
             throw new Exception('Error: Los horarios no pueden ser 00:00 para días laborables');
         }
 
@@ -384,8 +385,8 @@ class HorarioController extends Controller
                 }
             });
 
-            Log::info("✅ TOTAL PROCESADO: {$contador} registros");
-            Log::info('🎉 HORARIOS MASIVOS GUARDADOS CORRECTAMENTE');
+            //Log::info("✅ TOTAL PROCESADO: {$contador} registros");
+            //Log::info('🎉 HORARIOS MASIVOS GUARDADOS CORRECTAMENTE');
 
             return redirect()->back()->with('success', "✅ {$contador} horarios guardados correctamente");
 
@@ -643,6 +644,49 @@ class HorarioController extends Controller
             ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id', 'jornada_id', 'cargo']);
 
         return response()->json($empleados);
+    }
+
+    public function getFeriadosEmpleado(Request $request)
+    {
+        try {
+            $empleadoId = $request->query('empleado_id');
+
+            if (! $empleadoId) {
+                return response()->json([
+                    'feriadoDisponible' => [],
+                    'feriadoFuturo' => [],
+                ]);
+            }
+
+            // 🎯 COPIAR EXACTAMENTE esta parte de tu método edit() - YA PROBADA:
+            $fechasLaborables = Horario::where('empleado_id', $empleadoId)
+                ->where('estado', 'L')
+                ->whereDate('fecha', '<=', now())
+                ->pluck('fecha');
+
+            $feriadoFuturo = Feriado::query()
+                ->whereYear('fecha', now()->year)
+                ->whereDate('fecha', '>=', now())
+                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleadoId))
+                ->get();
+
+            $feriadoDisponible = Feriado::query()
+                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleadoId))
+                ->whereIn('fecha', $fechasLaborables)
+                ->get();
+
+            return response()->json([
+                'feriadoDisponible' => $feriadoDisponible,
+                'feriadoFuturo' => $feriadoFuturo,
+            ]);
+
+        } catch (\Exception $e) {
+            // Si algo sale mal, devolver arrays vacíos
+            return response()->json([
+                'feriadoDisponible' => [],
+                'feriadoFuturo' => [],
+            ]);
+        }
     }
 
     public function empleados(Request $request)
