@@ -70,6 +70,10 @@ export function WeekSelector({ currentWeekStart, onWeekChange }: WeekSelectorPro
             </Button>
           </div>
 
+              {/* BOTÓN APLICAR A TODOS
+
+            */}
+
           <div className="border-t pt-4">
             <Label>Búsqueda por Rango de Fechas</Label>
             <div className="flex gap-2 mt-2">

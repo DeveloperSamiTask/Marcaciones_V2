@@ -108,14 +108,10 @@ export default function App({ empleados, empresas, url }) {
 
 
     // Empleados expandidos
-    const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
+
 
     // Datos de horarios
-    const [scheduleData, setScheduleData] = useState<{
-        [employeeId: string]: {
-            [date: string]: DaySchedule;
-        };
-    }>({});
+
 
     // Filtrar empleados por empresa del supervisor y modalidad
     const selectedCompany = mockCompanies.find(c => c.id === selectedCompanyId);
@@ -148,6 +144,16 @@ export default function App({ empleados, empresas, url }) {
         }));
     };
 
+
+    /*Despliegue de informacion al seleccionar el boton asignar horario*/
+    const [scheduleData, setScheduleData] = useState<{
+        [employeeId: string]: {
+            [date: string]: DaySchedule;
+        };
+    }>({});
+
+    const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
+
     const handleApplyBaseToAll = () => {
         const newData: typeof scheduleData = { ...scheduleData };
         const newExpanded = new Set<string>();
@@ -176,6 +182,98 @@ export default function App({ empleados, empresas, url }) {
         toast.success(`Horario base aplicado a ${filteredEmployees.length} empleados`);
     };
 
+    useEffect(() => {
+        console.log("🔄 Reseteando validaciones - semana o empresa cambió");
+        setExpandedEmployees(new Set());
+
+        setScheduleData({});
+    }, [currentWeekStart, selectedEmpresa, selectedModality]);
+
+    /*Despliegue de informacion al seleccionar el boton asignar horario PARA LA GRANJA VILLA*/
+    const handleApplyLunesAJueves = () => {
+        const newData = { ...scheduleData };
+        const newExpanded = new Set<string>();
+
+        filteredEmployees.forEach(employee => {
+            newExpanded.add(employee.id);
+            if (!newData[employee.id]) newData[employee.id] = {};
+
+            weekDates.forEach(date => {
+                const dateStr = formatDate(date);
+                const dayOfWeek = date.getDay(); // 0=domingo, 1=lunes, etc.
+
+                if (dayOfWeek >= 1 && dayOfWeek <= 4) { // Solo Lunes a Jueves
+                    newData[employee.id][dateStr] = {
+                        entryTime: '09:30',
+                        exitTime: '18:00',
+                        status: newData[employee.id][dateStr]?.status || 'L',
+                    };
+                }
+            });
+        });
+
+        setExpandedEmployees(newExpanded);
+        setScheduleData(newData);
+        toast.success(`Horario Lunes-Jueves aplicado a ${filteredEmployees.length} empleados`);
+    };
+
+    // 🟢 PARA VIERNES
+    const handleApplyViernes = () => {
+        const newData = { ...scheduleData };
+        const newExpanded = new Set<string>();
+
+        filteredEmployees.forEach(employee => {
+            newExpanded.add(employee.id);
+            if (!newData[employee.id]) newData[employee.id] = {};
+
+            weekDates.forEach(date => {
+                const dateStr = formatDate(date);
+                const dayOfWeek = date.getDay();
+
+                if (dayOfWeek === 5) { // Solo Viernes
+                    newData[employee.id][dateStr] = {
+                        entryTime: '09:00',
+                        exitTime: '18:00',
+                        status: newData[employee.id][dateStr]?.status || 'L',
+                    };
+                }
+            });
+        });
+
+        setExpandedEmployees(newExpanded);
+        setScheduleData(newData);
+        toast.success(`Horario Viernes aplicado a ${filteredEmployees.length} empleados`);
+    };
+
+    // 🟢 PARA SÁBADO Y DOMINGO
+    const handleApplyFinDeSemana = () => {
+        const newData = { ...scheduleData };
+        const newExpanded = new Set<string>();
+
+        filteredEmployees.forEach(employee => {
+            newExpanded.add(employee.id);
+            if (!newData[employee.id]) newData[employee.id] = {};
+
+            weekDates.forEach(date => {
+                const dateStr = formatDate(date);
+                const dayOfWeek = date.getDay();
+
+                if (dayOfWeek === 0 || dayOfWeek === 6) { // Sábado (6) y Domingo (0)
+                    newData[employee.id][dateStr] = {
+                        entryTime: '09:00',
+                        exitTime: '18:00',
+                        status: newData[employee.id][dateStr]?.status || 'L',
+                    };
+                }
+            });
+        });
+
+        setExpandedEmployees(newExpanded);
+        setScheduleData(newData);
+        toast.success(`Horario Fin de Semana aplicado a ${filteredEmployees.length} empleados`);
+    };
+
+    /* */
 
     const handleToggleEmployee = (employeeId: string) => {
         setExpandedEmployees(prev => {
@@ -507,12 +605,7 @@ export default function App({ empleados, empresas, url }) {
     };
 
 
-    useEffect(() => {
-        console.log("🔄 Reseteando validaciones - semana o empresa cambió");
-        setExpandedEmployees(new Set());
 
-        setScheduleData({});
-    }, [currentWeekStart, selectedEmpresa, selectedModality]);
 
 
     return (
@@ -521,8 +614,8 @@ export default function App({ empleados, empresas, url }) {
             <div className="min-h-screen bg-gray-50">
                 <Toaster />
 
-                {/* Header */}
-                <div className="bg-white border-b shadow-sm">
+                {/* Header
+                                    <div className="bg-white border-b shadow-sm">
                     <div className="container mx-auto px-4 py-4">
                         <div className="flex items-center gap-2">
                             <Calendar className="h-6 w-6 text-blue-600" />
@@ -535,6 +628,9 @@ export default function App({ empleados, empresas, url }) {
                         </div>
                     </div>
                 </div>
+
+                */}
+
 
                 {/* Main Content */}
                 <div className="container mx-auto px-4 py-6">
@@ -578,6 +674,9 @@ export default function App({ empleados, empresas, url }) {
                                     baseSchedule={currentBaseSchedule}
                                     onBaseScheduleChange={handleBaseScheduleChange}
                                     onApplyToAll={handleApplyBaseToAll}
+                                    onApplyLunesAJueves={handleApplyLunesAJueves}
+                                    onApplyViernes={handleApplyViernes}
+                                    onApplyFinDeSemana={handleApplyFinDeSemana}
                                 />
                             )}
                         </div>
@@ -602,8 +701,8 @@ export default function App({ empleados, empresas, url }) {
                             defaultEntryTime={currentBaseSchedule.entryTime}
                             defaultExitTime={currentBaseSchedule.exitTime}
                         />
-                        {/* Botones de Acción */}
-                        <div className="flex justify-center gap-4 py-4">
+                        {/* Botones de Acción
+
                             <Button
                                 variant="outline"
                                 size="lg"
@@ -611,6 +710,10 @@ export default function App({ empleados, empresas, url }) {
                             >
                                 Aplicar horario base a todos
                             </Button>
+
+                        */}
+                        <div className="flex justify-center gap-4 py-4">
+
 
                             <Button
                                 size="lg"

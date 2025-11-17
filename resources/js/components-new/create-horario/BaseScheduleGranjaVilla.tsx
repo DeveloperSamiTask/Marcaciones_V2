@@ -9,13 +9,19 @@ interface BaseScheduleGranjaVillaProps {
     baseSchedule: BaseSchedule;
     onBaseScheduleChange: (schedule: BaseSchedule) => void;
     onApplyToAll: () => void;
+    onApplyLunesAJueves?: () => void;
+    onApplyViernes?: () => void;
+    onApplyFinDeSemana?: () => void;
 }
 
 export function BaseScheduleGranjaVilla({
     modality,
     baseSchedule,
     onBaseScheduleChange,
-    onApplyToAll
+    onApplyToAll,
+    onApplyLunesAJueves,
+    onApplyViernes,
+    onApplyFinDeSemana
 }: BaseScheduleGranjaVillaProps) {
     return (
         <div className="bg-green-50 p-4 rounded-lg border border-green-300">
@@ -30,11 +36,11 @@ export function BaseScheduleGranjaVilla({
                 <div className="bg-white p-3 rounded border">
                     <Label className="text-xs font-medium">Lunes a Jueves</Label>
                     <div className="flex gap-2 mt-2">
-                        <Input type="time" value="09:30" readOnly className="text-xs" />
-                        <Input type="time" value="18:00" readOnly className="text-xs" />
+                        <Input type="time" value="09:30"  className="text-xs" />
+                        <Input type="time" value="18:00"  className="text-xs" />
                     </div>
                     <Button
-                        onClick={() => onBaseScheduleChange({ entryTime: '09:30', exitTime: '18:00' })}
+                        onClick={onApplyLunesAJueves} // 🆕 CAMBIAR POR LA NUEVA FUNCIÓN
                         className="w-full mt-2 bg-green-600 hover:bg-green-700"
                         size="sm"
                     >
@@ -46,11 +52,11 @@ export function BaseScheduleGranjaVilla({
                 <div className="bg-white p-3 rounded border">
                     <Label className="text-xs font-medium">Viernes</Label>
                     <div className="flex gap-2 mt-2">
-                        <Input type="time" value="09:00" readOnly className="text-xs" />
-                        <Input type="time" value="18:00" readOnly className="text-xs" />
+                        <Input type="time" value="09:00"  className="text-xs" />
+                        <Input type="time" value="18:00"  className="text-xs" />
                     </div>
                     <Button
-                        onClick={() => onBaseScheduleChange({ entryTime: '09:00', exitTime: '18:00' })}
+                        onClick={onApplyViernes} // 🆕 CAMBIAR POR LA NUEVA FUNCIÓN
                         className="w-full mt-2 bg-green-600 hover:bg-green-700"
                         size="sm"
                     >
@@ -62,11 +68,11 @@ export function BaseScheduleGranjaVilla({
                 <div className="bg-white p-3 rounded border">
                     <Label className="text-xs font-medium">Sábado y Domingo</Label>
                     <div className="flex gap-2 mt-2">
-                        <Input type="time" value="09:00" readOnly className="text-xs" />
-                        <Input type="time" value="18:00" readOnly className="text-xs" />
+                        <Input type="time" value="09:00"  className="text-xs" />
+                        <Input type="time" value="18:00"  className="text-xs" />
                     </div>
                     <Button
-                        onClick={() => onBaseScheduleChange({ entryTime: '09:00', exitTime: '18:00' })}
+                        onClick={onApplyFinDeSemana} // 🆕 CAMBIAR POR LA NUEVA FUNCIÓN
                         className="w-full mt-2 bg-green-600 hover:bg-green-700"
                         size="sm"
                     >
@@ -75,17 +81,10 @@ export function BaseScheduleGranjaVilla({
                 </div>
             </div>
 
-            {/* BOTÓN APLICAR A TODOS */}
-            <div className="flex justify-end">
-                <Button onClick={onApplyToAll} className="bg-green-700 hover:bg-green-800" size="sm">
-                    <Clock className="h-3 w-3 mr-1" />
-                    Aplicar Horario Actual a TODA la modalidad
-                </Button>
-            </div>
-
             <p className="text-xs text-green-700 mt-2">
                 Horarios predefinidos para personal de Granja Villa
             </p>
         </div>
     );
 }
+
