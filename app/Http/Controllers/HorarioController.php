@@ -387,6 +387,8 @@ class HorarioController extends Controller
                 }
             });
 
+            \App\Jobs\VerificarHorasExtrasPartTime::dispatch();
+
             return redirect()->back()->with('success', "✅ {$contador} horarios guardados correctamente");
 
         } catch (Exception $e) {
