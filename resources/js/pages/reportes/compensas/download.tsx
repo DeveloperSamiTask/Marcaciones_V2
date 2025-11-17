@@ -25,6 +25,9 @@ interface Pendiente{
         fecha: string;
         nombre: string;
     }[]
+    permisos_td: {
+        fecha:string
+    }[]
 }
 
 type TabValue = 'pendientes' | 'compensas' | 'compensas_adelantadas';

@@ -51,6 +51,9 @@ interface Pendiente{
         fecha: string;
         nombre: string;
     }[]
+    permisos_td: {
+        fecha:string
+    }[]
 }
 
 export default function IndexReporteCompensas({

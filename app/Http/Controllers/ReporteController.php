@@ -17,6 +17,7 @@ use App\Models\Permiso;
 use App\Models\Suspension;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Container\Attributes\Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -303,6 +304,12 @@ class ReporteController extends Controller
                     ->select(['id', 'fecha', 'nombre'])
                     ->get();
 
+                $permisosTD = Permiso::where('empleado_id', $empleado->id)
+                    ->whereIn('tipo_id', [24])
+                    ->where('estado',1)
+                    ->select(['id', 'fecha', 'tipo_id', 'estado'])
+                    ->get();
+
                 if ($feriados->isNotEmpty()) {
                     return [
                         'id' => $empleado->id,
@@ -312,6 +319,7 @@ class ReporteController extends Controller
                         'area' => $empleado->area->nombre,
                         'jornada' => $empleado->jornada->nombre,
                         'feriados' => $feriados,
+                        'permisos_td' => $permisosTD
                     ];
                 }
             })->filter()->values();
