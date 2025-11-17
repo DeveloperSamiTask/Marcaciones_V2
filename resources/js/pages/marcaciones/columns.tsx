@@ -1,15 +1,15 @@
 'use client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Marcacion } from '@/types/marcaciones';
 import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { ArrowUpDown, CheckCheck, CircleAlert, ClockAlert, Download } from 'lucide-react';
 import CreateMarcacion from './create';
 import EditMarcacion from './edit';
-import { Checkbox } from '@/components/ui/checkbox';
 import UploadMarcacion from './upload';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const estadoBadgeVariants = {
     L: { label: 'LABORAL', variant: 'success' },
@@ -48,30 +48,23 @@ const formatMinutes = (minutes: number | false): string => {
 };
 
 const estadoHorasExtra = {
-    0: { label: 'Horas extra no aprobado', icon: <CircleAlert className='w-4 text-yellow-600' /> },
-    1: { label: 'Horas extra aprobadas', icon: <CheckCheck className='w-4 text-green-600' /> },
-    2: { label: 'Horas extra pendiente de aprobación', icon: <ClockAlert className='w-4 text-yellow-600' /> },
+    0: { label: 'Horas extra no aprobado', icon: <CircleAlert className="w-4 text-yellow-600" /> },
+    1: { label: 'Horas extra aprobadas', icon: <CheckCheck className="w-4 text-green-600" /> },
+    2: { label: 'Horas extra pendiente de aprobación', icon: <ClockAlert className="w-4 text-yellow-600" /> },
 } as const;
 
 export const columns: ColumnDef<Marcacion>[] = [
     {
-        id: "select",
+        id: 'select',
         header: ({ table }) => (
             <Checkbox
-                checked={
-                    table.getIsAllPageRowsSelected() ||
-                    (table.getIsSomePageRowsSelected() && "indeterminate")
-                }
+                checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
                 onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
                 aria-label="Select all"
             />
         ),
         cell: ({ row }) => (
-            <Checkbox
-                checked={row.getIsSelected()}
-                onCheckedChange={(value) => row.toggleSelected(!!value)}
-                aria-label="Select row"
-            />
+            <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Select row" />
         ),
         enableSorting: false,
         enableHiding: false,
@@ -86,12 +79,12 @@ export const columns: ColumnDef<Marcacion>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => row.original.empleado.area.nombre
+        cell: ({ row }) => row.original.empleado.area.nombre,
     },
     {
         accessorKey: 'dni',
         header: 'DNI',
-        cell: ({ row }) => <span className="text-blue-500"> {row.original.empleado.dni} </span>
+        cell: ({ row }) => <span className="text-blue-500"> {row.original.empleado.dni} </span>,
     },
     {
         accessorKey: 'empleado.apellidos',
@@ -103,7 +96,7 @@ export const columns: ColumnDef<Marcacion>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => `${row.original.empleado.apellidos} ${row.original.empleado.nombres}`
+        cell: ({ row }) => `${row.original.empleado.apellidos} ${row.original.empleado.nombres}`,
     },
     {
         accessorKey: 'empleado.jornada_id',
@@ -115,7 +108,7 @@ export const columns: ColumnDef<Marcacion>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => row.original.empleado.jornada.nombre
+        cell: ({ row }) => row.original.empleado.jornada.nombre,
     },
     {
         accessorKey: 'fecha',
@@ -127,7 +120,7 @@ export const columns: ColumnDef<Marcacion>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => format(row.original.fecha, 'dd/MM/yyyy')
+        cell: ({ row }) => format(row.original.fecha, 'dd/MM/yyyy'),
     },
     {
         accessorKey: 'horario.estado',
@@ -141,8 +134,45 @@ export const columns: ColumnDef<Marcacion>[] = [
         },
         cell: ({ row }) => {
             const estado = row.original.horario?.estado as keyof typeof estadoBadgeVariants;
-            const badgeConfig = estadoBadgeVariants[estado] || { variant: 'destructive', label: 'NO REGISTRADO' };
-            return <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>;
+            const marcacion = row.original.marcacion;
+
+            // Estados que NO deberían tener marcaciones
+            const estadosSinMarcacion = ['D']; //<-- Se puede agregar mas estados
+
+            // Validar si tiene marcaciones cuando no debería
+            const tieneMarcacionIndebida = estadosSinMarcacion.includes(estado) && marcacion && (marcacion.ingreso || marcacion.salida);
+
+            // Configurar el badge según el caso
+            let badgeConfig;
+
+            if (tieneMarcacionIndebida) {
+                const estadoOriginal = estadoBadgeVariants[estado];
+                badgeConfig = {
+                    variant: 'warning' as const,
+                    label: `${estadoOriginal.label} (CM)`,
+                };
+            } else {
+                badgeConfig = estadoBadgeVariants[estado] || {
+                    variant: 'destructive' as const,
+                    label: 'NO REGISTRADO',
+                };
+            }
+
+            return (
+                <div className="flex items-center gap-2">
+                    <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+                    {tieneMarcacionIndebida && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <CircleAlert className="w-4 text-yellow-600" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Empleado tiene marcación en día no laboral</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+            );
         },
     },
     {
@@ -154,7 +184,9 @@ export const columns: ColumnDef<Marcacion>[] = [
             const marcacionHora = row.original.marcacion?.ingreso ? row.original.marcacion?.ingreso?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
+            const estado = row.original.marcacion
+                ? row.original.marcacion?.estado != 0
+                : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
             return row.original.marcacion?.ingreso ? (
                 <EditMarcacion
@@ -165,14 +197,22 @@ export const columns: ColumnDef<Marcacion>[] = [
                     tipo="ingreso"
                 />
             ) : (
-                <CreateMarcacion key={`marcacion-ingreso-${fecha}-${empleadoId}`} disabled={estado} empleadoId={empleadoId} fecha={fecha} tipo="ingreso" />
+                <CreateMarcacion
+                    key={`marcacion-ingreso-${fecha}-${empleadoId}`}
+                    disabled={estado}
+                    empleadoId={empleadoId}
+                    fecha={fecha}
+                    tipo="ingreso"
+                />
             );
         },
     },
     {
         accessorKey: 'ingreso_programado', // ingreso del horario
         header: 'HIP',
-        cell: ({ row }) => <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.ingreso?.substring(0, 5) || '-'}</span>,
+        cell: ({ row }) => (
+            <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.ingreso?.substring(0, 5) || '-'}</span>
+        ),
     },
     {
         accessorKey: 'salida', // salida de la marcacion
@@ -182,7 +222,9 @@ export const columns: ColumnDef<Marcacion>[] = [
             const marcacionHora = row.original.marcacion?.salida ? row.original.marcacion?.salida?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
+            const estado = row.original.marcacion
+                ? row.original.marcacion?.estado != 0
+                : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
             return row.original.marcacion?.salida ? (
                 <EditMarcacion
@@ -198,7 +240,8 @@ export const columns: ColumnDef<Marcacion>[] = [
                     key={`marcacion-salida-${fecha}-${empleadoId}`}
                     disabled={estado}
                     empleadoId={empleadoId}
-                    fecha={fecha} tipo="salida"
+                    fecha={fecha}
+                    tipo="salida"
                     horariosExtra={row.original.horariosExtra}
                 />
             );
@@ -207,7 +250,9 @@ export const columns: ColumnDef<Marcacion>[] = [
     {
         accessorKey: 'salida_programada', // salida del horario
         header: 'HSP',
-        cell: ({ row }) => <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.salida?.substring(0, 5) || '-'}</span>,
+        cell: ({ row }) => (
+            <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.salida?.substring(0, 5) || '-'}</span>
+        ),
     },
     {
         accessorKey: 'ingreso_refri', // ingreso de refrigerio de la marcacion
@@ -217,7 +262,9 @@ export const columns: ColumnDef<Marcacion>[] = [
             const marcacionHora = row.original.marcacion?.ingreso_refri ? row.original.marcacion?.ingreso_refri?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
+            const estado = row.original.marcacion
+                ? row.original.marcacion?.estado != 0
+                : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
             return row.original.marcacion?.ingreso_refri ? (
                 <EditMarcacion
@@ -246,7 +293,9 @@ export const columns: ColumnDef<Marcacion>[] = [
             const marcacionHora = row.original.marcacion?.salida_refri ? row.original.marcacion?.salida_refri?.substring(0, 5) : '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
+            const estado = row.original.marcacion
+                ? row.original.marcacion?.estado != 0
+                : fecha < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
             return row.original.marcacion?.salida_refri ? (
                 <EditMarcacion
@@ -257,7 +306,13 @@ export const columns: ColumnDef<Marcacion>[] = [
                     tipo="salida_refri"
                 />
             ) : (
-                <CreateMarcacion key={`marcacion-salida_refri-${fecha}-${empleadoId}`} disabled={estado} empleadoId={empleadoId} fecha={fecha} tipo="salida_refri" />
+                <CreateMarcacion
+                    key={`marcacion-salida_refri-${fecha}-${empleadoId}`}
+                    disabled={estado}
+                    empleadoId={empleadoId}
+                    fecha={fecha}
+                    tipo="salida_refri"
+                />
             );
         },
     },
@@ -267,16 +322,26 @@ export const columns: ColumnDef<Marcacion>[] = [
         cell: ({ row }) => {
             const horas = row.original.horas;
             const horario = row.original.horario?.estado;
-            return (<span className={horas < 480 && horario == 'L' ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {horas ? formatMinutes(horas) : '00:00'} </span>)
-        }
+            return (
+                <span className={horas < 480 && horario == 'L' ? 'font-semibold text-red-600' : 'font-semibold text-green-600'}>
+                    {' '}
+                    {horas ? formatMinutes(horas) : '00:00'}{' '}
+                </span>
+            );
+        },
     },
     {
         accessorKey: 'tardanza', // tardanza
         header: 'TARDANZA',
         cell: ({ row }) => {
             const tardanza = row.original.tardanza;
-            return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
-        }
+            return (
+                <span className={tardanza ? 'font-semibold text-red-600' : 'font-semibold text-green-600'}>
+                    {' '}
+                    {tardanza ? formatMinutes(tardanza) : '00:00'}{' '}
+                </span>
+            );
+        },
     },
     {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
@@ -286,51 +351,65 @@ export const columns: ColumnDef<Marcacion>[] = [
             const estadoExtra = row.original.marcacion?.estado_horas_extra as keyof typeof estadoHorasExtra;
 
             return (
-                <span className={extra ? 'text-red-600 font-semibold flex gap-2' : 'text-green-600 font-semibold flex gap-2'}>
+                <span className={extra ? 'flex gap-2 font-semibold text-red-600' : 'flex gap-2 font-semibold text-green-600'}>
                     {extra ? formatMinutes(extra) : '00:00'}
-                    {extra > 0 ?
-                        (<Tooltip>
-                            <TooltipTrigger asChild>
-                                {estadoHorasExtra[estadoExtra].icon}
-                            </TooltipTrigger>
-                            <TooltipContent color='red'>
+                    {extra > 0 ? (
+                        <Tooltip>
+                            <TooltipTrigger asChild>{estadoHorasExtra[estadoExtra].icon}</TooltipTrigger>
+                            <TooltipContent color="red">
                                 <p>{estadoHorasExtra[estadoExtra].label}</p>
                             </TooltipContent>
-                        </Tooltip>)
-                        : ''}
+                        </Tooltip>
+                    ) : (
+                        ''
+                    )}
                 </span>
-            )
-        }
+            );
+        },
     },
     {
         accessorKey: 'anticipado', // hora antes de su salida programada (horario)
         header: 'ANTICIPADO',
         cell: ({ row }) => {
             const anticipado = row.original.anticipado;
-            return (<span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {anticipado ? formatMinutes(anticipado) : '00:00'} </span>)
-        }
+            return (
+                <span className={anticipado ? 'font-semibold text-red-600' : 'font-semibold text-green-600'}>
+                    {' '}
+                    {anticipado ? formatMinutes(anticipado) : '00:00'}{' '}
+                </span>
+            );
+        },
     },
     {
         accessorKey: 'nocturno', // hora pasada las 10 pm
         header: 'NOCTURNO',
         cell: ({ row }) => {
             const nocturno = row.original.nocturno;
-            return (<span className={nocturno ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {nocturno ? formatMinutes(nocturno) : '00:00'} </span>)
-        }
+            return (
+                <span className={nocturno ? 'font-semibold text-red-600' : 'font-semibold text-green-600'}>
+                    {' '}
+                    {nocturno ? formatMinutes(nocturno) : '00:00'}{' '}
+                </span>
+            );
+        },
     },
     {
         id: 'actions',
         cell: ({ row }) => {
             const marcacion = row.original.marcacion ?? null;
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : format(row.original.fecha, 'yyyy-MM-dd') < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
+            const estado = row.original.marcacion
+                ? row.original.marcacion?.estado != 0
+                : format(row.original.fecha, 'yyyy-MM-dd') < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
 
             return (
                 <div className="flex items-center gap-2">
-                    {marcacion && !marcacion.sustento && (<UploadMarcacion key={`upload-marcacion-${marcacion.id}`} disabled={estado} marcacionId={marcacion.id ?? 0} />)}
+                    {marcacion && !marcacion.sustento && (
+                        <UploadMarcacion key={`upload-marcacion-${marcacion.id}`} disabled={estado} marcacionId={marcacion.id ?? 0} />
+                    )}
 
                     {marcacion && marcacion.sustento && (
-                        <Button variant="info" asChild key={`download-marcacion-${marcacion.id}`} size="sm" >
-                            <a href={`${marcacion.sustento}`} target='_blank' rel="noopener noreferrer">
+                        <Button variant="info" asChild key={`download-marcacion-${marcacion.id}`} size="sm">
+                            <a href={`${marcacion.sustento}`} target="_blank" rel="noopener noreferrer">
                                 <Download />
                             </a>
                         </Button>
@@ -339,5 +418,4 @@ export const columns: ColumnDef<Marcacion>[] = [
             );
         },
     },
-
 ];

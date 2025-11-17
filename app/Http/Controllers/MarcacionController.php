@@ -10,6 +10,7 @@ use App\Models\Empresa;
 use App\Models\Horario;
 use App\Models\Marcacion;
 use App\Models\MarcacionEdicion;
+use App\Models\Permiso;
 use App\Models\User;
 use App\Models\Zktimems;
 use Carbon\Carbon;
@@ -18,6 +19,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
@@ -25,7 +27,7 @@ use Maatwebsite\Excel\Facades\Excel;
 class MarcacionController extends Controller
 {
 
-    public function index(Request $request)//: Response
+    public function index(Request $request) //: Response
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -41,8 +43,8 @@ class MarcacionController extends Controller
             ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id')
             ->with(['area:id,nombre', 'jornada:id,nombre'])
             ->where('empresa_id', $request->empresa)
-            ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
-            ->when($request->fechaFin, function ($query) use ($request){
+            ->when($request->encargado, fn($query) => $query->where('jefe_id', $request->encargado))
+            ->when($request->fechaFin, function ($query) use ($request) {
                 $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
             })
             ->whereNull('fecha_cese')
@@ -88,7 +90,7 @@ class MarcacionController extends Controller
                     $horas = $horasTrabajadas - $tardanza - ($partTime ? 0 : 60); // no se descuenta la hora de refrigerio si es parttime y no tomo refrigerio
                     $anticipado = $horasAnticipado;
 
-                    if((in_array($horario->salida->format('H:i'), ['23:00', '23:30' , '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)){ // solo para chacxra y granja
+                    if ((in_array($horario->salida->format('H:i'), ['23:00', '23:30', '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)) { // solo para chacxra y granja
                         $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20; // estos minutos son de tolerancia en salida anticipada, solo granja tiene hasta 30 minutos
                         $anticipado += $horasAnticipado >= $minutosTolerancia ? $horasAnticipado : 0;
                     }
@@ -112,7 +114,6 @@ class MarcacionController extends Controller
                     'nocturno' => $nocturno,
                 ];
             });
-
         });
 
 
@@ -125,7 +126,7 @@ class MarcacionController extends Controller
         ]);
     }
 
-    public function real(Request $request)//: Response
+    public function real(Request $request) //: Response
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -139,20 +140,20 @@ class MarcacionController extends Controller
 
         $empleadosDnis = Empleado::query()
             ->where('empresa_id', $request->empresa)
-            ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
-            ->when($request->fechaFin, function ($query) use ($request){
+            ->when($request->encargado, fn($query) => $query->where('jefe_id', $request->encargado))
+            ->when($request->fechaFin, function ($query) use ($request) {
                 $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
             })
             ->whereNull('fecha_cese')
             ->pluck('dni');
 
         $marcaciones = Zktimems::query()
-        ->with(['empleado' => function ($query){
-            $query->select('id', 'dni', 'nombres', 'apellidos');
-        }])
-        ->whereIn('tarjeta', $empleadosDnis)
-        ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-        ->get(['hora', 'tarjeta', 'fecha']);
+            ->with(['empleado' => function ($query) {
+                $query->select('id', 'dni', 'nombres', 'apellidos');
+            }])
+            ->whereIn('tarjeta', $empleadosDnis)
+            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->get(['hora', 'tarjeta', 'fecha']);
 
         return Inertia::render('marcaciones/reales/index', [
             'marcaciones' => $marcaciones,
@@ -161,7 +162,6 @@ class MarcacionController extends Controller
             'filters' => $filters,
             'csrf_token' => csrf_token(),
         ]);
-
     }
 
     public function store(StoreMarcacionRequest $request)
@@ -217,7 +217,6 @@ class MarcacionController extends Controller
                         $ultimoHorario->save();
                     }
                 }
-
             });
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
@@ -268,7 +267,6 @@ class MarcacionController extends Controller
                         $ultimoHorario->save();
                     }
                 }
-
             });
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
@@ -310,12 +308,12 @@ class MarcacionController extends Controller
                 if ($request->hasFile('sustento')) { // verificamos que haya un archivo comrpobante
                     $file = $request->file('sustento');
                     // $path = Storage::put('comprobantes', $file);
-                    $path = $file->store('asistencia/'.$marcacion->id, 'public'); // Almacenar el archivo en la carpeta public del storage
+                    $path = $file->store('asistencia/' . $marcacion->id, 'public'); // Almacenar el archivo en la carpeta public del storage
                     $marcacion->update(['sustento' => "storage/$path"]);
                 }
             });
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
@@ -327,43 +325,94 @@ class MarcacionController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($data){
+            DB::transaction(function () use ($data) {
                 $dnis = Empleado::where('empresa_id', $data['empresa'])->whereNull('fecha_cese')->pluck('id', 'dni');
+
+                // CARGAR TODOS LOS HORARIOS DE UNA SOLA VEZ
+                $horarios = Horario::whereIn('empleado_id', $dnis->values())
+                    ->whereBetween('fecha', [$data['fecha'], now()->toDateString()])
+                    ->get()
+                    ->keyBy(function ($horario) {
+                        return $horario->fecha->format('Y-m-d') . '-' . $horario->empleado_id;
+                    });
+
                 Zktimems::whereBetween('fecha', [$data['fecha'], now()->toDateString()])
-                ->whereIn('tarjeta', $dnis->keys())
-                ->get(['tarjeta', 'fecha', 'hora'])
-                ->groupBy(fn ($item) => $item->fecha->format('Y-m-d') . '-' . $item->tarjeta)
-                ->each(function ($items) use ($dnis){
-                    $item = $items->first();
-                    $horas = $items->pluck('hora')->filter()->unique()->sort()->values();
-                    if($horas->count() > 4){
-                        $horas = Marcacion::validarHora($horas);
-                    }
-                    $ingreso = $horas->count() > 0 ? $horas->get(0) : null;
-                    $salida = $horas->count() >= 2 ? $horas->last(): null;
-                    $ingreso_refri = $horas->count() >= 3 ? $horas->get(1) : null;
-                    $salida_refri = $horas->count() == 4 ? $horas->get(2) : null;
-                    $marcacion = Marcacion::where('empleado_id', $dnis->get($item->tarjeta))->whereDate('fecha', $item->fecha)->first();
+                    ->whereIn('tarjeta', $dnis->keys())
+                    ->get(['tarjeta', 'fecha', 'hora'])
+                    ->groupBy(fn($item) => $item->fecha->format('Y-m-d') . '-' . $item->tarjeta)
+                    ->each(function ($items) use ($dnis, $horarios) {
+                        $item = $items->first();
+                        $horas = $items->pluck('hora')->filter()->unique()->sort()->values();
 
-                    if(!$marcacion){
-                        $marcacion = Marcacion::create([
-                            'empleado_id' => $dnis->get($item->tarjeta),
-                            'fecha' => $item->fecha,
-                        ]);
-                    }
+                        if ($horas->count() > 4) {
+                            $horas = Marcacion::validarHora($horas);
+                        }
 
-                    if($marcacion->estado == 0){
-                        $marcacion->update([
-                            'ingreso' => $ingreso ?? $marcacion->ingreso,
-                            'salida' => $salida ?? $marcacion->salida,
-                            'ingreso_refri' => $ingreso_refri ?? $marcacion->ingreso_refri,
-                            'salida_refri' => $salida_refri ?? $marcacion->salida_refri,
-                        ]);
-                    }
-                });
+                        $ingreso = $horas->count() > 0 ? $horas->get(0) : null;
+                        $salida = $horas->count() >= 2 ? $horas->last() : null;
+                        $ingreso_refri = $horas->count() >= 3 ? $horas->get(1) : null;
+                        $salida_refri = $horas->count() == 4 ? $horas->get(2) : null;
+
+                        $empleadoId = $dnis->get($item->tarjeta);
+                        $fecha = $item->fecha;
+                        $fechaKey = $fecha->format('Y-m-d') . '-' . $empleadoId;
+
+                        // Buscar el horario en la colección cargada
+                        $horario = $horarios->get($fechaKey);
+
+                        // Validar si es día de DESCANSO y tiene marcaciones
+                        if ($horario && $horario->estado === 'D' && ($ingreso || $salida)) {
+
+                            // Verificar si ya existe un permiso para evitar duplicados
+                            $permisoExistente = Permiso::where('empleado_id', $empleadoId)
+                                ->where('tipo_id', 24) // TRABAJO DIA DESCANSO
+                                ->whereDate('fecha', $fecha)
+                                ->where('estado', '!=', 2) // que no esté rechazado
+                                ->exists();
+
+                            if (!$permisoExistente) {
+                                Permiso::create([
+                                    'empleado_id' => $empleadoId,
+                                    'tipo_id' => 24, // TRABAJO DIA DESCANSO
+                                    'fecha' => $fecha,
+                                    'motivo' => 'TRABAJO EN DIA DE DESCANSO',
+                                    'estado' => 0, // Pendiente de aprobación
+                                ]);
+
+                                Log::info('Permiso creado: Trabajo en día de descanso', [
+                                    'empleado_id' => $empleadoId,
+                                    'fecha' => $fecha->format('Y-m-d'),
+                                    'ingreso' => $ingreso,
+                                    'salida' => $salida,
+                                ]);
+                            }
+                        }
+
+                        $marcacion = Marcacion::where('empleado_id', $empleadoId)
+                            ->whereDate('fecha', $fecha)
+                            ->first();
+
+                        if (!$marcacion) {
+                            $marcacion = Marcacion::create([
+                                'empleado_id' => $empleadoId,
+                                'fecha' => $fecha,
+                            ]);
+                        }
+
+                        if ($marcacion->estado == 0) {
+                            $marcacion->update([
+                                'ingreso' => $ingreso ?? $marcacion->ingreso,
+                                'salida' => $salida ?? $marcacion->salida,
+                                'ingreso_refri' => $ingreso_refri ?? $marcacion->ingreso_refri,
+                                'salida_refri' => $salida_refri ?? $marcacion->salida_refri,
+                            ]);
+                        }
+                    });
             });
+
+            return back()->with('success', 'Marcaciones sincronizadas correctamente');
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
@@ -379,5 +428,4 @@ class MarcacionController extends Controller
 
         return Excel::download(new MarcacionExport($data), 'marcaciones.xlsx');
     }
-
 }
