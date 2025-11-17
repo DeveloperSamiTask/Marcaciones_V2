@@ -308,8 +308,8 @@ export default function App({ empleados, empresas, url }) {
         const entries = [];
         let hasValidationErrors = false;
 
-        // Validaciones de horas semanales (tu código existente)
-        filteredEmployees.forEach(employee => {
+        // ✅ CAMBIAR forEach POR for...of
+        for (const employee of filteredEmployees) {
             if (employee.jornada_id === 1) {
                 const employeeSchedule = scheduleData[employee.id] || {};
                 const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
@@ -317,10 +317,10 @@ export default function App({ empleados, empresas, url }) {
                 if (horasSemanales > 2880) {
                     toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas)`);
                     hasValidationErrors = true;
-                    return;
+                    return; // ✅ AHORA SÍ FUNCIONA
                 }
             }
-        });
+        }
 
         if (hasValidationErrors) return;
 
@@ -332,7 +332,6 @@ export default function App({ empleados, empresas, url }) {
 
         console.log('👥 Empleados con compensación:', empleadosConCompensacion.length);
 
-        // Cargar feriados en paralelo
         const feriadosMap = {};
         await Promise.all(
             empleadosConCompensacion.map(async (emp) => {
@@ -343,13 +342,16 @@ export default function App({ empleados, empresas, url }) {
 
         console.log('📦 Feriados cargados:', feriadosMap);
 
-        // Validaciones y construcción de entries
-        filteredEmployees.forEach(employee => {
+        // 🔥 TRACKEAR FERIADOS USADOS POR EMPLEADO
+        const feriadosUsadosPorEmpleado = {};
+
+        // ✅ CAMBIAR forEach POR for...of
+        for (const employee of filteredEmployees) {
             const empSchedule = scheduleData[employee.id];
             if (!empSchedule) {
                 toast.error(`${employee.nombres} no tiene horarios configurados`);
                 hasValidationErrors = true;
-                return;
+                return; // ✅ AHORA SÍ FUNCIONA
             }
 
             const employeeSchedule = scheduleData[employee.id] || {};
@@ -359,17 +361,24 @@ export default function App({ empleados, empresas, url }) {
             if (diasDescanso > 1) {
                 toast.error(`${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
                 hasValidationErrors = true;
-                return;
+                return; // ✅ AHORA SÍ FUNCIONA
             }
 
             if (diasDescanso === 0 && !tieneVacaciones) {
                 toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
                 hasValidationErrors = true;
-                return;
+                return; // ✅ AHORA SÍ FUNCIONA
             }
+
+            // 🔥 INICIALIZAR TRACKING DE FERIADOS
+            feriadosUsadosPorEmpleado[employee.id] = {
+                C: [],
+                CA: []
+            };
 
             let tieneHorariosInvalidos = false;
 
+            // ✅ MANTENER forEach AQUÍ (no necesitas return aquí)
             Object.keys(empSchedule).forEach(date => {
                 const { entryTime, exitTime, status } = empSchedule[date];
 
@@ -378,7 +387,7 @@ export default function App({ empleados, empresas, url }) {
                     tieneHorariosInvalidos = true;
                 }
 
-                // 🔥 ASIGNAR FERIADO_ID PARA C Y CA
+                // 🔥 ASIGNAR FERIADO PARA C Y CA
                 let feriadoId = null;
                 if (status === 'C' || status === 'CA') {
                     const feriadosDelEmpleado = feriadosMap[employee.id];
@@ -387,18 +396,38 @@ export default function App({ empleados, empresas, url }) {
                         const tipoFeriado = status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
                         const listaFeriados = feriadosDelEmpleado[tipoFeriado] || [];
 
-                        if (listaFeriados.length > 0) {
-                            // Ordenar por fecha (más antiguo primero)
-                            const feriadosOrdenados = [...listaFeriados].sort(
+                        const feriadosDisponibles = listaFeriados.filter(
+                            f => !feriadosUsadosPorEmpleado[employee.id][status].includes(f.id)
+                        );
+
+                        if (feriadosDisponibles.length > 0) {
+                            const feriadosOrdenados = [...feriadosDisponibles].sort(
                                 (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
                             );
-                            feriadoId = feriadosOrdenados[0].id;
 
-                            console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, feriadosOrdenados[0].nombre);
+                            feriadoId = feriadosOrdenados[0].id;
+                            feriadosUsadosPorEmpleado[employee.id][status].push(feriadoId);
+
+                            console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, {
+                                tipo: status,
+                                nombre: feriadosOrdenados[0].nombre,
+                                id: feriadoId
+                            });
                         } else {
-                            toast.error(`${employee.nombres}: No tiene feriados ${status === 'C' ? 'disponibles' : 'futuros'}`);
+                            const tipoTexto = status === 'C' ? 'compensaciones (pasadas)' : 'compensaciones adelantadas (futuras)';
+                            const totalDisponibles = listaFeriados.length;
+                            const yaUsados = feriadosUsadosPorEmpleado[employee.id][status].length;
+
+                            toast.error(
+                                `❌ ${employee.nombres}: No puede marcar más días como "${status}". ` +
+                                `Solo tiene ${totalDisponibles} ${tipoTexto} y ya usó ${yaUsados}.`,
+                                { duration: 8000 }
+                            );
                             tieneHorariosInvalidos = true;
                         }
+                    } else {
+                        toast.error(`${employee.nombres}: No se pudieron cargar los feriados`);
+                        tieneHorariosInvalidos = true;
                     }
                 }
 
@@ -409,17 +438,16 @@ export default function App({ empleados, empresas, url }) {
                         ingreso: entryTime,
                         salida: exitTime,
                         estado: status,
-                        feriado: feriadoId, // 🔥 AQUÍ SE ENVÍA AL BACKEND
+                        feriado: feriadoId,
                     });
-                } else {
-                    hasValidationErrors = true;
                 }
             });
 
             if (tieneHorariosInvalidos) {
                 hasValidationErrors = true;
+                return; // ✅ AHORA SÍ FUNCIONA
             }
-        });
+        }
 
         if (hasValidationErrors) return;
 
@@ -430,13 +458,6 @@ export default function App({ empleados, empresas, url }) {
 
         console.log('🧾 Enviando al backend:', entries);
         console.log('📊 Total registros:', entries.length);
-
-        // Mostrar solo los que tienen feriado
-        const conFeriado = entries.filter(e => e.feriado);
-        if (conFeriado.length > 0) {
-            console.log('🎯 Registros con feriado:', conFeriado);
-            console.table(conFeriado);
-        }
 
         router.post(route('horarios.store-multiple'), { entries }, {
             preserveScroll: true,

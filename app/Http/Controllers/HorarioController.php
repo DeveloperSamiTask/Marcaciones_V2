@@ -566,41 +566,23 @@ class HorarioController extends Controller
                 'estado' => ($estado === 'L') ? 'L' : 'PE',  // ← Aquí SÍ es $estado (parámetro del método)
             ]
         );
-
+        /* -------------------- CODIGO PARA ELIMINAR PERMISOS -------------------- */
         // busca permisos para eliminar
         $estadosQueGeneranPermisos = [
             'D', 'C', 'CA', 'AHE', 'CHE', 'F', 'FL', 'SP', 'V', 'M', 'SN', 'ST',
             'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'PE', 'TD',
         ];
-        // Estados no-laborales que generan permisos
 
-        // CASO 1: Si el estado actual es LABORAL, eliminar permisos de estados no-laborales
-        if ($estado === 'L') {
-            $tiposPermisosNoLaborales = PermisoTipo::whereIn('codigo', $estadosQueGeneranPermisos)
-                ->pluck('id');
+        $tiposTodosEstados = PermisoTipo::whereIn('codigo', $estadosQueGeneranPermisos)->pluck('id');
 
-            Permiso::where('empleado_id', $empleadoId)
-                ->whereDate('fecha', $fechaCarbon)
-                ->whereIn('tipo_id', $tiposPermisosNoLaborales)
-                ->where('estado', '!=', 2) // No eliminar los rechazados
-                ->delete();
+        $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
+            ->whereDate('fecha', $fechaCarbon)
+            ->whereIn('tipo_id', $tiposTodosEstados)
+            ->where('estado', '!=', 2) // No eliminar los rechazados
+            ->delete();
 
-            Log::info("🧹 Permisos no-laborales eliminados para empleado $empleadoId, fecha $fecha");
-        }
-
-        // CASO 2: Si el estado actual es no-laboral, eliminar permisos de OTROS estados no-laborales
-        else {
-            $otrosEstados = array_diff($estadosQueGeneranPermisos, [$estado]);
-            $tiposOtrosEstados = PermisoTipo::whereIn('codigo', $otrosEstados)
-                ->pluck('id');
-
-            Permiso::where('empleado_id', $empleadoId)
-                ->whereDate('fecha', $fechaCarbon)
-                ->whereIn('tipo_id', $tiposOtrosEstados)
-                ->where('estado', '!=', 2) // No eliminar los rechazados
-                ->delete();
-
-            Log::info("🧹 Permisos de otros estados eliminados para empleado $empleadoId, fecha $fecha");
+        if ($permisosEliminados > 0) {
+            Log::info("🧹 ELIMINADOS $permisosEliminados permisos existentes - empleado $empleadoId, fecha $fecha");
         }
 
         // 🆕 LIMPIAR RELACIÓN CON FERIADOS SI YA NO ES C/CA
@@ -610,45 +592,37 @@ class HorarioController extends Controller
 
         // 🆕 ASOCIAR FERIADO SI ES C/CA
         if (($estado === 'C' || $estado === 'CA') && $feriado) {
-            $feriado = Feriado::find($feriado);
-            if ($feriado) {
+            $feriadoObj = Feriado::find($feriado);
+            if ($feriadoObj) {
+                $horario->feriados()->sync([$feriado]); // Usar sync para evitar duplicados
 
-                // ✅ VALIDAR QUE NO EXISTA LA RELACIÓN (igual que el otro método)
-                $existe = $horario->feriados()->where('feriado_id', $feriado)->exists();
-                if (! $existe) {
-
-                    // Buscar el permiso C/CA recién creado y actualizar motivo
-                    $permiso = Permiso::where('empleado_id', $empleadoId)
-                        ->whereDate('fecha', $fechaCarbon)
-                        ->where('estado', 0)
-                        ->first();
-
-                    if ($permiso) {
-                        $permiso->update([
-                            'motivo' => $permiso->motivo.' del '.$feriado->fecha->format('d/m/Y'),
-                        ]);
-                    }
-
-                    // ✅ USAR attach EN VEZ DE sync (para ser consistentes)
-                    $horario->feriados()->attach($feriado);
-                }
+                Log::info("✅ ASOCIADO feriado {$feriadoObj->nombre} - empleado $empleadoId, fecha $fecha");
             }
         }
 
-        // 4. Control de permisos automáticos
-        // Horarios laborales con exceso de horas
-        // Para descanso o vacaciones
-        // 🆕 GENERAR PERMISO PARA CUALQUIER ESTADO QUE NO SEA 'L'
+        // 🆕 CREAR NUEVO PERMISO SOLO SI ES NO-LABORAL
         if ($estado !== 'L') {
             $tipoPermiso = PermisoTipo::firstWhere('codigo', $estado);
             if ($tipoPermiso) {
-                Permiso::create([
+                // 🆕 CREAR EL PERMISO PRIMERO para luego actualizar el motivo si es C/CA
+                $permisoData = [
                     'empleado_id' => $empleadoId,
                     'tipo_id' => $tipoPermiso->id,
                     'fecha' => $fechaCarbon,
                     'motivo' => $tipoPermiso->nombre,
                     'estado' => 0,
-                ]);
+                ];
+
+                // 🆕 SI ES C/CA Y TIENE FERIADO, AGREGAR AL MOTIVO
+                if (($estado === 'C' || $estado === 'CA') && $feriado) {
+                    $feriadoObj = Feriado::find($feriado);
+                    if ($feriadoObj) {
+                        $permisoData['motivo'] = $tipoPermiso->nombre.' del '.$feriadoObj->fecha->format('d/m/Y');
+                    }
+                }
+
+                Permiso::create($permisoData);
+                Log::info("✅ CREADO permiso {$estado} - empleado $empleadoId, fecha $fecha");
             }
         }
 
