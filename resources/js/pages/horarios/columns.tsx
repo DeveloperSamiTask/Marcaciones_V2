@@ -34,6 +34,7 @@ const estadoBadgeVariants = {
     PE: { label: 'PENDIENTE', variant: 'warning' },
     HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
+    TD: { label: 'TRABAJÓ DIA DE DESCANSO', variant: 'info'}
 } as const;
 
 export const columns: ColumnDef<Horario>[] = [
