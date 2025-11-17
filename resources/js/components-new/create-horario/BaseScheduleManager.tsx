@@ -14,9 +14,9 @@ interface BaseScheduleManagerProps {
     baseSchedule: BaseSchedule;
     onBaseScheduleChange: (schedule: BaseSchedule) => void;
     onApplyToAll: () => void;
-    onApplyLunesAJueves?: () => void;
-    onApplyViernes?: () => void;
-    onApplyFinDeSemana?: () => void;
+    onApplyLunesAJueves?: (horario: { entrada: string; salida: string }) => void;
+    onApplyViernes?: (horario: { entrada: string; salida: string }) => void;
+    onApplyFinDeSemana?: (horario: { entrada: string; salida: string }) => void;
 }
 
 export function BaseScheduleManager({
@@ -31,10 +31,6 @@ export function BaseScheduleManager({
     onApplyViernes,
     onApplyFinDeSemana
 }: BaseScheduleManagerProps) {
-
-    console.log('🔍 BaseScheduleManager - companyId:', companyId);
-    console.log('🔍 BaseScheduleManager - companyName:', companyName);
-    console.log('🔍 BaseScheduleManager - esGranjaVilla?:', companyId === 1);
 
     const [viewMode, setViewMode] = useState<'granja' | 'standard'>('standard');
     const weekEnd = getWeekEnd(weekStart);

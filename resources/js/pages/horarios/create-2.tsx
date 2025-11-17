@@ -87,9 +87,6 @@ export default function App({ empleados, empresas, url }) {
         }
     }, [selectedEmpresa, user]);
 
-
-
-
     // Estados principales
     const [currentSupervisorId] = useState('sup1'); // Simular supervisor actual (Granja Villa)
     const supervisor = mockSupervisors.find(s => s.id === currentSupervisorId);
@@ -105,13 +102,6 @@ export default function App({ empleados, empresas, url }) {
     const [baseSchedules, setBaseSchedules] = useState<{
         [weekKey: string]: { [modality: string]: BaseSchedule }
     }>({});
-
-
-    // Empleados expandidos
-
-
-    // Datos de horarios
-
 
     // Filtrar empleados por empresa del supervisor y modalidad
     const selectedCompany = mockCompanies.find(c => c.id === selectedCompanyId);
@@ -190,7 +180,7 @@ export default function App({ empleados, empresas, url }) {
     }, [currentWeekStart, selectedEmpresa, selectedModality]);
 
     /*Despliegue de informacion al seleccionar el boton asignar horario PARA LA GRANJA VILLA*/
-    const handleApplyLunesAJueves = () => {
+    const handleApplyLunesAJueves = (horario: { entrada: string; salida: string }) => {
         const newData = { ...scheduleData };
         const newExpanded = new Set<string>();
 
@@ -204,8 +194,8 @@ export default function App({ empleados, empresas, url }) {
 
                 if (dayOfWeek >= 1 && dayOfWeek <= 4) { // Solo Lunes a Jueves
                     newData[employee.id][dateStr] = {
-                        entryTime: '09:30',
-                        exitTime: '18:00',
+                        entryTime: horario.entrada,
+                        exitTime: horario.salida,
                         status: newData[employee.id][dateStr]?.status || 'L',
                     };
                 }
@@ -218,7 +208,7 @@ export default function App({ empleados, empresas, url }) {
     };
 
     // 🟢 PARA VIERNES
-    const handleApplyViernes = () => {
+    const handleApplyViernes = (horario: { entrada: string; salida: string }) => {
         const newData = { ...scheduleData };
         const newExpanded = new Set<string>();
 
@@ -232,8 +222,8 @@ export default function App({ empleados, empresas, url }) {
 
                 if (dayOfWeek === 5) { // Solo Viernes
                     newData[employee.id][dateStr] = {
-                        entryTime: '09:00',
-                        exitTime: '18:00',
+                        entryTime: horario.entrada,
+                        exitTime: horario.salida,
                         status: newData[employee.id][dateStr]?.status || 'L',
                     };
                 }
@@ -246,7 +236,7 @@ export default function App({ empleados, empresas, url }) {
     };
 
     // 🟢 PARA SÁBADO Y DOMINGO
-    const handleApplyFinDeSemana = () => {
+    const handleApplyFinDeSemana = (horario: { entrada: string; salida: string }) => {
         const newData = { ...scheduleData };
         const newExpanded = new Set<string>();
 
@@ -260,8 +250,8 @@ export default function App({ empleados, empresas, url }) {
 
                 if (dayOfWeek === 0 || dayOfWeek === 6) { // Sábado (6) y Domingo (0)
                     newData[employee.id][dateStr] = {
-                        entryTime: '09:00',
-                        exitTime: '18:00',
+                        entryTime: horario.entrada,
+                        exitTime: horario.salida,
                         status: newData[employee.id][dateStr]?.status || 'L',
                     };
                 }
