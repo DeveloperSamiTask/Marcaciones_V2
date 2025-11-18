@@ -548,20 +548,6 @@ class HorarioController extends Controller
         $finSemana = $fechaCarbon->copy()->endOfWeek(Carbon::SUNDAY);
         $horasSemanal = 0;
 
-        foreach (CarbonPeriod::create($inicioSemana, $finSemana) as $fechaSemana) {
-            $horarioLaboradoSemanal = Horario::where('empleado_id', $empleadoId)
-                ->where('fecha', $fechaSemana)
-                ->where('estado', 'L')
-                ->first();
-
-            if ($horarioLaboradoSemanal) {
-                $horasSemanal += max(0, $horarioLaboradoSemanal->ingreso->diffInMinutes($horarioLaboradoSemanal->salida, false));
-                if ($horasSemanal >= 360) {
-                    $horasSemanal -= 60;
-                }
-            }
-        }
-
         $permisosHSeliminados = Permiso::where('empleado_id', $empleadoId)
             ->where('tipo_id', 2) // Solo permisos de horas extras
             ->whereDate('fecha', $fechaCarbon)
@@ -585,6 +571,7 @@ class HorarioController extends Controller
                 'estado' => ($estado === 'L') ? 'L' : 'PE',  // ← Aquí SÍ es $estado (parámetro del método)
             ]
         );
+
         /* -------------------- CODIGO PARA ELIMINAR PERMISOS -------------------- */
         // busca permisos para eliminar
         $estadosQueGeneranPermisos = [
@@ -738,8 +725,9 @@ class HorarioController extends Controller
     {
         $horario->load('empleado');
         $fechaHorario = $horario->fecha;
-        $fechaInicio = Carbon::now()->subMonth()->day(29)->startOfDay();
-        $fechaFin = Carbon::now()->day(28)->endOfDay();
+        $fechaInicio = $fechaHorario->copy()->startOfMonth(); // Inicio del mes del horario
+        $fechaFin = $fechaHorario->copy()->endOfMonth(); // Fin del mes del horario
+
         $inicioSemana = $fechaHorario->copy()->startOfWeek(Carbon::MONDAY); // lunes
         $finSemana = $fechaHorario->copy()->endOfWeek(Carbon::SUNDAY); // domingo
         $fechas = CarbonPeriod::create($fechaInicio, $fechaFin);
@@ -755,13 +743,18 @@ class HorarioController extends Controller
             }]);
 
         // horas trabajadas en el mes
+        // horas trabajadas en el mes
         foreach ($fechas as $fecha) {
             $horarioLaborado = $empleado->horarios->where('fecha', $fecha)->where('estado', 'L')->first();
             $marcacionLaborado = $empleado->marcaciones->firstWhere('fecha', $fecha);
-            if ($horarioLaborado && $marcacionLaborado && $marcacionLaborado->ingreso_refri) {
-                $partTime = $empleado->jornada_id == 2 && ! $marcacionLaborado->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
+
+            // 🟢 CORREGIDO: Contar aunque no tenga marcación (para horarios futuros)
+            if ($horarioLaborado) {
                 $horasTrabajadas = max(0, $horarioLaborado->ingreso->diffInMinutes($horarioLaborado->salida, false));
-                $horas += $horasTrabajadas - ($partTime ? 0 : 60); // no se descuenta la hora de refrigerio si es parttime y no tomo refrigerio
+
+                // Solo restar refrigerio si tiene marcación y tomó refrigerio
+                $partTime = $empleado->jornada_id == 2 && (! $marcacionLaborado || ! $marcacionLaborado->ingreso_refri);
+                $horas += $horasTrabajadas - ($partTime ? 0 : 60);
             }
         }
 
@@ -800,6 +793,28 @@ class HorarioController extends Controller
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->get();
+
+        Log::info('🔵 EDIT METHOD - Empleado:', [
+            'id' => $empleado->id,
+            'horas_semanal_trabajadas' => $empleado->horas_semanal_trabajadas,
+            'horas_trabajadas' => $empleado->horas_trabajadas,
+            'jornada_id' => $empleado->jornada_id,
+            'horas' => $empleado->horas,
+        ]);
+
+        Log::info('🔵 EDIT METHOD - Cálculos finales:', [
+            'horas_semanal_calculadas' => $horasSemanal,
+            'horas_mensual_calculadas' => $horas / 60,
+            'horas_semanal_guardadas' => $empleado->horas_semanal_trabajadas,
+            'horas_mensual_guardadas' => $empleado->horas_trabajadas,
+        ]);
+
+        Log::info('🔵 HORARIOS ENCONTRADOS - Semana:', [
+            'inicio_semana' => $inicioSemana,
+            'fin_semana' => $finSemana,
+            'horarios_count' => $empleado->horarios->count(),
+            'horarios_laborales' => $empleado->horarios->where('estado', 'L')->pluck('fecha', 'id'),
+        ]);
 
         return Inertia::render('horarios/edit', [
             'empleado' => $empleado,

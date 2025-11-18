@@ -226,6 +226,30 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
 
     }, [data.ingreso, data.salida])
 
+    useEffect(() => {
+        console.log("🟢 EMPLEADO DATA:", {
+            id: empleado.id,
+            horas_semanal_trabajadas: empleado.horas_semanal_trabajadas,
+            horas_trabajadas: empleado.horas_trabajadas,
+            jornada_id: empleado.jornada_id,
+            horas: empleado.horas
+        });
+
+        console.log("🟢 CHART DATA:", {
+            chartData,
+            chartDataSemanal
+        });
+
+        console.log("🟢 HORARIO ACTUAL:", {
+            id: horario.id,
+            fecha: horario.fecha,
+            ingreso: horario.ingreso,
+            salida: horario.salida,
+            estado: horario.estado,
+            descripcion: horario.descripcion
+        });
+    }, []);
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         patch(route('horarios.update', horario.id), {
