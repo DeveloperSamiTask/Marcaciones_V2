@@ -236,48 +236,36 @@ class SuspensionController extends Controller
     // {/* Imprimir en esta parte debe estar el calendario */}
     public function print(Request $request, Suspension $suspension)
     {
-        // DEBUG: Ver qué llega en el request
-
         $suspension->load(['empleado.area', 'empleado.empresa']);
         $suspension->update([
             'estado_print' => 1,
             'motivo' => $request->motivo,
             'fecha_print' => $request->fecha_inicio,
         ]);
+
         $fechaMemo = now()->format('m-Y');
 
         // VALIDACIÓN DE FECHAS Y CÁLCULO DE DÍAS
         $fecha = null;
         $fechaFin = null;
-        $diasSuspension = 1; // Por defecto 1 día
+        $diasSuspension = 1;
 
         if ($request->fecha_inicio && $request->fecha_fin) {
-            // SI SON DOS FECHAS: usar ambas y calcular días
             $fecha = Carbon::parse($request->fecha_inicio)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
             $fechaFin = Carbon::parse($request->fecha_fin)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
-
-            // CALCULAR DÍAS: diferencia + 1 (incluyendo ambos días)
             $inicio = Carbon::parse($request->fecha_inicio);
             $fin = Carbon::parse($request->fecha_fin);
             $diasSuspension = $inicio->diffInDays($fin) + 1;
-
-            // DEBUG: Ver cálculo de días
-
         } elseif ($request->fecha) {
-            // SI ES SOLO UNA FECHA: usar la misma para ambas (1 día)
             $fecha = Carbon::parse($request->fecha)->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
-            $fechaFin = $fecha; // misma fecha
-            $diasSuspension = 1; // Un solo día
-
+            $fechaFin = $fecha;
+            $diasSuspension = 1;
         } else {
-            // SI NO HAY FECHAS: usar fecha actual (1 día)
             $fecha = now()->locale('es')->translatedFormat('j \d\e F \d\e\l Y');
             $fechaFin = $fecha;
-            $diasSuspension = 1; // Un solo día
-
+            $diasSuspension = 1;
         }
 
-        // DEBUG: Valores finales que se envían a la vista
         $articulo = $request->articulo;
 
         // EMPRESAS QUE USAN FORMATO A5 HORIZONTAL
@@ -286,7 +274,6 @@ class SuspensionController extends Controller
 
         // INCUMPLIMIENTO
         if ($suspension->tipo == 'incumplimiento') {
-            // Solo usar A5 si es SUSPENSIÓN (código empieza con 'S') Y es de las 4 empresas
             if ($usarA5 && isset($suspension->codigo[0]) && $suspension->codigo[0] == 'S') {
                 return view('exports.pdf.suspension.incumplimiento_a5', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
             }
@@ -298,7 +285,6 @@ class SuspensionController extends Controller
         if ($suspension->tipo == 'falta injustificada') {
             $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 
-            // Usar A5 si es de las 4 empresas
             if ($usarA5) {
                 return view('exports.pdf.suspension.faltaInjustificada_a5', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
             }
@@ -308,7 +294,6 @@ class SuspensionController extends Controller
 
         // NEGLIGENCIA
         if ($suspension->tipo == 'negligencia') {
-            // Solo usar A5 si es SUSPENSIÓN (código empieza con 'S') Y es de las 4 empresas
             if ($usarA5 && isset($suspension->codigo[0]) && $suspension->codigo[0] == 'S') {
                 return view('exports.pdf.suspension.negligencia_a5', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
             }
@@ -316,8 +301,12 @@ class SuspensionController extends Controller
             return view('exports.pdf.suspension.negligencia', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
-        // SUSPENSIÓN POR ACUMULACIÓN (default)
+        // SUSPENSIÓN POR ACUMULACIÓN
         $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
+
+        if ($usarA5) {
+            return view('exports.pdf.suspension.suspension_a5', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
+        }
 
         return view('exports.pdf.suspension.suspension', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
     }

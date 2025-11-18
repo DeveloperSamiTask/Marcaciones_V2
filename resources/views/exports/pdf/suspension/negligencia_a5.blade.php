@@ -89,11 +89,7 @@
             padding-top: 2px;
         }
 
-        .firma-line {
-            border-top: 1px solid #000;
-            margin: 0;
-            padding: 0;
-        }
+
     </style>
 </head>
 

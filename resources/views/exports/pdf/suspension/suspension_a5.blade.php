@@ -31,62 +31,97 @@
         }
 
         h2 {
-            font-size: 12px;
+            font-size: 11px;
             text-align: center;
             text-decoration: underline;
-            margin: 0 0 6px 0;
+            margin: 0 0 5px 0;
         }
 
         p {
-            font-size: 9px;
+            font-size: 8px;
             text-align: justify;
-            margin: 3px 0;
-            line-height: 1.3;
+            margin: 2px 0;
+            line-height: 1.2;
         }
 
         .header-line {
-            font-size: 9px;
+            font-size: 8px;
             text-align: left;
-            margin: 2px 0;
-            line-height: 1.2;
+            margin: 1px 0;
+            line-height: 1.1;
         }
 
         hr {
             border: none;
             border-top: 1px solid #000;
-            margin: 5px 0;
+            margin: 4px 0;
+        }
+
+        ul {
+            margin: 3px 0;
+            padding-left: 15px;
+        }
+
+        li {
+            font-size: 8px;
+            margin: 1px 0;
+            line-height: 1.1;
         }
 
         strong {
             font-weight: bold;
         }
 
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 5px 0;
+        }
+
+        table th,
+        table td {
+            font-size: 7px;
+            border: 1px solid black;
+            padding: 2px;
+            text-align: center;
+        }
+
+        table th {
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+
         .firmas {
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .firmas img {
-            height: 40px;
-            max-width: 80px;
+            height: 35px;
+            max-width: 70px;
         }
 
         .firmas table {
             width: 100%;
+            border: none;
+            margin: 0;
         }
 
         .firmas td {
             text-align: center;
             vertical-align: bottom;
+            border: none;
+            padding: 0;
         }
 
         .lineas {
-            margin-top: 3px;
+            margin-top: 2px;
         }
 
         .lineas td {
-            font-size: 8px;
+            font-size: 7px;
             text-align: center;
             padding-top: 2px;
+            border: none;
         }
 
 
@@ -95,9 +130,9 @@
 
 <body>
     @php
-        $codigo = [
-            'S' => 'SUSPENSION POR NEGLIGENCIA DE FUNCIONES',
-            'A' => 'AMONESTACION ESCRITA POR NEGLIGENCIA DE FUNCIONES',
+        $tipo = [
+            'tardanza' => 'AMONESTACION ESCRITA POR TARDANZA',
+            'refrigerio' => 'AMONESTACION ESCRITA POR SOBRE TIEMPO DE REFRIGERIO',
         ];
     @endphp
 
@@ -110,22 +145,45 @@
             <div class="header-line"><strong>A:</strong> {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</div>
             <div class="header-line"><strong>ÁREA:</strong> {{ $suspension->empleado->area->nombre }}</div>
             <div class="header-line"><strong>FECHA:</strong> {{ now()->format('d/m/Y') }}</div>
-            <div class="header-line"><strong>ASUNTO:</strong> <strong>{{ $codigo[$suspension->codigo[0]] }}</strong></div>
+            <div class="header-line"><strong>ASUNTO:</strong> <strong>SUSPENSION POR ACUMULACION DE AMONESTACIONES</strong></div>
 
             <hr>
 
             <p>
                 Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                 ley, le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en
-                <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                <strong>SUSPENSION POR ACUMULACION DE AMONESTACIONES</strong>
                 en referencia a los hechos que describimos a continuación:
             </p>
 
-            <p>{{ $suspension->motivo }}</p>
+            <ul>
+                <li>Por acumulación de amonestaciones.</li>
+            </ul>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>MES</th>
+                        <th>FECHA</th>
+                        <th>DESCRIPCIÓN</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($amonestaciones as $item)
+                    <tr>
+                        <td style="text-transform: uppercase;">{{ $item->fecha->isoFormat('MMMM') }}</td>
+                        <td>{{ $item->fecha->format('d/m/Y') }}</td>
+                        <td style="text-transform: uppercase;">{{ $tipo[$suspension->tipo] }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
 
             <p>
                 Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
-                artículo 48 inciso {{ $articulo }}.
+                CAPITULO X artículo 42) "Medida disciplinaria o sanción es la acción correctiva tomando a través de
+                los niveles de supervisión que sanciona la falta o faltas cometidas por uno o más colaboradores en
+                contra de la disciplinaria".
             </p>
 
             <p>
@@ -135,20 +193,19 @@
                 son obligatorias y plenamente conocidas por todo el personal que labora para la empresa.
             </p>
 
-            @if ($diasSuspension == 1)
+            @if ($fecha == $fechaFin)
             <p>
-                Por esta razón, la empresa ha decidido proceder a sancionarlo con
-                ({{ $diasSuspension }}) día de <strong>Suspensión sin goce de Haber</strong>, fecha
-                que será efectiva el día <strong>{{ $fecha }}</strong>.
-                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se
+                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día de
+                <strong>Suspensión sin goce de haber</strong>, fecha que será efectiva el día <strong>{{ $fecha }}</strong>.
+                Finalmente, se le exhorta a que hechos como este no vuelvan a suceder; caso contrario, se
                 tomarán medidas pertinentes al respecto, siendo de su entera responsabilidad.
             </p>
             @else
             <p>
-                Por esta razón, la empresa ha decidido proceder a sancionarlo con
-                ({{ $diasSuspension }}) días de <strong>Suspensión sin goce de Haber</strong>, que será
-                efectiva desde el <strong>{{ $fecha }}</strong> hasta el <strong>{{ $fechaFin }}</strong>.
-                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se
+                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días de
+                <strong>Suspensión sin goce de haber</strong>, que será efectiva desde el <strong>{{ $fecha }}</strong>
+                hasta el <strong>{{ $fechaFin }}</strong>.
+                Finalmente, se le exhorta a que hechos como este no vuelvan a suceder; caso contrario, se
                 tomarán medidas pertinentes al respecto, siendo de su entera responsabilidad.
             </p>
             @endif

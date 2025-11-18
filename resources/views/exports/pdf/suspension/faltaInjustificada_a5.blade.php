@@ -100,11 +100,7 @@
             padding-top: 2px;
         }
 
-        .firma-line {
-            border-top: 1px solid #000;
-            margin: 0;
-            padding: 0;
-        }
+
     </style>
 </head>
 
@@ -115,7 +111,8 @@
             <h2>MEMORANDUM {{ $fechaMemo }}-RRHH/GVS</h2>
 
             <div class="header-line"><strong>DE:</strong> {{ $suspension->empleado->empresa->razonsocial }}</div>
-            <div class="header-line"><strong>A:</strong> {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</div>
+            <div class="header-line"><strong>A:</strong>
+                {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</div>
             <div class="header-line"><strong>ÁREA:</strong> {{ $suspension->empleado->area->nombre }}</div>
             <div class="header-line"><strong>FECHA:</strong> {{ now()->format('d/m/Y') }}</div>
             <div class="header-line"><strong>ASUNTO:</strong> <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong></div>
@@ -125,15 +122,23 @@
             <p>
                 Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la ley,
                 le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en
-                <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
+                <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a
+                continuación:
             </p>
 
-            <ul>
-                @foreach ($amonestaciones as $amonestacion)
-                <li>Amonestación previa por falta injustificada el día {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.</li>
-                @endforeach
-                <li>Y en adición, por faltar injustificadamente el día {{ $suspension->fecha->format('d/m/Y') }}.</li>
-            </ul>
+            @if (count($amonestaciones) > 0)
+                <ul>
+                    @foreach ($amonestaciones as $amonestacion)
+                        <li>Amonestación previa por falta injustificada el día
+                            {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.</li>
+                    @endforeach
+                </ul>
+            @else
+                <ul>
+                    <li>Por faltar injustificadamente a su centro de labores el día
+                        {{ $suspension->fecha->format('d/m/Y') }}.</li>
+                </ul>
+            @endif
 
             <p>
                 Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
@@ -150,20 +155,22 @@
             </p>
 
             @if ($fecha == $fechaFin)
-            <p>
-                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día de
-                <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día <strong>{{ $fecha }}</strong>.
-                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
-                medidas pertinentes al respecto, siendo de su entera responsabilidad.
-            </p>
+                <p>
+                    Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día de
+                    <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día
+                    <strong>{{ $fecha }}</strong>.
+                    Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                    medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                </p>
             @else
-            <p>
-                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días de
-                <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el <strong>{{ $fecha }}</strong>
-                hasta el <strong>{{ $fechaFin }}</strong>.
-                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
-                medidas pertinentes al respecto, siendo de su entera responsabilidad.
-            </p>
+                <p>
+                    Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días de
+                    <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el
+                    <strong>{{ $fecha }}</strong>
+                    hasta el <strong>{{ $fechaFin }}</strong>.
+                    Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                    medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                </p>
             @endif
 
             <p>Atentamente,</p>
@@ -189,12 +196,13 @@
             </div>
         </div>
 
-        <!-- COLUMNA 2: SIN AMONESTACIONES PREVIAS -->
+        <!-- COLUMNA 2: SIN AMONESTACIONES PREVIAS (SOLO FALTA ACTUAL) -->
         <div class="memorandum">
             <h2>MEMORANDUM {{ $fechaMemo }}-RRHH/GVS</h2>
 
             <div class="header-line"><strong>DE:</strong> {{ $suspension->empleado->empresa->razonsocial }}</div>
-            <div class="header-line"><strong>A:</strong> {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</div>
+            <div class="header-line"><strong>A:</strong>
+                {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</div>
             <div class="header-line"><strong>ÁREA:</strong> {{ $suspension->empleado->area->nombre }}</div>
             <div class="header-line"><strong>FECHA:</strong> {{ now()->format('d/m/Y') }}</div>
             <div class="header-line"><strong>ASUNTO:</strong> <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong></div>
@@ -204,12 +212,24 @@
             <p>
                 Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la ley,
                 le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en
-                <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
+                <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a
+                continuación:
             </p>
 
-            <ul>
-                <li>Por faltar injustificadamente a su centro de labores el día {{ $suspension->fecha->format('d/m/Y') }}</li>
-            </ul>
+            @if (count($amonestaciones) > 0)
+                <ul>
+                    @foreach ($amonestaciones as $amonestacion)
+                        <li>Amonestación previa por falta injustificada el día
+                            {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.</li>
+                    @endforeach
+                </ul>
+            @else
+                <ul>
+                    <li>Por faltar injustificadamente a su centro de labores el día
+                        {{ $suspension->fecha->format('d/m/Y') }}.</li>
+                </ul>
+            @endif
+
 
             <p>
                 Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
@@ -226,20 +246,22 @@
             </p>
 
             @if ($fecha == $fechaFin)
-            <p>
-                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día de
-                <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día <strong>{{ $fecha }}</strong>.
-                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
-                medidas pertinentes al respecto, siendo de su entera responsabilidad.
-            </p>
+                <p>
+                    Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día de
+                    <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día
+                    <strong>{{ $fecha }}</strong>.
+                    Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                    medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                </p>
             @else
-            <p>
-                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días de
-                <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el <strong>{{ $fecha }}</strong>
-                hasta el <strong>{{ $fechaFin }}</strong>.
-                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
-                medidas pertinentes al respecto, siendo de su entera responsabilidad.
-            </p>
+                <p>
+                    Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días de
+                    <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el
+                    <strong>{{ $fecha }}</strong>
+                    hasta el <strong>{{ $fechaFin }}</strong>.
+                    Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                    medidas pertinentes al respecto, siendo de su entera responsabilidad.
+                </p>
             @endif
 
             <p>Atentamente,</p>
