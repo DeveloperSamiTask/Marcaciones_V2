@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\Empleado;
 use App\Models\SolicitudHorasExtrasPT;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -15,49 +14,56 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public $empleadosPartTime; // 🆕 Recibir empleados directamente
+
+    // 🆕 Constructor modificado
+    public function __construct($empleadosPartTime)
+    {
+        $this->empleadosPartTime = $empleadosPartTime;
+    }
+
     public function handle()
     {
-        Log::info('🔍 Iniciando verificación horas extras Part Time');
+        Log::info('🔍 Iniciando verificación horas extras Part Time', [
+            'empleados_count' => $this->empleadosPartTime->count(),
+        ]);
 
-        $empleadosPartTime = Empleado::where('jornada_id', 2)->get();
         $solicitudesGeneradas = [];
 
-        foreach ($empleadosPartTime as $empleado) {
+        foreach ($this->empleadosPartTime as $empleado) {
+            Log::info("🔎 Verificando: {$empleado->nombre_completo} - Empresa: {$empleado->empresa_id}");
             $solicitud = $this->verificarEmpleado($empleado);
             if ($solicitud) {
                 $solicitudesGeneradas[] = $solicitud;
             }
         }
-
-        // 🆕 ENVIAR UN SOLO EMAIL CON TODAS LAS SOLICITUDES
-        if (! empty($solicitudesGeneradas)) {
-            $this->enviarNotificacionAgrupada($solicitudesGeneradas);
-        }
-
-        Log::info("✅ Verificación completada - {$solicitudesGeneradas} nuevas solicitudes");
     }
 
     private function verificarEmpleado($empleado)
     {
-        // 🆕 OBTENER LA ÚLTIMA SOLICITUD APROBADA PARA SABER DESDE DÓNDE CONTAR
+        Log::info("🔍 INICIANDO VERIFICACIÓN PARA: {$empleado->nombres}");
+
         $ultimaSolicitud = SolicitudHorasExtrasPT::where('empleado_id', $empleado->id)
             ->where('estado', 'aprobado')
             ->orderBy('fecha_deteccion', 'desc')
             ->first();
 
-        // 🆕 FECHA DESDE LA QUE CONTAR (última aprobación o inicio del mes si no hay)
-        /*Se va a calcular desde el inicio del mes hastas la fecha de hoy , si detecta las 93h se genera la solicitud
-          Si eso pasa el acumulador regresa a 0 y vuelve a contar */
+        // 🆕 DEBUG: Ver si hay solicitud anterior
+        Log::info("📅 {$empleado->nombres} - Última solicitud: ".($ultimaSolicitud ? $ultimaSolicitud->fecha_deteccion : 'Ninguna'));
 
         $fechaInicioConteo = $ultimaSolicitud
-            ? $ultimaSolicitud->fecha_deteccion->addDay() // Empezar desde el día siguiente
+            ? $ultimaSolicitud->fecha_deteccion->addDay()
             : now()->startOfMonth();
 
-        // CALCULAR HORAS DESDE LA FECHA DE INICIO
+        Log::info("📊 {$empleado->nombres} - Contando desde: {$fechaInicioConteo}");
+
         $horarios = $empleado->horarios()
             ->where('fecha', '>=', $fechaInicioConteo)
             ->where('fecha', '<=', now())
             ->get();
+
+        // 🆕 DEBUG: Ver horarios encontrados
+        Log::info("📋 {$empleado->nombres} - Horarios encontrados: ".$horarios->count());
 
         $totalHoras = 0;
         $fechaCumplimiento = null;
@@ -67,18 +73,26 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 $horasDia = $this->calcularHorasDia($horario);
                 $totalHoras += $horasDia;
 
-                // 🆕 DETECTAR EL DÍA EXACTO EN QUE LLEGÓ A 93h
+                // 🆕 DEBUG: Ver cálculo día por día
+                Log::info("📅 {$empleado->nombres} - {$horario->fecha}: {$horario->ingreso} a {$horario->salida} = {$horasDia}h (Total: {$totalHoras}h)");
+
                 if ($totalHoras >= 93 && ! $fechaCumplimiento) {
                     $fechaCumplimiento = $horario->fecha;
-                    Log::info("🎯 {$empleado->nombre_completo} alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
+                    Log::info("🎯 {$empleado->nombres} alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
                 }
             }
         }
 
-        // 🆕 GENERAR SOLICITUD SI LLEGÓ A 93h Y NO TIENE UNA PENDIENTE
+        // 🆕 DEBUG: Total final
+        Log::info("🏁 {$empleado->nombres} - TOTAL HORAS: {$totalHoras}h");
+
         if ($totalHoras >= 93 && $fechaCumplimiento) {
-            $this->generarSolicitud($empleado, $totalHoras, $fechaCumplimiento);
+            Log::info("🚨 GENERANDO SOLICITUD para {$empleado->nombres}");
+
+            return $this->generarSolicitud($empleado, $totalHoras, $fechaCumplimiento);
         }
+
+        return null;
     }
 
     private function calcularHorasDia($horario)

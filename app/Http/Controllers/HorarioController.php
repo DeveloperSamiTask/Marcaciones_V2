@@ -368,8 +368,9 @@ class HorarioController extends Controller
 
         try {
             $contador = 0; // 🆕 MOVER AFUERA del transaction
+            $empleadoIds = [];
 
-            DB::transaction(function () use ($data, &$contador) { // 🆕 PASAR POR REFERENCIA
+            DB::transaction(function () use ($data, &$contador, &$empleadoIds) { // 🆕 PASAR POR REFERENCIA
                 foreach ($data['entries'] as $entry) {
                     //  Log::info("🔄 Procesando día {$contador + 1}:", $entry);
 
@@ -384,10 +385,26 @@ class HorarioController extends Controller
                     );
 
                     $contador++;
+                    $empleadoIds[] = $entry['empleado_id'];
                 }
             });
 
-            \App\Jobs\VerificarHorasExtrasPartTime::dispatch();
+            $empleadoIds = array_unique($empleadoIds);
+
+            // 🆕 DEBUG EXTRA: Ver qué IDs tenemos realmente
+            Log::info('🔍 EMPLEADO IDs CAPTURADOS:', $empleadoIds);
+
+            $empleadosPartTime = Empleado::whereIn('id', $empleadoIds)
+                ->where('jornada_id', 2)
+                ->get();
+
+            Log::info('🚀 DISPATCHING VerificarHorasExtrasPartTime job', [
+                'count' => $empleadosPartTime->count(),
+                'empleados' => $empleadosPartTime->pluck('id', 'nombres')->toArray(),
+                'jornada_ids' => $empleadosPartTime->pluck('jornada_id')->toArray(),
+            ]);
+
+            \App\Jobs\VerificarHorasExtrasPartTime::dispatch($empleadosPartTime);
 
             return redirect()->back()->with('success', "✅ {$contador} horarios guardados correctamente");
 
