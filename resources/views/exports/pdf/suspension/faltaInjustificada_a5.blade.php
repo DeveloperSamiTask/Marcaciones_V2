@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A5 landscape;
+            margin: 0;
+        }
+
+        body {
+            font-family: "Arial", sans-serif;
+            margin: 0;
+            padding: 8mm;
+            box-sizing: border-box;
+        }
+
+        .contenedor {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            page-break-inside: avoid;
+            max-width: 100%;
+        }
+
+        .memorandum {
+            width: 50%;
+            box-sizing: border-box;
+            padding: 8px;
+        }
+
+        h2 {
+            font-size: 12px;
+            text-align: center;
+            text-decoration: underline;
+            margin: 0 0 6px 0;
+        }
+
+        p {
+            font-size: 9px;
+            text-align: justify;
+            margin: 3px 0;
+            line-height: 1.3;
+        }
+
+        .header-line {
+            font-size: 9px;
+            text-align: left;
+            margin: 2px 0;
+            line-height: 1.2;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #000;
+            margin: 5px 0;
+        }
+
+        ul {
+            margin: 4px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            font-size: 9px;
+            margin: 2px 0;
+            line-height: 1.2;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        .firmas {
+            margin-top: 10px;
+        }
+
+        .firmas img {
+            height: 40px;
+            max-width: 80px;
+        }
+
+        .firmas table {
+            width: 100%;
+        }
+
+        .firmas td {
+            text-align: center;
+            vertical-align: bottom;
+        }
+
+        .lineas {
+            margin-top: 3px;
+        }
+
+        .lineas td {
+            font-size: 8px;
+            text-align: center;
+            padding-top: 2px;
+        }
+
+        .firma-line {
+            border-top: 1px solid #000;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="contenedor">
+        <!-- COLUMNA 1: CON AMONESTACIONES PREVIAS -->
+        <div class="memorandum">
+            <h2>MEMORANDUM {{ $fechaMemo }}-RRHH/GVS</h2>
+
+            <div class="header-line"><strong>DE:</strong> {{ $suspension->empleado->empresa->razonsocial }}</div>
+            <div class="header-line"><strong>A:</strong> {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</div>
+            <div class="header-line"><strong>ÁREA:</strong> {{ $suspension->empleado->area->nombre }}</div>
+            <div class="header-line"><strong>FECHA:</strong> {{ now()->format('d/m/Y') }}</div>
+            <div class="header-line"><strong>ASUNTO:</strong> <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong></div>
+
+            <hr>
+
+            <p>
+                Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la ley,
+                le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en
+                <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
+            </p>
+
+            <ul>
+                @foreach ($amonestaciones as $amonestacion)
+                <li>Amonestación previa por falta injustificada el día {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.</li>
+                @endforeach
+                <li>Y en adición, por faltar injustificadamente el día {{ $suspension->fecha->format('d/m/Y') }}.</li>
+            </ul>
+
+            <p>
+                Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
+                CAPITULO X artículo 42) "Medida disciplinaria o sanción es la acción correctiva tomando a través de
+                los niveles de supervisión que sanciona la falta o faltas cometidas por uno o más colaboradores en
+                contra de la disciplinaria".
+            </p>
+
+            <p>
+                Sobre el particular, le recordamos que cumplir con las normas establecidas por la empresa es
+                obligación inherente a su contrato de trabajo, constituyendo además su inobservancia una manifiesta
+                contravención del Reglamento Interno de Trabajo de la empresa, cuyas disposiciones son obligatorias
+                y plenamente conocidas por todo el personal que labora para la empresa.
+            </p>
+
+            @if ($fecha == $fechaFin)
+            <p>
+                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día de
+                <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día <strong>{{ $fecha }}</strong>.
+                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                medidas pertinentes al respecto, siendo de su entera responsabilidad.
+            </p>
+            @else
+            <p>
+                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días de
+                <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el <strong>{{ $fecha }}</strong>
+                hasta el <strong>{{ $fechaFin }}</strong>.
+                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                medidas pertinentes al respecto, siendo de su entera responsabilidad.
+            </p>
+            @endif
+
+            <p>Atentamente,</p>
+
+            <div class="firmas">
+                <table>
+                    <tr>
+                        <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt="Firma Empleador"></td>
+                        <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt="Firma Trabajador"></td>
+                    </tr>
+                </table>
+
+                <table class="lineas">
+                    <tr>
+                        <td class="firma-line">_______________________________</td>
+                        <td class="firma-line">_______________________________</td>
+                    </tr>
+                    <tr>
+                        <td>EL EMPLEADOR</td>
+                        <td>EL TRABAJADOR</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- COLUMNA 2: SIN AMONESTACIONES PREVIAS -->
+        <div class="memorandum">
+            <h2>MEMORANDUM {{ $fechaMemo }}-RRHH/GVS</h2>
+
+            <div class="header-line"><strong>DE:</strong> {{ $suspension->empleado->empresa->razonsocial }}</div>
+            <div class="header-line"><strong>A:</strong> {{ "{$suspension->empleado->apellidos} {$suspension->empleado->nombres}" }}</div>
+            <div class="header-line"><strong>ÁREA:</strong> {{ $suspension->empleado->area->nombre }}</div>
+            <div class="header-line"><strong>FECHA:</strong> {{ now()->format('d/m/Y') }}</div>
+            <div class="header-line"><strong>ASUNTO:</strong> <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong></div>
+
+            <hr>
+
+            <p>
+                Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la ley,
+                le comunicamos la decisión de la empresa de imponerle una sanción disciplinaria consistente en
+                <strong>SUSPENSION POR FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
+            </p>
+
+            <ul>
+                <li>Por faltar injustificadamente a su centro de labores el día {{ $suspension->fecha->format('d/m/Y') }}</li>
+            </ul>
+
+            <p>
+                Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
+                CAPITULO X artículo 42) "Medida disciplinaria o sanción es la acción correctiva tomando a través de
+                los niveles de supervisión que sanciona la falta o faltas cometidas por uno o más colaboradores en
+                contra de la disciplinaria".
+            </p>
+
+            <p>
+                Sobre el particular, le recordamos que cumplir con las normas establecidas por la empresa es
+                obligación inherente a su contrato de trabajo, constituyendo además su inobservancia una manifiesta
+                contravención del Reglamento Interno de Trabajo de la empresa, cuyas disposiciones son obligatorias
+                y plenamente conocidas por todo el personal que labora para la empresa.
+            </p>
+
+            @if ($fecha == $fechaFin)
+            <p>
+                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) día de
+                <strong>Suspensión sin goce de Haber</strong>, fecha que será efectiva el día <strong>{{ $fecha }}</strong>.
+                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                medidas pertinentes al respecto, siendo de su entera responsabilidad.
+            </p>
+            @else
+            <p>
+                Por esta razón, la empresa ha decidido proceder a sancionarlo con ({{ $diasSuspension }}) días de
+                <strong>Suspensión sin goce de Haber</strong>, que será efectiva desde el <strong>{{ $fecha }}</strong>
+                hasta el <strong>{{ $fechaFin }}</strong>.
+                Finalmente, se le exhorta, que hechos como este no vuelvan a suceder, caso contrario, se tomarán
+                medidas pertinentes al respecto, siendo de su entera responsabilidad.
+            </p>
+            @endif
+
+            <p>Atentamente,</p>
+
+            <div class="firmas">
+                <table>
+                    <tr>
+                        <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt="Firma Empleador"></td>
+                        <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt="Firma Trabajador"></td>
+                    </tr>
+                </table>
+
+                <table class="lineas">
+                    <tr>
+                        <td class="firma-line">_______________________________</td>
+                        <td class="firma-line">_______________________________</td>
+                    </tr>
+                    <tr>
+                        <td>EL EMPLEADOR</td>
+                        <td>EL TRABAJADOR</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

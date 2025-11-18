@@ -725,9 +725,8 @@ class HorarioController extends Controller
     {
         $horario->load('empleado');
         $fechaHorario = $horario->fecha;
-        $fechaInicio = $fechaHorario->copy()->startOfMonth(); // Inicio del mes del horario
-        $fechaFin = $fechaHorario->copy()->endOfMonth(); // Fin del mes del horario
-
+        $fechaInicio = Carbon::now()->subMonth()->day(29)->startOfDay();
+        $fechaFin = Carbon::now()->day(28)->endOfDay();
         $inicioSemana = $fechaHorario->copy()->startOfWeek(Carbon::MONDAY); // lunes
         $finSemana = $fechaHorario->copy()->endOfWeek(Carbon::SUNDAY); // domingo
         $fechas = CarbonPeriod::create($fechaInicio, $fechaFin);
@@ -743,18 +742,13 @@ class HorarioController extends Controller
             }]);
 
         // horas trabajadas en el mes
-        // horas trabajadas en el mes
         foreach ($fechas as $fecha) {
             $horarioLaborado = $empleado->horarios->where('fecha', $fecha)->where('estado', 'L')->first();
             $marcacionLaborado = $empleado->marcaciones->firstWhere('fecha', $fecha);
-
-            // 🟢 CORREGIDO: Contar aunque no tenga marcación (para horarios futuros)
-            if ($horarioLaborado) {
+            if ($horarioLaborado && $marcacionLaborado && $marcacionLaborado->ingreso_refri) {
+                $partTime = $empleado->jornada_id == 2 && ! $marcacionLaborado->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
                 $horasTrabajadas = max(0, $horarioLaborado->ingreso->diffInMinutes($horarioLaborado->salida, false));
-
-                // Solo restar refrigerio si tiene marcación y tomó refrigerio
-                $partTime = $empleado->jornada_id == 2 && (! $marcacionLaborado || ! $marcacionLaborado->ingreso_refri);
-                $horas += $horasTrabajadas - ($partTime ? 0 : 60);
+                $horas += $horasTrabajadas - ($partTime ? 0 : 60); // no se descuenta la hora de refrigerio si es parttime y no tomo refrigerio
             }
         }
 
@@ -793,9 +787,8 @@ class HorarioController extends Controller
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->get();
-
         Log::info('🔵 EDIT METHOD - Empleado:', [
-            'id' => $empleado->id,
+
             'horas_semanal_trabajadas' => $empleado->horas_semanal_trabajadas,
             'horas_trabajadas' => $empleado->horas_trabajadas,
             'jornada_id' => $empleado->jornada_id,

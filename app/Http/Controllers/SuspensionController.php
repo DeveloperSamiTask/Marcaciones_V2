@@ -278,25 +278,45 @@ class SuspensionController extends Controller
         }
 
         // DEBUG: Valores finales que se envían a la vista
-
         $articulo = $request->articulo;
 
+        // EMPRESAS QUE USAN FORMATO A5 HORIZONTAL
+        $empresasA5 = [1, 2, 10, 3]; // Granja Villa, Sami Task, Yaku Park, Inturpesa
+        $usarA5 = in_array($suspension->empleado->empresa_id, $empresasA5);
+
+        // INCUMPLIMIENTO
         if ($suspension->tipo == 'incumplimiento') {
+            // Solo usar A5 si es SUSPENSIÓN (código empieza con 'S') Y es de las 4 empresas
+            if ($usarA5 && isset($suspension->codigo[0]) && $suspension->codigo[0] == 'S') {
+                return view('exports.pdf.suspension.incumplimiento_a5', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
+            }
+
             return view('exports.pdf.suspension.incumplimiento', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
+        // FALTA INJUSTIFICADA
         if ($suspension->tipo == 'falta injustificada') {
-
             $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 
+            // Usar A5 si es de las 4 empresas
+            if ($usarA5) {
+                return view('exports.pdf.suspension.faltaInjustificada_a5', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
+            }
 
             return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
         }
 
+        // NEGLIGENCIA
         if ($suspension->tipo == 'negligencia') {
+            // Solo usar A5 si es SUSPENSIÓN (código empieza con 'S') Y es de las 4 empresas
+            if ($usarA5 && isset($suspension->codigo[0]) && $suspension->codigo[0] == 'S') {
+                return view('exports.pdf.suspension.negligencia_a5', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
+            }
+
             return view('exports.pdf.suspension.negligencia', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
+        // SUSPENSIÓN POR ACUMULACIÓN (default)
         $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 
         return view('exports.pdf.suspension.suspension', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
