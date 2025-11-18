@@ -117,8 +117,9 @@ export default function App({ empleados, empresas, url }) {
         'Full Time': { entryTime: '09:00', exitTime: '18:00' },
         'Part Time': { entryTime: '13:00', exitTime: '17:00' },
     };
-    const currentBaseSchedule = currentWeekBaseSchedules[selectedModality];
-
+    const currentBaseSchedule = currentWeekBaseSchedules[selectedModality] ||
+        currentWeekBaseSchedules['Full Time'] ||
+        { entryTime: '09:00', exitTime: '18:00' };
     // Contar empleados por modalidad para la empresa seleccionada
     const fullTimeCount = empleadosList.filter(emp => Number(emp.jornada_id) === 1).length;
     const partTimeCount = empleadosList.filter(emp => Number(emp.jornada_id) === 2).length;
