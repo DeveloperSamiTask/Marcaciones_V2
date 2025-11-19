@@ -180,11 +180,14 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         if (! $solicitudExistente) {
             $solicitud = SolicitudHorasExtrasPT::create([
                 'empleado_id' => $empleado->id,
+                'empleado_area' => $empleado->area->nombre,
                 'fecha_deteccion' => now(),
                 'fecha_cumplimiento_93h' => $fechaCumplimiento, // 🆕 FECHA EXACTA
                 'horas_acumuladas' => $horasAcumuladas,
                 'fecha_limite_aprobacion' => now()->addHours(48),
                 'fecha_inicio_extras' => $fechaInicioConteo,
+                //agregar fecha fin de extras
+                'fecha_fin_extras' => null,
                 'estado' => 'pendiente',
                 'aprobado_por' => null,
                 'fecha_aprobacion' => null,
