@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\SolicitudHorasExtrasPTController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\DashboardController;
@@ -142,6 +142,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return Inertia::render('settings/appearance');
         })->name('appearance');
     });
+
+    // SOLICITUDES PT
+    Route::get('/horas-extras-pt/solicitudes', [SolicitudHorasExtrasPTController::class, 'index'])
+        ->name('horas-extras-pt.index');
+
+    // 👁️ Ver detalle
+    Route::get('/horas-extras-pt/solicitudes/{id}', [SolicitudHorasExtrasPTController::class, 'show'])
+        ->name('horas-extras-pt.show');
+
+    // ✅ Aprobar
+    Route::post('/horas-extras-pt/solicitudes/{id}/aprobar', [SolicitudHorasExtrasPTController::class, 'aprobar'])
+        ->name('horas-extras-pt.aprobar');
+
+    // ❌ Rechazar
+    Route::post('/horas-extras-pt/solicitudes/{id}/rechazar', [SolicitudHorasExtrasPTController::class, 'rechazar'])
+        ->name('horas-extras-pt.rechazar');
+
 });
 
 // routes/web.php

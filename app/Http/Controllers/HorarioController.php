@@ -383,16 +383,17 @@ class HorarioController extends Controller
                         '',
                         $entry['feriado'] ?? null
                     );
-
+                    // Log::info('🔍 FECHA QUE ENTRA:',  $entry['fecha']);
                     $contador++;
                     $empleadoIds[] = $entry['empleado_id'];
                 }
             });
 
-            $empleadoIds = array_unique($empleadoIds);
+            $fechasRecibidas = collect($data['entries'])->pluck('fecha')->unique()->sort()->values();
 
-            // 🆕 DEBUG EXTRA: Ver qué IDs tenemos realmente
-            Log::info('🔍 EMPLEADO IDs CAPTURADOS:', $empleadoIds);
+            $fechaMinima = $fechasRecibidas->first(); // "2025-11-17"
+            $fechaMaxima = $fechasRecibidas->last();  // "2025-11-23"
+            $empleadoIds = array_unique($empleadoIds);
 
             $empleadosPartTime = Empleado::whereIn('id', $empleadoIds)
                 ->where('jornada_id', 2)
@@ -404,7 +405,7 @@ class HorarioController extends Controller
                 'jornada_ids' => $empleadosPartTime->pluck('jornada_id')->toArray(),
             ]);
 
-            \App\Jobs\VerificarHorasExtrasPartTime::dispatch($empleadosPartTime);
+            \App\Jobs\VerificarHorasExtrasPartTime::dispatch($empleadosPartTime, $fechaMinima, $fechaMaxima);
 
             return redirect()->back()->with('success', "✅ {$contador} horarios guardados correctamente");
 
