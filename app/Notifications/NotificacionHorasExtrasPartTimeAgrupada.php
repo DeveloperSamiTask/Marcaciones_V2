@@ -6,17 +6,40 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
 
-class NotificacionHorasExtrasPartTimeAgrupada extends Notification implements ShouldQueue
+class NotificacionHorasExtrasPartTimeAgrupada extends Notification //implements ShouldQueue
 {
     use Queueable;
 
     // 🆕 AGREGAR ESTA PROPIEDAD
     public $solicitudes;
 
-    public function __construct(array $solicitudes)
+    public function __construct($solicitudes)
     {
-        $this->solicitudes = $solicitudes; // 🆕 GUARDAR LA PROPIEDAD
+        Log::info('🔴 NOTIFICACIÓN CONSTRUCTOR INICIO');
+
+        try {
+            Log::info('🔴 ANTES DE CONVERSIÓN');
+
+            if ($solicitudes instanceof \Illuminate\Support\Collection) {
+                $this->solicitudes = $solicitudes->all();
+            } else {
+                $this->solicitudes = $solicitudes;
+            }
+
+            Log::info('🔴 DESPUÉS DE CONVERSIÓN', [
+                'count' => count($this->solicitudes),
+                'solicitud_1' => isset($this->solicitudes[0]) ? $this->solicitudes[0] : 'none',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ ERROR EN CONSTRUCTOR: '.$e->getMessage());
+            Log::error('❌ STACK: '.$e->getTraceAsString());
+            throw $e; // Relanzar para ver el error real
+        }
+
+        Log::info('🔴 NOTIFICACIÓN CONSTRUCTOR FIN');
     }
 
     public function via($notifiable)
@@ -26,6 +49,11 @@ class NotificacionHorasExtrasPartTimeAgrupada extends Notification implements Sh
 
     public function toMail($notifiable)
     {
+        Log::info('🔴 EN NOTIFICACIÓN toMail:', [
+            'solicitudes_count' => count($this->solicitudes),
+            'solicitudes' => $this->solicitudes,
+        ]);
+
         $mail = (new MailMessage)
             ->subject('Solicitudes por horas extras – Personal Part Time')
             ->greeting('Nuevas solicitudes de horas extras')
@@ -36,7 +64,7 @@ class NotificacionHorasExtrasPartTimeAgrupada extends Notification implements Sh
         }
 
         $mail->action('Revisar Todas las Solicitudes', url('/horas-extras-pt/solicitudes'))
-             ->line('Tienen 48 horas para aprobar estas solicitudes.');
+            ->line('Tienen 48 horas para aprobar estas solicitudes.');
 
         return $mail;
     }
@@ -45,7 +73,7 @@ class NotificacionHorasExtrasPartTimeAgrupada extends Notification implements Sh
     {
         return [
             'count_solicitudes' => count($this->solicitudes),
-            'tipo' => 'horas_extras_pt_agrupada'
+            'tipo' => 'horas_extras_pt_agrupada',
         ];
     }
 }

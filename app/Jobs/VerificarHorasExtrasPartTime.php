@@ -34,7 +34,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             'empleados_count' => $this->empleadosPartTime->count(),
         ]);
 
-        $solicitudesGeneradas = [];
+        $solicitudesGeneradas = collect();
 
         foreach ($this->empleadosPartTime as $empleado) {
             Log::info("🔎 Verificando: {$empleado->nombre_completo} - Empresa: {$empleado->empresa_id}");
@@ -42,6 +42,45 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             if ($solicitud) {
                 $solicitudesGeneradas[] = $solicitud;
             }
+        }
+
+        // 🟢 ENVIAR 1 SOLO EMAIL AGRUPADO CON TODAS LAS SOLICITUDES
+        if (count($solicitudesGeneradas) > 0) {
+            Log::info("📧 Enviando email agrupado con {$solicitudesGeneradas->count()} solicitudes");
+            $this->enviarNotificacionAgrupada($solicitudesGeneradas);
+        } else {
+            Log::info('📭 No hay solicitudes para notificar');
+        }
+    }
+
+    private function enviarNotificacionAgrupada($solicitudes)
+    {
+        try {
+            $emailsGerencia = [
+                'cordovasandro99@gmail.com',
+                'sandrocordova99@hotmail.com',
+            ];
+
+            foreach ($emailsGerencia as $email) {
+                try {
+                    $usuarioTemporal = new \App\Models\User;
+                    $usuarioTemporal->email = $email;
+
+                    Log::info("🔴 ENVIANDO NOTIFICACIÓN A: {$email}");
+
+                    $usuarioTemporal->notify(new \App\Notifications\NotificacionHorasExtrasPartTimeAgrupada($solicitudes));
+
+                    Log::info("📧 Email agrupado enviado a: {$email}");
+
+                } catch (\Exception $e) {
+                    Log::error("❌ ERROR con email {$email}: ".$e->getMessage());
+                    Log::error('❌ STACK TRACE: '.$e->getTraceAsString());
+                }
+            }
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error general en enviarNotificacionAgrupada: '.$e->getMessage());
+            Log::error('❌ Stack trace: '.$e->getTraceAsString());
         }
     }
 
@@ -186,7 +225,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 'horas_acumuladas' => $horasAcumuladas,
                 'fecha_limite_aprobacion' => now()->addHours(48),
                 'fecha_inicio_extras' => $fechaInicioConteo,
-                //agregar fecha fin de extras
+                // agregar fecha fin de extras
                 'fecha_fin_extras' => null,
                 'estado' => 'pendiente',
                 'aprobado_por' => null,
@@ -195,55 +234,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 
             Log::info("📝 Solicitud generada para {$empleado->nombre_completo} - Alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
 
-            $this->enviarNotificacion($solicitud);
-        }
-    }
-
-    private function enviarNotificacion($solicitud)
-    {
-        try {
-            // 🆕 EMAILS FIJOS DE GERENCIA -> Necesito confirmar esto.
-            $emailsGerencia = [
-                'cordovasandro99@gmail.com',
-                'sandrocordova99@hotmail.com',
-                'jefes@empresa.com',
-            ];
-
-            foreach ($emailsGerencia as $email) {
-                // 🆕 CREAR USUARIO TEMPORAL PARA ENVIAR NOTIFICACIÓN
-                $usuarioTemporal = new \App\Models\User;
-                $usuarioTemporal->email = $email;
-                $usuarioTemporal->notify(new \App\Notifications\NotificacionHorasExtrasPartTime($solicitud));
-
-                Log::info("📧 Email enviado a: {$email}");
-            }
-
-        } catch (\Exception $e) {
-            Log::error('❌ Error enviando notificación: '.$e->getMessage());
-        }
-    }
-
-    private function enviarNotificacionAgrupada($solicitudes)
-    {
-        try {
-            $emailsGerencia = [
-                'gerencia@empresa.com',
-                'rrhh@empresa.com',
-                'jefes@empresa.com',
-            ];
-
-            foreach ($emailsGerencia as $email) {
-                $usuarioTemporal = new \App\Models\User;
-                $usuarioTemporal->email = $email;
-
-                // 🆕 CREAR NOTIFICACIÓN AGRUPADA
-                $usuarioTemporal->notify(new \App\Notifications\NotificacionHorasExtrasPartTimeAgrupada($solicitudes));
-
-                Log::info("📧 Email agrupado enviado a: {$email}");
-            }
-
-        } catch (\Exception $e) {
-            Log::error('❌ Error enviando notificación agrupada: '.$e->getMessage());
+            return $solicitud;
         }
     }
 }
