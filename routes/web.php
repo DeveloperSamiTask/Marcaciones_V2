@@ -149,17 +149,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // SOLICITUDES PT
     Route::patch('/solicitudes-he-pt/{solicitud}/aprobar', [SolicitudHorasExtrasPTController::class, 'aprobar'])->name('solicitudes-he-pt.aprobar');
+
+    Route::delete('/solicitudes-he-pt/{solicitud}/rechazar', [SolicitudHorasExtrasPTController::class, 'rechazar'])->name('solicitudes-he-pt.rechazar');
+
+
+
     // 👁️ Ver detalle
     Route::get('/horas-extras-pt/solicitudes/{id}', [SolicitudHorasExtrasPTController::class, 'show'])
         ->name('horas-extras-pt.show');
-
-    // ✅ Aprobar
-    Route::post('/horas-extras-pt/solicitudes/{id}/aprobar', [SolicitudHorasExtrasPTController::class, 'aprobar'])
-        ->name('horas-extras-pt.aprobar');
-
-    // ❌ Rechazar
-    Route::post('/horas-extras-pt/solicitudes/{id}/rechazar', [SolicitudHorasExtrasPTController::class, 'rechazar'])
-        ->name('horas-extras-pt.rechazar');
 
 });
 

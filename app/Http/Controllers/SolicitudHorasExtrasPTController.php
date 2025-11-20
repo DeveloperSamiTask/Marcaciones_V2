@@ -2,16 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Empleado;
 use App\Models\Horario;
 use App\Models\Permiso;
 use App\Models\SolicitudHorasExtrasPT;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Exception;
-
-
 
 class SolicitudHorasExtrasPTController extends Controller
 {
@@ -68,6 +64,39 @@ class SolicitudHorasExtrasPTController extends Controller
         }
     }
 
+    public function rechazar(Request $request, $solicitudId)
+    {
+        try {
+            DB::transaction(function () use ($request, $solicitudId) {
+                // 1. ACTUALIZAR LA SOLICITUD CON MOTIVO DE RECHAZO
+                $solicitud = SolicitudHorasExtrasPT::findOrFail($solicitudId);
+                $solicitud->update([
+                    'estado' => 2, // Rechazado
+                    'aprobado_por' => auth()->id(),
+                    'fecha_aprobacion' => now(),
+                    'observaciones' => $request->observaciones, // 🚨 Motivo del rechazo
+                ]);
+
+                // 2. BUSCAR Y ACTUALIZAR EL PERMISO ASOCIADO
+                $permiso = Permiso::where('permiso_HE_PT', $solicitudId)->first();
+
+                if ($permiso) {
+                    $permiso->update([
+                        'estado' => 2, // Rechazado
+                        'motivo_rechazo' => $request->observaciones, // 🚨 Mismo motivo
+                    ]);
+
+                    // NO actualizamos el horario porque fue rechazado
+                }
+            });
+
+            return response()->json(['message' => 'Solicitud rechazada exitosamente']);
+
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * 👁️ Ver detalle de una solicitud
      */
@@ -79,47 +108,6 @@ class SolicitudHorasExtrasPTController extends Controller
     }
 
     /**
-     * ✅ APROBAR SOLICITUD
-     */
-
-    /**
      * ❌ RECHAZAR SOLICITUD
      */
-    public function rechazar(Request $request, $id)
-    {
-        $request->validate([
-            'observaciones' => 'required|string|max:500',
-        ]);
-
-        $solicitud = SolicitudHorasExtrasPT::findOrFail($id);
-
-        // 🔒 Validar que esté pendiente
-        if ($solicitud->estado !== 'pendiente') {
-            return back()->with('error', '❌ Esta solicitud ya fue procesada');
-        }
-
-        try {
-            // 🟢 ACTUALIZAR SOLICITUD
-            $solicitud->update([
-                'estado' => 'rechazado',
-                'aprobado_por' => auth()->id(),
-                'fecha_aprobacion' => now(),
-                'observaciones' => $request->observaciones,
-                'fecha_fin_extras' => $solicitud->fecha_cumplimiento_93h,
-            ]);
-
-            // 🟢 EL EMPLEADO SIGUE SIENDO PART TIME
-            // El contador ya está corriendo desde el día siguiente automáticamente
-
-            Log::info("❌ Solicitud #{$solicitud->id} RECHAZADA para {$solicitud->empleado->nombre_completo}");
-            Log::info("ℹ️ Empleado continúa como Part Time. Nuevo periodo ya está contando desde {$solicitud->fecha_cumplimiento_93h->addDay()->format('d/m/Y')}");
-
-            return back()->with('success', "✅ Solicitud rechazada. {$solicitud->empleado->nombre_completo} continúa como Part Time");
-
-        } catch (\Exception $e) {
-            Log::error("❌ Error rechazando solicitud #{$id}: ".$e->getMessage());
-
-            return back()->with('error', '❌ Error al rechazar: '.$e->getMessage());
-        }
-    }
 }

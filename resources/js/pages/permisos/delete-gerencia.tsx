@@ -6,16 +6,16 @@ import { FormEventHandler, useRef } from 'react';
 import { toast } from 'sonner';
 import { LoaderCircle, SquareX } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
-//import { InputError } from '@/components/ui/input-error';
 
+//import { InputError } from '@/components/ui/input-error';
 export default function RechazarSolicitudHE({ solicitudId }: { solicitudId: number }) {
     const motivoRechazoInput = useRef<HTMLTextAreaElement>(null);
-    const { data, delete: destroy, setData, processing, reset, clearErrors } = useForm<{observaciones: string }>({ observaciones: '' });
+    const { data, delete: destroy, setData, processing, reset, errors, clearErrors } = useForm<{observaciones: string }>({ observaciones: '' });
 
     const rechazarSolicitud: FormEventHandler = (e) => {
         e.preventDefault();
 
-        destroy(route('solicitudes-he-pt.rechazar', solicitudId), {
+        destroy(route('solicitudes-he-pt.rechazar', solicitudId), { // 🚨 RUTA DELETE
             preserveScroll: true,
             onSuccess: () => {
                 toast.success('Solicitud HE PT rechazada exitosamente!');
@@ -54,10 +54,9 @@ export default function RechazarSolicitudHE({ solicitudId }: { solicitudId: numb
                             ref={motivoRechazoInput}
                             onChange={(e) => setData('observaciones', e.target.value)}
                             required
-                            placeholder="Descripción del motivo"
+                            placeholder="Descripción del motivo de rechazo"
                         />
-
-                    </div>
+                     </div>
                     <DialogFooter className="gap-2">
                         <DialogClose asChild>
                             <Button variant="secondary" onClick={closeModal}>
