@@ -1,5 +1,5 @@
 <?php
-use App\Http\Controllers\SolicitudHorasExtrasPTController;
+
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\DashboardController;
@@ -13,6 +13,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\SolicitudHorasExtrasPTController;
 use App\Http\Controllers\SuspensionController;
 use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +80,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{permiso}/horarios', [PermisoController::class, 'showHorarios'])->name('showHorarios');
         Route::get('{permiso}/imprimir', [PermisoController::class, 'imprimir'])->name('imprimir');
         Route::post('{permiso}/upload', [PermisoController::class, 'upload'])->name('upload');
+
+        Route::get('gerencia', [PermisoController::class, 'index_gerencia'])->name('index_gerencia');
+        Route::get('rrhh', [PermisoController::class, 'index_rrhh'])->name('index_rrhh');
     });
 
     // Marcaciones

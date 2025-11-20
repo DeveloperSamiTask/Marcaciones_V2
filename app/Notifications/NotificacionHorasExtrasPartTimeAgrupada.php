@@ -63,7 +63,7 @@ class NotificacionHorasExtrasPartTimeAgrupada extends Notification //implements 
             $mail->line("• **{$solicitud->empleado->nombre_completo}** - {$solicitud->horas_acumuladas}h - Cumplió el: {$solicitud->fecha_cumplimiento_93h->format('d/m/Y')}");
         }
 
-        $mail->action('Revisar Todas las Solicitudes', url('/horas-extras-pt/solicitudes'))
+        $mail->action('Revisar Todas las Solicitudes',route('permisos.index_gerencia'))
             ->line('Tienen 48 horas para aprobar estas solicitudes.');
 
         return $mail;
