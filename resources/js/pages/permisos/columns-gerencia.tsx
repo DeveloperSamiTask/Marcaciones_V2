@@ -7,11 +7,12 @@ import { usePage } from '@inertiajs/react';
 import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { ArrowUpDown, Download } from 'lucide-react';
-import UploadPermiso from './upload';
-import EditPermiso from './edit';
-import DeletePermiso from './delete';
-import PrintPermiso from './print';
-import SearchHorario from './searchHorario';
+
+import AprobarSolicitudHE  from './edit-gerencia';
+import RechazarSolicitudHE  from './delete-gerencia';
+import DetalleSolicitudHE from './searchHorario';
+
+
 
 const estadoBadgeVariants = {
     0: { label: 'PENDIENTE', variant: 'warning' },
@@ -86,5 +87,28 @@ export const columnsSolicitudesHE: ColumnDef<any>[] = [
             return <Badge variant={config.variant}>{config.label}</Badge>;
         },
     },
+    {
+        id: 'actions',
+        cell: ({ row }) => {
+            const solicitud = row.original;
+            const { auth } = usePage<SharedData>().props;
+            const isAdmin = auth.user.rol_id !== 4;
+
+            return (
+                <div className="flex items-center gap-2">
+                    {solicitud.estado === 0 && (
+                        <>
+                            <AprobarSolicitudHE key={`aprobar-${solicitud.id}`} solicitudId={solicitud.id} />
+                            <RechazarSolicitudHE key={`rechazar-${solicitud.id}`} solicitudId={solicitud.id} />
+                        </>
+                    )}
+
+                    {/* DETALLE - SIEMPRE VISIBLE */}
+                    <DetalleSolicitudHE key={`detalle-${solicitud.id}`} solicitud={solicitud} />
+                </div>
+            );
+        },
+    }
 ];
+
 

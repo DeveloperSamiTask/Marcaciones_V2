@@ -2,10 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SolicitudHorasExtrasPT;
 use App\Models\Empleado;
+use App\Models\Horario;
+use App\Models\Permiso;
+use App\Models\SolicitudHorasExtrasPT;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Exception;
+
+
 
 class SolicitudHorasExtrasPTController extends Controller
 {
@@ -21,6 +27,47 @@ class SolicitudHorasExtrasPTController extends Controller
         return view('horas-extras-pt.index', compact('solicitudes'));
     }
 
+    public function aprobar(Request $request, $solicitudId)
+    {
+        try {
+            DB::transaction(function () use ($solicitudId) {
+                // 1. ACTUALIZAR LA SOLICITUD
+                $solicitud = SolicitudHorasExtrasPT::findOrFail($solicitudId);
+                $solicitud->update([
+                    'estado' => 1, // Aprobado
+                    'aprobado_por' => auth()->id(),
+                    'fecha_aprobacion' => now(),
+                    // 'fecha_fin_extras' => $solicitud->fecha_cumplimiento_93h, // Llenar este campo
+                    'observaciones' => null,
+                ]);
+
+                // 2. BUSCAR Y ACTUALIZAR EL PERMISO ASOCIADO
+                $permiso = Permiso::where('permiso_HE_PT', $solicitudId)->first();
+
+                if ($permiso) {
+                    $permiso->update([
+                        'estado' => 1, // Aprobado
+                        // Aquí puedes agregar más campos si necesitas
+                    ]);
+
+                    // 3. ACTUALIZAR EL HORARIO (COMO EN TU MÉTODO UPDATE EXISTENTE)
+                    $horario = Horario::where('empleado_id', $permiso->empleado_id)
+                        ->whereDate('fecha', $permiso->fecha)
+                        ->firstOrFail();
+
+                    if ($horario) {
+                        $horario->update(['estado' => 'L']); // Como en tu código para tipo_id == 2
+                    }
+                }
+            });
+
+            return response()->json(['message' => 'Solicitud y permiso aprobados exitosamente']);
+
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * 👁️ Ver detalle de una solicitud
      */
@@ -34,44 +81,6 @@ class SolicitudHorasExtrasPTController extends Controller
     /**
      * ✅ APROBAR SOLICITUD
      */
-    public function aprobar(Request $request, $id)
-    {
-        $request->validate([
-            'observaciones' => 'nullable|string|max:500'
-        ]);
-
-        $solicitud = SolicitudHorasExtrasPT::findOrFail($id);
-
-        // 🔒 Validar que esté pendiente
-        if ($solicitud->estado !== 'pendiente') {
-            return back()->with('error', '❌ Esta solicitud ya fue procesada');
-        }
-
-        try {
-            // 🟢 ACTUALIZAR SOLICITUD
-            $solicitud->update([
-                'estado' => 'aprobado',
-                'aprobado_por' => auth()->id(),
-                'fecha_aprobacion' => now(),
-                'observaciones' => $request->observaciones,
-                'fecha_fin_extras' => $solicitud->fecha_cumplimiento_93h, // El periodo termina cuando cumplió 93h
-            ]);
-
-            // 🟢 CAMBIAR JORNADA DEL EMPLEADO A TIEMPO COMPLETO
-            $solicitud->empleado->update([
-                'jornada_id' => 1  // 1 = Full Time
-            ]);
-
-            Log::info("✅ Solicitud #{$solicitud->id} APROBADA para {$solicitud->empleado->nombre_completo}");
-            Log::info("🔄 Empleado cambiado a jornada Full Time (jornada_id = 1)");
-
-            return back()->with('success', "✅ Solicitud aprobada. {$solicitud->empleado->nombre_completo} ahora es Full Time");
-
-        } catch (\Exception $e) {
-            Log::error("❌ Error aprobando solicitud #{$id}: " . $e->getMessage());
-            return back()->with('error', '❌ Error al aprobar: ' . $e->getMessage());
-        }
-    }
 
     /**
      * ❌ RECHAZAR SOLICITUD
@@ -79,7 +88,7 @@ class SolicitudHorasExtrasPTController extends Controller
     public function rechazar(Request $request, $id)
     {
         $request->validate([
-            'observaciones' => 'required|string|max:500'
+            'observaciones' => 'required|string|max:500',
         ]);
 
         $solicitud = SolicitudHorasExtrasPT::findOrFail($id);
@@ -108,8 +117,9 @@ class SolicitudHorasExtrasPTController extends Controller
             return back()->with('success', "✅ Solicitud rechazada. {$solicitud->empleado->nombre_completo} continúa como Part Time");
 
         } catch (\Exception $e) {
-            Log::error("❌ Error rechazando solicitud #{$id}: " . $e->getMessage());
-            return back()->with('error', '❌ Error al rechazar: ' . $e->getMessage());
+            Log::error("❌ Error rechazando solicitud #{$id}: ".$e->getMessage());
+
+            return back()->with('error', '❌ Error al rechazar: '.$e->getMessage());
         }
     }
 }

@@ -148,9 +148,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // SOLICITUDES PT
-    Route::get('/horas-extras-pt/solicitudes', [SolicitudHorasExtrasPTController::class, 'index'])
-        ->name('horas-extras-pt.index');
-
+    Route::patch('/solicitudes-he-pt/{solicitud}/aprobar', [SolicitudHorasExtrasPTController::class, 'aprobar'])->name('solicitudes-he-pt.aprobar');
     // 👁️ Ver detalle
     Route::get('/horas-extras-pt/solicitudes/{id}', [SolicitudHorasExtrasPTController::class, 'show'])
         ->name('horas-extras-pt.show');
