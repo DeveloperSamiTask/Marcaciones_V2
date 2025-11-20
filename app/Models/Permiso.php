@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,6 +16,7 @@ class Permiso extends Model
         'comprobante',
         'estado',
         'estado_print',
+        'permiso_HE_PT',
     ];
 
     protected function casts(): array
@@ -31,12 +31,13 @@ class Permiso extends Model
 
     public function empleado(): BelongsTo
     {
-      return $this->belongsTo(Empleado::class);
+        return $this->belongsTo(Empleado::class);
     }
 
     public function tipo(): BelongsTo
     {
-      return $this->belongsTo(PermisoTipo::class, 'tipo_id');
+        return $this->belongsTo(PermisoTipo::class, 'tipo_id');
     }
+
 
 }

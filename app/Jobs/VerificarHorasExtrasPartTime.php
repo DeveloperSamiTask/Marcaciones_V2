@@ -9,7 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-
+use App\Models\Permiso;
 class VerificarHorasExtrasPartTime implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -230,6 +230,20 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 'estado' => 0,
                 'aprobado_por' => null,
                 'fecha_aprobacion' => null,
+            ]);
+
+            Permiso::create([
+                'empleado_id' => $empleado->id,
+                'tipo_id' => 2,
+                'motivo' => 'HORARIO PROGRAMADO EXTRA',
+                'fecha' => now(), // Usa la misma fecha que fecha_deteccion
+                'estado' => 0, // pendiente
+                'motivo_rechazo' => null,
+                'comprobante' => null,
+                'estado_print' => 0,
+                'created_at' => now(), // Asegurar mismo timestamp
+                'updated_at' => now(),
+                'permiso_HE_PT' => $solicitud->id,
             ]);
 
             Log::info("📝 Solicitud generada para {$empleado->nombre_completo} - Alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");

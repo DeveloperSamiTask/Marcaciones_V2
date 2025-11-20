@@ -23,7 +23,7 @@ class SolicitudHorasExtrasPT extends Model
         'estado',                    // pendiente | aprobado | rechazado
         'aprobado_por',              // user_id que aprobó/rechazó
         'fecha_aprobacion',          // Cuándo se aprobó/rechazó
-        'observaciones'              // Notas de RRHH
+        'observaciones',              // Notas de RRHH
     ];
 
     protected $casts = [
@@ -33,7 +33,7 @@ class SolicitudHorasExtrasPT extends Model
         'fecha_fin_extras' => 'date',
         'fecha_limite_aprobacion' => 'datetime',
         'fecha_aprobacion' => 'datetime',
-        'horas_acumuladas' => 'decimal:2'
+        'horas_acumuladas' => 'decimal:2',
     ];
 
     // 🎯 RELACIÓN CON EMPLEADO
@@ -41,4 +41,6 @@ class SolicitudHorasExtrasPT extends Model
     {
         return $this->belongsTo(Empleado::class);
     }
+
+
 }
