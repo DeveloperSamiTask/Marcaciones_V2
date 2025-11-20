@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Permiso;
 use App\Models\SolicitudHorasExtrasPT;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -9,7 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use App\Models\Permiso;
+
 class VerificarHorasExtrasPartTime implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -216,39 +217,58 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             ->where('estado', '1')
             ->first();
 
+        Log::info("🔍 Verificando solicitud existente para empleado: {$empleado->id} - Existe: ".($solicitudExistente ? 'SÍ' : 'NO'));
+
         if (! $solicitudExistente) {
+            // CREAR SOLICITUD
             $solicitud = SolicitudHorasExtrasPT::create([
                 'empleado_id' => $empleado->id,
                 'empleado_area' => $empleado->area->nombre,
-                'fecha_deteccion' => now(),
-                'fecha_cumplimiento_93h' => $fechaCumplimiento, // 🆕 FECHA EXACTA
+                'fecha_deteccion' => $fechaCumplimiento,
+                'fecha_cumplimiento_93h' => $fechaCumplimiento,
                 'horas_acumuladas' => $horasAcumuladas,
                 'fecha_limite_aprobacion' => $fechaCumplimiento->copy()->addHours(48),
                 'fecha_inicio_extras' => $fechaInicioConteo,
-                // agregar fecha fin de extras
                 'fecha_fin_extras' => null,
                 'estado' => 0,
                 'aprobado_por' => null,
                 'fecha_aprobacion' => null,
             ]);
 
-            Permiso::create([
-                'empleado_id' => $empleado->id,
-                'tipo_id' => 2,
-                'motivo' => 'HORARIO PROGRAMADO EXTRA',
-                'fecha' => now(), // Usa la misma fecha que fecha_deteccion
-                'estado' => 0, // pendiente
-                'motivo_rechazo' => null,
-                'comprobante' => null,
-                'estado_print' => 0,
-                'created_at' => now(), // Asegurar mismo timestamp
-                'updated_at' => now(),
-                'permiso_HE_PT' => $solicitud->id,
-            ]);
+            Log::info("✅ Solicitud creada - ID: {$solicitud->id}");
+
+            // CREAR PERMISO
+            try {
+                $permiso = Permiso::create([
+                    'empleado_id' => $empleado->id,
+                    'tipo_id' => 2,
+                    'motivo' => 'HORARIO PROGRAMADO EXTRA',
+                    'fecha' => $fechaCumplimiento,
+                    'estado' => 0,
+                    'motivo_rechazo' => null,
+                    'comprobante' => null,
+                    'estado_print' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                    'permiso_HE_PT' => $solicitud->id,
+                ]);
+
+                Log::info("✅ Permiso creado - ID: {$permiso->id} - Vinculado a solicitud: {$solicitud->id}");
+
+            } catch (\Exception $e) {
+                Log::error('❌ Error creando permiso: '.$e->getMessage());
+                Log::error('📋 Datos del permiso: '.json_encode([
+                    'empleado_id' => $empleado->id,
+                    'tipo_id' => 2,
+                    'permiso_HE_PT' => $solicitud->id,
+                ]));
+            }
 
             Log::info("📝 Solicitud generada para {$empleado->nombre_completo} - Alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
 
             return $solicitud;
+        } else {
+            Log::info("⏸️  No se creó solicitud - Ya existe una activa para empleado: {$empleado->id}");
         }
     }
 }
