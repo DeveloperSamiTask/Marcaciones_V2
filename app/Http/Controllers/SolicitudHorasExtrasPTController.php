@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Empresa;
 use App\Models\Horario;
 use App\Models\Permiso;
 use App\Models\SolicitudHorasExtrasPT;
+use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use Inertia\Inertia;
 
 class SolicitudHorasExtrasPTController extends Controller
 {
@@ -153,5 +155,63 @@ class SolicitudHorasExtrasPTController extends Controller
         } catch (Exception $e) {
             return response()->json(['error' => 'No se pudo obtener el detalle: '.$e->getMessage()], 500);
         }
+    }
+
+    public function indexRRHH(Request $request)
+    {
+        $filters = $request->validate([
+            'empresa' => 'nullable|integer|exists:empresas,id',
+            'fechaInicio' => 'nullable|date',
+            'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+        ]);
+
+        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
+        // OBTENER SOLICITUDES CON FILTROS (mismo query)
+        $solicitudes = SolicitudHorasExtrasPT::with(['empleado'])
+            ->whereHas('empleado', function ($query) use ($request) {
+                $query->where('empresa_id', $request->empresa)
+                    ->whereNull('fecha_cese');
+            })
+            ->when($request->fechaInicio && $request->fechaFin, function ($query) use ($request) {
+                $query->whereBetween('fecha_deteccion', [$request->fechaInicio, $request->fechaFin]);
+            })
+            ->orderBy('fecha_deteccion', 'desc')
+            ->get()
+            ->groupBy(function ($item) {
+                return match ($item->estado) {
+                    0 => 'pendientes',
+                    1 => 'aprobados',
+                    2 => 'rechazados',
+                    default => 'otros'
+                };
+            });
+
+        session(['solicitudes_he_pt_url' => $request->fullUrl()]);
+
+        // FUNCIÓN ÚNICA para mapear solicitudes
+        $mapearSolicitud = function ($solicitud) {
+            return [
+                'id' => $solicitud->id,
+                'empleado_nombre' => $solicitud->empleado->nombres.' '.$solicitud->empleado->apellidos,
+                'empleado_area' => $solicitud->empleado_area,
+                'fecha_deteccion' => $solicitud->fecha_deteccion->format('d/m/Y'),
+                'fecha_cumplimiento_93h' => $solicitud->fecha_cumplimiento_93h->format('d/m/Y'),
+                'horas_acumuladas' => $solicitud->horas_acumuladas,
+                'horas_excedentes' => $solicitud->horas_acumuladas - 93,
+                'fecha_limite_aprobacion' => $solicitud->fecha_limite_aprobacion->format('d/m/Y H:i'),
+                'estado' => $solicitud->estado,
+                'fecha_aprobacion' => $solicitud->fecha_aprobacion?->format('d/m/Y H:i'),
+                'observaciones' => $solicitud->observaciones,
+            ];
+        };
+
+        return Inertia::render('permisos/index-rrhh', [
+            'pendientes' => $solicitudes->get('pendientes', collect())->map($mapearSolicitud),
+            'aprobados' => $solicitudes->get('aprobados', collect())->map($mapearSolicitud),
+            'rechazados' => $solicitudes->get('rechazados', collect())->map($mapearSolicitud),
+            'empresas' => $empresas,
+            'filters' => $filters,
+        ]);
     }
 }

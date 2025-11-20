@@ -14,7 +14,7 @@ import { parseISO } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DateRange } from 'react-day-picker';
-import { columnsSolicitudesHE  } from './columns-gerencia';
+import { columnsSolicitudesHE } from './columns-gerencia';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -114,66 +114,63 @@ export default function IndexPermisoGerencia({
     return (
 
 
-            <div className="flex flex-1 flex-col p-8">
-                <div className="@container/main flex flex-1 flex-col gap-6">
-                    <div className="sticky top-0 z-10 grid py-2 gap-6 bg-background">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Solicitudes HE - Part Time - Gerencia</h2>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
-                            <SelectFilter
-                                items={empresas}
-                                selected={selectedEmpresa}
-                                onSelect={setSelectedEmpresa}
-                                getValue={(empresa) => empresa.id}
-                                displayValue={(empresa) => empresa.razonsocial}
-                                placeholder="SELECCIONAR EMPRESA"
-                            />
-
-                            <DateRangeFilter dateRange={dateRange} setDateRange={setDateRange} placeholder="SELECCIONAR RANGO DE FECHAS" />
-                        </div>
+        <div className="flex flex-1 flex-col p-8">
+            <div className="@container/main flex flex-1 flex-col gap-6">
+                <div className="sticky top-0 z-10 grid py-2 gap-6 bg-background">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Solicitudes HE - Part Time - Gerencia</h2>
                     </div>
-                    <Tabs defaultValue="pendientes">
-                        <TabsList className="w-full">
-                            <TabsTrigger
-                                className="data-[state=active]:bg-warning data-[state=active]:text-warning-foreground dark:data-[state=active]:bg-warning dark:data-[state=active]:text-warning-foreground"
-                                value="pendientes"
-                            >
-                                PENDIENTES
-                            </TabsTrigger>
-                            <TabsTrigger
-                                className="data-[state=active]:bg-success dark:data-[state=active]:bg-success data-[state=active]:text-success-foreground dark:data-[state=active]:text-success-foreground"
-                                value="aprobados"
-                            >
-                                APROBADOS
-                            </TabsTrigger>
-                            {/*
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
+                        <SelectFilter
+                            items={empresas}
+                            selected={selectedEmpresa}
+                            onSelect={setSelectedEmpresa}
+                            getValue={(empresa) => empresa.id}
+                            displayValue={(empresa) => empresa.razonsocial}
+                            placeholder="SELECCIONAR EMPRESA"
+                        />
+                        {/*<DateRangeFilter dateRange={dateRange} setDateRange={setDateRange} placeholder="SELECCIONAR RANGO DE FECHAS" />*/}
+                    </div>
+                </div>
+                <Tabs defaultValue="pendientes">
+                    {/*
+                                                   <TabsList className="w-full"
+                                <TabsTrigger
+                            className="data-[state=active]:bg-warning data-[state=active]:text-warning-foreground dark:data-[state=active]:bg-warning dark:data-[state=active]:text-warning-foreground"
+                            value="pendientes"
+                        >
+                            PENDIENTES
+                        </TabsTrigger>
+                                 <TabsTrigger
+                            className="data-[state=active]:bg-success dark:data-[state=active]:bg-success data-[state=active]:text-success-foreground dark:data-[state=active]:text-success-foreground"
+                            value="aprobados"
+                        >
+                            APROBADOS
+                        </TabsTrigger>
                                  <TabsTrigger
                                 className="data-[state=active]:bg-destructive dark:data-[state=active]:bg-destructive data-[state=active]:text-white dark:data-[state=active]:text-foreground"
                                 value="rechazados"
                             >
                                 RECHAZADOS
                             </TabsTrigger>
-
+                    </TabsList>
                              */}
 
-                        </TabsList>
+                    <Card>
+                        <CardContent>
+                            <TabsContent value="pendientes">
+                                {isFiltering ? (
+                                    <LoadingSkeleton />
+                                ) : (
+                                    <DataTable key="datatable-permisos-pendientes" columns={columnsSolicitudesHE} data={solicitudes} />
+                                )}
+                            </TabsContent>
 
-                        <Card>
-                            <CardContent>
-                                <TabsContent value="pendientes">
-                                    {isFiltering ? (
-                                        <LoadingSkeleton />
-                                    ) : (
-                                        <DataTable key="datatable-permisos-pendientes" columns={columnsSolicitudesHE } data={solicitudes} />
-                                    )}
-                                </TabsContent>
-
-                            </CardContent>
-                        </Card>
-                    </Tabs>
-                </div>
+                        </CardContent>
+                    </Card>
+                </Tabs>
             </div>
-     );
+        </div>
+    );
 }

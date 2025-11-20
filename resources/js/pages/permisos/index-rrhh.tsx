@@ -14,12 +14,12 @@ import { parseISO } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DateRange } from 'react-day-picker';
-import { columns } from './columns';
 
+import { columnsSolicitudesHERRHH } from './columns-rrhh.tsx';
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Permisos',
-        href: '/permisos',
+        title: 'Solicitudes HE PT',
+        href: '/solicitudes-he-pt/rrhh',
     },
 ];
 
@@ -29,31 +29,31 @@ type Filters = {
     fechaFin?: string;
 };
 
-export default function IndexPermisoRRHH({
+export default function IndexSolicitudesHERRHH({
     pendientes,
     aprobados,
     rechazados,
     empresas,
     filters,
 }: {
-    pendientes: Permiso[];
-    aprobados: Permiso[];
-    rechazados: Permiso[];
+    pendientes: any[]; // Cambiar por tu tipo de Solicitud
+    aprobados: any[];
+    rechazados: any[];
     empresas: Empresa[];
     filters: Filters;
 }) {
 
     const { auth } = usePage<SharedData>().props;
 
-    // valores iniciales
+    // valores iniciales - ESTRUCTURA IDÉNTICA
     const initialState = {
         empresa: auth.user.rol_id !== 4 ? filters.empresa || null : auth.user.empleado.empresa_id,
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -63,7 +63,7 @@ export default function IndexPermisoRRHH({
 
     const applyFilters = useCallback(() => {
         router.get(
-            route('permisos.index'),
+            route('solicitudes-he-pt.rrhh'), // 🚨 RUTA NUEVA
             {
                 empresa: selectedEmpresa,
                 fechaInicio: dateRange?.from?.toISOString().split('T')[0],
@@ -85,13 +85,13 @@ export default function IndexPermisoRRHH({
         }
     }, [selectedEmpresa, dateRange, applyFilters]);
 
-    // Componente para mostrar cuando no hay filtros
+    // Componente para mostrar cuando no hay filtros - ESTRUCTURA IDÉNTICA
     const NoFiltersMessage = () => (
         <div className="flex flex-col items-center justify-center p-8">
             <div className="max-w-md space-y-4 text-center">
                 <CalendarIcon className="text-muted-foreground mx-auto h-12 w-12" />
                 <h3 className="text-lg font-medium">No hay filtros aplicados</h3>
-                <p className="text-muted-foreground text-sm">Selecciona una empresa, tipo y/o rango de fechas para ver los permisos</p>
+                <p className="text-muted-foreground text-sm">Selecciona una empresa y rango de fechas para ver las solicitudes</p>
                 <Button
                     variant="outline"
                     className="mt-4"
@@ -103,23 +103,23 @@ export default function IndexPermisoRRHH({
                         });
                     }}
                 >
-                    Mostrar registros de hoy
+                    Mostrar solicitudes de hoy
                 </Button>
             </div>
         </div>
     );
 
-    // Determinar si se deben mostrar los datos
+    // Determinar si se deben mostrar los datos - ESTRUCTURA IDÉNTICA
     const showData = selectedEmpresa && dateRange?.from && dateRange?.to;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Permisos" />
+            <Head title="Solicitudes HE PT - RRHH" />
             <div className="flex flex-1 flex-col p-8">
                 <div className="@container/main flex flex-1 flex-col gap-6">
                     <div className="sticky top-0 z-10 grid py-2 gap-6 bg-background">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Lista de permisos RRHH</h2>
+                            <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Solicitudes Horas Extras PT</h2>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
@@ -165,7 +165,7 @@ export default function IndexPermisoRRHH({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-permisos-pendientes" columns={columns} data={pendientes} />
+                                        <DataTable key="datatable-solicitudes-pendientes" columns={columnsSolicitudesHERRHH } data={pendientes} />
                                     )}
                                 </TabsContent>
 
@@ -175,7 +175,7 @@ export default function IndexPermisoRRHH({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-permisos-aprobados" columns={columns} data={aprobados} />
+                                        <DataTable key="datatable-solicitudes-aprobados" columns={columnsSolicitudesHERRHH } data={aprobados} />
                                     )}
                                 </TabsContent>
 
@@ -185,7 +185,7 @@ export default function IndexPermisoRRHH({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-permisos-rechazados" columns={columns} data={rechazados} />
+                                        <DataTable key="datatable-solicitudes-rechazados" columns={columnsSolicitudesHERRHH } data={rechazados} />
                                     )}
                                 </TabsContent>
                             </CardContent>
