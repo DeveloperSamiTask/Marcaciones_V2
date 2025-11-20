@@ -8,6 +8,7 @@ use App\Models\SolicitudHorasExtrasPT;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class SolicitudHorasExtrasPTController extends Controller
 {
@@ -97,17 +98,60 @@ class SolicitudHorasExtrasPTController extends Controller
         }
     }
 
-    /**
-     * 👁️ Ver detalle de una solicitud
-     */
-    public function show($id)
+    public function showDetalleSolicitud($solicitudId)
     {
-        $solicitud = SolicitudHorasExtrasPT::with('empleado')->findOrFail($id);
+        try {
+            // PASO 1: SOLICITUD → PERMISO
+            $permiso = Permiso::where('permiso_HE_PT', $solicitudId)->firstOrFail();
 
-        return view('horas-extras-pt.show', compact('solicitud'));
+            // PASO 2: PERMISO → EMPLEADO Y JORNADA
+            $jornada = $permiso->empleado->jornada_id; // 1: completa, 2: part time
+
+            // PASO 3: CALCULAR SEMANA DEL PERMISO
+            $inicioSemana = $permiso->fecha->copy()->startOfWeek(Carbon::MONDAY);
+            $finSemana = $permiso->fecha->copy()->endOfWeek(Carbon::SUNDAY);
+            $totalHorasTrabajadas = 0;
+
+            // PASO 4: HORARIOS DE LA SEMANA
+            $horarios = Horario::where('empleado_id', $permiso->empleado_id)
+                ->whereBetween('fecha', [$inicioSemana, $finSemana])
+                ->where('estado', '!=', 'PE')
+                ->orderBy('fecha')
+                ->get();
+
+            // PASO 5: HORARIO ESPECÍFICO DEL DÍA DEL PERMISO
+            $permisoLaboral = Horario::where('empleado_id', $permiso->empleado_id)
+                ->whereDate('fecha', $permiso->fecha)
+                ->first();
+
+            // PASO 6: CÁLCULO DE HORAS (TU LÓGICA EXISTENTE)
+            foreach ($horarios as $horario) {
+                if ($horario->estado == 'L') {
+                    $totalHorasTrabajadas += $horario->ingreso->diffInMinutes($horario->salida);
+                    if ($totalHorasTrabajadas >= 360) {
+                        $totalHorasTrabajadas -= 60;
+                    }
+                }
+            }
+
+            $tiempoLaboral = $permisoLaboral ? $permisoLaboral->ingreso->diffInMinutes($permisoLaboral->salida) : 0;
+            if ($tiempoLaboral >= 360) {
+                $tiempoLaboral -= 60;
+            }
+
+            $tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
+
+            return response()->json([
+                'horarios' => $horarios,
+                'extra' => $tiempoExtra,
+                'laboral' => $totalHorasTrabajadas,
+                'horarioExtra' => $permisoLaboral,
+                'jornada' => $jornada,
+                'empleado' => $permiso->empleado,
+            ]);
+
+        } catch (Exception $e) {
+            return response()->json(['error' => 'No se pudo obtener el detalle: '.$e->getMessage()], 500);
+        }
     }
-
-    /**
-     * ❌ RECHAZAR SOLICITUD
-     */
 }

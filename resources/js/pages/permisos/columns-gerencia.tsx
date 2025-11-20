@@ -10,7 +10,7 @@ import { ArrowUpDown, Download } from 'lucide-react';
 
 import AprobarSolicitudHE  from './edit-gerencia';
 import RechazarSolicitudHE  from './delete-gerencia';
-import DetalleSolicitudHE from './searchHorario';
+import DetalleSolicitudHE from './searchHorarios-gerencia';
 
 
 

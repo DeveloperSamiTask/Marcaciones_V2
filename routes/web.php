@@ -152,11 +152,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::delete('/solicitudes-he-pt/{solicitud}/rechazar', [SolicitudHorasExtrasPTController::class, 'rechazar'])->name('solicitudes-he-pt.rechazar');
 
+    Route::get('/solicitudes-he-pt/{solicitud}/detalle', [SolicitudHorasExtrasPTController::class, 'showDetalleSolicitud'])->name('solicitudes-he-pt.detalle');
 
-
-    // 👁️ Ver detalle
-    Route::get('/horas-extras-pt/solicitudes/{id}', [SolicitudHorasExtrasPTController::class, 'show'])
-        ->name('horas-extras-pt.show');
 
 });
 
