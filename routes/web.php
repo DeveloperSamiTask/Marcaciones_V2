@@ -155,6 +155,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/solicitudes-he-pt/{solicitud}/detalle', [SolicitudHorasExtrasPTController::class, 'showDetalleSolicitud'])->name('solicitudes-he-pt.detalle');
 
     Route::get('/solicitudes-he-pt/rrhh', [SolicitudHorasExtrasPTController::class, 'indexRRHH'])->name('solicitudes-he-pt.rrhh');
+
+    Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes']);
 });
 
 // routes/web.php

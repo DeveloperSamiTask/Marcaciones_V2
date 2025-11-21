@@ -11,12 +11,43 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
+use App\Jobs\VerificarHorasExtrasPartTime;
 
 class SolicitudHorasExtrasPTController extends Controller
 {
     /**
      * 📋 Listar todas las solicitudes
      */
+    public function enviarTodaLasSolicitudes()
+    {
+        // 1. BUSCAR TODAS LAS SOLICITUDES DE
+        $todasLasSolicitudes = SolicitudHorasExtrasPT::all();
+
+        Log::info('📧 ENVIANDO  ACUMULADA - Solicitudes encontradas: '.$todasLasSolicitudes->count());
+
+        // 2. SI HAY , ENVIAR
+        if ($todasLasSolicitudes->count() > 0) {
+            // USAR TU MISMO MÉTODO DE ENVÍO DEL JOB
+            $job = new VerificarHorasExtrasPartTime(collect(), now(), now());
+            $job->enviarNotificacionAgrupada($todasLasSolicitudes);
+
+            Log::info('✅  ENVIADA - Total: '.$todasLasSolicitudes->count().' solicitudes');
+
+            return response()->json([
+                'success' => true,
+                'message' => "Se enviaron {$todasLasSolicitudes->count()} solicitudes acumuladas",
+            ]);
+        } else {
+            Log::info('📭 NO HAY  PARA ENVIAR');
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No hay solicitudes acumuladas para enviar',
+            ]);
+        }
+    }
+
     public function index()
     {
         $solicitudes = SolicitudHorasExtrasPT::with('empleado')
@@ -60,11 +91,11 @@ class SolicitudHorasExtrasPTController extends Controller
                 }
             });
 
-             return redirect()->back()->with('success', 'Solicitud rechazada exitosamente');
+            return redirect()->back()->with('success', 'Solicitud rechazada exitosamente');
 
-         } catch (Exception $e) {
-        return redirect()->back()->with('error', 'Error al rechazar: ' . $e->getMessage());
-    }
+        } catch (Exception $e) {
+            return redirect()->back()->with('error', 'Error al rechazar: '.$e->getMessage());
+        }
     }
 
     public function rechazar(Request $request, $solicitudId)
@@ -95,9 +126,9 @@ class SolicitudHorasExtrasPTController extends Controller
 
             return redirect()->back()->with('success', 'Solicitud rechazada exitosamente');
 
-         } catch (Exception $e) {
-        return redirect()->back()->with('error', 'Error al rechazar: ' . $e->getMessage());
-    }
+        } catch (Exception $e) {
+            return redirect()->back()->with('error', 'Error al rechazar: '.$e->getMessage());
+        }
     }
 
     public function showDetalleSolicitud($solicitudId)

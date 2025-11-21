@@ -48,13 +48,13 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         // 🟢 ENVIAR 1 SOLO EMAIL AGRUPADO CON TODAS LAS SOLICITUDES
         if (count($solicitudesGeneradas) > 0) {
             Log::info("📧 Enviando email agrupado con {$solicitudesGeneradas->count()} solicitudes");
-            $this->enviarNotificacionAgrupada($solicitudesGeneradas);
+           // $this->enviarNotificacionAgrupada($solicitudesGeneradas);
         } else {
             Log::info('📭 No hay solicitudes para notificar');
         }
     }
 
-    private function enviarNotificacionAgrupada($solicitudes)
+    public  function enviarNotificacionAgrupada($solicitudes)
     {
         try {
             $emailsGerencia = [
