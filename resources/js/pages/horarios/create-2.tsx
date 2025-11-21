@@ -136,7 +136,7 @@ export default function App({ empleados, empresas, url }) {
     };
 
 
-    /*Despliegue de informacion al seleccionar el boton asignar horario*/
+    /* ----------------------- Despliegue de informacion al seleccionar el boton asignar horario* ----------------------- */
     const [scheduleData, setScheduleData] = useState<{
         [employeeId: string]: {
             [date: string]: DaySchedule;
@@ -264,7 +264,7 @@ export default function App({ empleados, empresas, url }) {
         toast.success(`Horario Fin de Semana aplicado a ${filteredEmployees.length} empleados`);
     };
 
-    /* */
+    /* ----------------------------------------------------------------------------------------------------*/
 
     const handleToggleEmployee = (employeeId: string) => {
         setExpandedEmployees(prev => {
@@ -394,26 +394,46 @@ export default function App({ empleados, empresas, url }) {
             return;
         }
 
+        /* ------------------- VALIDACION SEGUN TIPO DE JORNADA ------------------- */
         const entries = [];
         let hasValidationErrors = false;
-
-        // ✅ CAMBIAR forEach POR for...of
         for (const employee of filteredEmployees) {
-            if (employee.jornada_id === 1) {
-                const employeeSchedule = scheduleData[employee.id] || {};
-                const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
+            const employeeSchedule = scheduleData[employee.id] || {};
+            const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
 
-                if (horasSemanales > 2880) {
+            /*MAXIMO PARA FULL TIME
+             if (employee.jornada_id === 1) {
+                // MÁXIMO (lo que ya tienes)
+                if (horasSemanales > 2880) { // 48 horas en minutos
                     toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas)`);
                     hasValidationErrors = true;
-                    return; // ✅ AHORA SÍ FUNCIONA
+                    return;
+                }
+            }*/
+
+
+            // 🆕 MÍNIMO PARA FULL TIME (47 horas = 2820 minutos)
+            if (horasSemanales < 2820) {
+                toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas para Full Time)`);
+                hasValidationErrors = true;
+                return;
+            }
+
+            // 🆕 VALIDAR PART TIME (jornada_id === 2)
+            if (employee.jornada_id === 2) {
+                // MÍNIMO PARA PART TIME (23.5 horas = 1410 minutos)
+                if (horasSemanales < 1410) {
+                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 23.5 horas mínimas para Part Time)`);
+                    hasValidationErrors = true;
+                    return;
                 }
             }
         }
 
         if (hasValidationErrors) return;
 
-        // 🔥 CARGAR FERIADOS PARA EMPLEADOS CON C O CA
+
+        /* ------------------- 🔥 CARGAR FERIADOS PARA EMPLEADOS CON C O CA ------------------- */
         const empleadosConCompensacion = filteredEmployees.filter(emp => {
             const schedule = scheduleData[emp.id] || {};
             return Object.values(schedule).some(day => day.status === 'C' || day.status === 'CA');
