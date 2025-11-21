@@ -8,8 +8,8 @@ import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { ArrowUpDown, Download } from 'lucide-react';
 
-import AprobarSolicitudHE  from './edit-gerencia';
-import RechazarSolicitudHE  from './delete-gerencia';
+import AprobarSolicitudHE from './edit-gerencia';
+import RechazarSolicitudHE from './delete-gerencia';
 import DetalleSolicitudHE from './searchHorarios-gerencia';
 
 
@@ -70,6 +70,34 @@ export const columnsSolicitudesHERRHH: ColumnDef<any>[] = [
         header: 'LÍMITE APROBACIÓN',
         cell: ({ row }) => {
             return <span>{row.original.fecha_limite_aprobacion}</span>;
+        }
+    },
+        {
+        accessorKey: 'fecha_aprobacion',
+        header: 'F. REVISION',
+        cell: ({ row }) => {
+            const fecha = row.original.fecha_aprobacion;
+            return <span>{fecha || '-'}</span>;
+        }
+    },
+    {
+        accessorKey: 'aprobado_por_nombre',
+        header: 'REVISADO POR',
+        cell: ({ row }) => {
+            const aprobador = row.original.aprobado_por_nombre;
+            return <span>{aprobador || '-'}</span>;
+        }
+    },
+    {
+        accessorKey: 'observaciones',
+        header: 'OBSERVACIONES',
+        cell: ({ row }) => {
+            const observaciones = row.original.observaciones;
+            return (
+                <span title={observaciones} className="max-w-[200px] truncate block">
+                    {observaciones || '-'}
+                </span>
+            );
         }
     },
     {

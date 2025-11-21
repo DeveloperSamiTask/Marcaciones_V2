@@ -60,11 +60,11 @@ class SolicitudHorasExtrasPTController extends Controller
                 }
             });
 
-            return response()->json(['message' => 'Solicitud y permiso aprobados exitosamente']);
+             return redirect()->back()->with('success', 'Solicitud rechazada exitosamente');
 
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+         } catch (Exception $e) {
+        return redirect()->back()->with('error', 'Error al rechazar: ' . $e->getMessage());
+    }
     }
 
     public function rechazar(Request $request, $solicitudId)
@@ -93,11 +93,11 @@ class SolicitudHorasExtrasPTController extends Controller
                 }
             });
 
-            return response()->json(['message' => 'Solicitud rechazada exitosamente']);
+            return redirect()->back()->with('success', 'Solicitud rechazada exitosamente');
 
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+         } catch (Exception $e) {
+        return redirect()->back()->with('error', 'Error al rechazar: ' . $e->getMessage());
+    }
     }
 
     public function showDetalleSolicitud($solicitudId)
@@ -199,10 +199,13 @@ class SolicitudHorasExtrasPTController extends Controller
                 'fecha_cumplimiento_93h' => $solicitud->fecha_cumplimiento_93h->format('d/m/Y'),
                 'horas_acumuladas' => $solicitud->horas_acumuladas,
                 'horas_excedentes' => $solicitud->horas_acumuladas - 93,
-                'fecha_limite_aprobacion' => $solicitud->fecha_limite_aprobacion->format('d/m/Y H:i'),
+                'fecha_limite_aprobacion' => $solicitud->fecha_limite_aprobacion->format('d/m/Y'),
                 'estado' => $solicitud->estado,
-                'fecha_aprobacion' => $solicitud->fecha_aprobacion?->format('d/m/Y H:i'),
+
+                'fecha_aprobacion' => $solicitud->fecha_aprobacion?->format('d/m/Y'),
+                'aprobado_por_nombre' => $solicitud->aprobado_por ? \App\Models\User::find($solicitud->aprobado_por)->name : null,
                 'observaciones' => $solicitud->observaciones,
+
             ];
         };
 

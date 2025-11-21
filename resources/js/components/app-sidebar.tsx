@@ -53,6 +53,11 @@ const mainNavItems: NavItem[] = [
                 href: route('permisos.extras'),
                 permissions: [1, 2]
             },
+             {
+                title: 'Solicitudes HS PT',
+                href: route('solicitudes-he-pt.rrhh'),
+                permissions: [1, 2]
+            },
         ],
 
     },
@@ -143,7 +148,7 @@ const mainNavItems: NavItem[] = [
             },
         ],
     },
-        {
+    {
         title: 'Logs',
         href: route('movimientos.index'),
         icon: FileText,

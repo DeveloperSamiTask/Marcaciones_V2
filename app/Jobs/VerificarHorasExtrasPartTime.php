@@ -242,10 +242,10 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 $permiso = Permiso::create([
                     'empleado_id' => $empleado->id,
                     'tipo_id' => 2,
-                    'motivo' => 'HORARIO PROGRAMADO EXTRA',
+                    'motivo' => ' ',
                     'fecha' => $fechaCumplimiento,
                     'estado' => 0,
-                    'motivo_rechazo' => null,
+                    'motivo_rechazo' => ' ',
                     'comprobante' => null,
                     'estado_print' => 0,
                     'created_at' => now(),
