@@ -161,7 +161,7 @@ export function WeekScheduleTable({
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        value={isHorarioBloqueado ? '00:00' : (dayData?.entryTime || '00:00')}
+                                        value={(dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"
@@ -172,7 +172,7 @@ export function WeekScheduleTable({
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        value={isHorarioBloqueado ? '00:00' : (dayData?.exitTime || '00:00')}
+                                        value={(dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"

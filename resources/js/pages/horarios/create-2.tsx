@@ -388,13 +388,13 @@ export default function App({ empleados, empresas, url }) {
         }
     };
 
-    //Evitar que cree horarios de semanas anteriores
+
     const handleSaveSchedules = async () => {
         console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
 
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
-
+         //Evitar que cree horarios de semanas anteriores
         const inicioSemanaActual = new Date(hoy);
         const dayOfWeek = hoy.getDay();
         const diffToMonday = (dayOfWeek + 6) % 7;
@@ -421,7 +421,8 @@ export default function App({ empleados, empresas, url }) {
                     return;
                 }
             }
-            // 🆕 VALIDAR PART TIME (jornada_id === 2)
+            /*
+              // 🆕 VALIDAR PART TIME (jornada_id === 2)
             if (employee.jornada_id === 2) {
                 // MÍNIMO PARA PART TIME (23.5 horas = 1410 minutos)
                 if (horasSemanales < 1410) {
@@ -430,6 +431,8 @@ export default function App({ empleados, empresas, url }) {
                     return;
                 }
             }
+            */
+
         }
         if (hasValidationErrors) return;
         /* ------------------- 🔥 CARGAR FERIADOS PARA EMPLEADOS CON C O CA ------------------- */
@@ -538,6 +541,9 @@ export default function App({ empleados, empresas, url }) {
                         tieneHorariosInvalidos = true;
                     }
                 }
+
+
+                
 
                 if (!tieneHorariosInvalidos) {
                     entries.push({

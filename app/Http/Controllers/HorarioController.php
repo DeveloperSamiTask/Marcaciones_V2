@@ -548,7 +548,7 @@ class HorarioController extends Controller
         // Esto asegura que siempre partas desde cero al editar
         $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
             ->whereDate('fecha', $fechaCarbon)
-            ->where('estado', '!=', 2) // No eliminar rechazados
+            ->where('estado', '!=', 2 , 1) // No eliminar rechazados
             ->delete();
 
         if ($permisosEliminados > 0) {
