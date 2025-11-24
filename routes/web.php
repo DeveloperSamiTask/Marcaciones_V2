@@ -71,6 +71,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/horarios/getFeriadosEmpleado', [HorarioController::class, 'getFeriadosEmpleado'])->name('horarios.getFeriadosEmpleado');
 
+    Route::get('/horarios/getTDDisponibles', [HorarioController::class, 'getTDDisponibles'])
+        ->name('horarios.getTDDisponibles');
+
+    // feriados
     // Route::get('/horarios/nuevo', HorarioController::class ()
 
     // Permisos
@@ -157,6 +161,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/solicitudes-he-pt/rrhh', [SolicitudHorasExtrasPTController::class, 'indexRRHH'])->name('solicitudes-he-pt.rrhh');
 
     Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes']);
+
 });
 
 // routes/web.php

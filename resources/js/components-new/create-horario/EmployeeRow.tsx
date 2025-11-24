@@ -17,6 +17,8 @@ interface EmployeeRowProps {
         feriadoDisponible: any[];
         feriadoFuturo: any[];
     } | null;
+     permisosTDData?: any[] | null;
+     isLoadingData?: boolean;
 }
 
 export function EmployeeRow({
@@ -30,6 +32,8 @@ export function EmployeeRow({
     defaultExitTime,
     hasRestDayValidationError,
     feriadosData,
+    permisosTDData,
+    isLoadingData,
 }: EmployeeRowProps) {
     const fullName = `${employee.nombres ?? ''} ${employee.apellidos ?? ''}`.trim();
 
@@ -90,6 +94,7 @@ export function EmployeeRow({
                             defaultEntryTime={defaultEntryTime}
                             defaultExitTime={defaultExitTime}
                             feriadosData={feriadosData}
+                            permisosTDData={permisosTDData}
                         />
                     </div>
                 </div>

@@ -15,6 +15,7 @@ interface WeekScheduleTableProps {
         feriadoDisponible: any[];
         feriadoFuturo: any[];
     } | null;
+    permisosTDData?: any[] | null; // 🔥 NUEVA PROP
 }
 
 const estadoOptions = [
@@ -76,7 +77,8 @@ export function WeekScheduleTable({
     onFieldChange,
     defaultEntryTime,
     defaultExitTime,
-    feriadosData
+    feriadosData,
+    permisosTDData // 🔥 RECIBIR NUEVA PROP
 }: WeekScheduleTableProps) {
 
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -143,10 +145,6 @@ export function WeekScheduleTable({
                         const tipoFeriado = dayData?.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
                         const feriadosList = feriadosActuales?.[tipoFeriado] || [];
 
-                        const esDescanso = dayData?.status === 'D';
-                        const entradaValue = esDescanso ? '00:00' : (dayData?.entryTime || '00:00');
-                        const salidaValue = esDescanso ? '00:00' : (dayData?.exitTime || '00:00');
-
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">
                                 {/* Día */}
@@ -163,7 +161,7 @@ export function WeekScheduleTable({
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        value={entradaValue}
+                                        value={isHorarioBloqueado ? '00:00' : (dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"
@@ -174,7 +172,7 @@ export function WeekScheduleTable({
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        value={salidaValue}
+                                        value={isHorarioBloqueado ? '00:00' : (dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"
@@ -201,7 +199,7 @@ export function WeekScheduleTable({
                                         </SelectContent>
                                     </Select>
 
-                                    {/* 🔥 TU CÓDIGO QUE SÍ FUNCIONA */}
+                                    {/* Mostrar feriados para C/CA */}
                                     {esTipoCompensacion && (
                                         <div className="mt-1 text-xs">
                                             {loading ? (
@@ -220,6 +218,31 @@ export function WeekScheduleTable({
                                                         ))
                                                     ) : (
                                                         <div>⚠️ No hay feriados {dayData.status === 'C' ? 'disponibles' : 'futuros'}</div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* 🔥 Mostrar permisos TD */}
+                                    {dayData?.status === 'TD' && (
+                                        <div className="mt-1 text-xs">
+                                            {loading ? (
+                                                <div>⏳ Cargando permisos TD...</div>
+                                            ) : (
+                                                <div>
+                                                    <strong>
+                                                        🟡 Trabajo en Días de Descanso Disponibles ({permisosTDData?.length || 0})
+                                                    </strong>
+
+                                                    {permisosTDData && permisosTDData.length > 0 ? (
+                                                        permisosTDData.map((permiso: any) => (
+                                                            <div key={permiso.id}>
+                                                                • {new Date(permiso.fecha).toLocaleDateString('es-PE')} - {permiso.motivo || 'Descanso trabajado'}
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div>⚠️ No hay días de descanso trabajados pendientes de aprobar</div>
                                                     )}
                                                 </div>
                                             )}

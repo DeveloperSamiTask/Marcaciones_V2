@@ -281,6 +281,12 @@ class PermisoController extends Controller
 
                 $horario->update(['estado' => $permiso->tipo->codigo]);
 
+                if ($permiso->tipo_id == 24){
+                    $horario->update([
+                        'estado' => 'TD'
+                    ]);
+                }
+
                 if ($horario->estado == 'FI') { // se crea una suspension cuando es falta injustificada y cae un fin de semana
                     $finde = $horario->fecha->isWeekend();
                     $esFeriado = Feriado::whereDate('fecha', $horario->fecha)->exists();

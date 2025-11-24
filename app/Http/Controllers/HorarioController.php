@@ -693,6 +693,35 @@ class HorarioController extends Controller
         return response()->json($empleados);
     }
 
+    public function getTDDisponibles(Request $request)
+    {
+        try {
+            $empleadoId = $request->query('empleado_id');
+
+            if (! $empleadoId) {
+                return response()->json([]);
+            }
+
+            // 🎯 Buscar permisos TD (tipo_id = 24) pendientes (estado = 0)
+            $permisosTD = Permiso::where('empleado_id', $empleadoId)
+                ->where('tipo_id', 24)  // TD = Trabajo Día Descanso
+                ->where('estado', 0)     // Pendientes de aprobar
+                ->orderBy('fecha', 'asc') // Más antiguos primero
+                ->get(['id', 'fecha', 'motivo', 'estado', 'tipo_id']);
+
+            return response()->json($permisosTD);
+
+        } catch (\Exception $e) {
+            Log::error('Error al obtener TD disponibles:', [
+                'empleado_id' => $empleadoId ?? 'null',
+                'error' => $e->getMessage(),
+            ]);
+
+            // Si algo sale mal, devolver array vacío
+            return response()->json([]);
+        }
+    }
+
     public function getFeriadosEmpleado(Request $request)
     {
         try {

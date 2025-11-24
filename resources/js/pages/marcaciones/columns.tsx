@@ -146,9 +146,46 @@ export const columns: ColumnDef<Marcacion>[] = [
         },
         cell: ({ row }) => {
             const estado = row.original.horario?.estado as keyof typeof estadoBadgeVariants;
-            const badgeConfig = estadoBadgeVariants[estado] || { variant: 'destructive', label: 'NO REGISTRADO' };
-            return <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>;
-        }
+            const marcacion = row.original.marcacion;
+
+            // Estados que NO deberían tener marcaciones
+            const estadosSinMarcacion = ['D']; //<-- Se puede agregar mas estados
+
+            // Validar si tiene marcaciones cuando no debería
+            const tieneMarcacionIndebida = estadosSinMarcacion.includes(estado) && marcacion && (marcacion.ingreso || marcacion.salida);
+
+            // Configurar el badge según el caso
+            let badgeConfig;
+
+            if (tieneMarcacionIndebida) {
+                const estadoOriginal = estadoBadgeVariants[estado];
+                badgeConfig = {
+                    variant: 'warning' as const,
+                    label: `${estadoOriginal.label} (CM)`,
+                };
+            } else {
+                badgeConfig = estadoBadgeVariants[estado] || {
+                    variant: 'destructive' as const,
+                    label: 'NO REGISTRADO',
+                };
+            }
+
+            return (
+                <div className="flex items-center gap-2">
+                    <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+                    {tieneMarcacionIndebida && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <CircleAlert className="w-4 text-yellow-600" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Empleado tiene marcación en día no laboral</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+            );
+        },
     },
     /*
 import { sendSomething } from "./send";
@@ -171,17 +208,17 @@ import { sendSomething } from "./send";
 
             let disabled;
 
-            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            // Estados 0 (pendiente/rechazado) ? EDICIÓN TOTAL
             if (horariosValidado === 0 && estadoMarcacion === 0) {
                 disabled = false;
             }
 
-            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) ? BLOQUEADO
             else if (horariosValidado === 1 || horariosValidado === 2 ||
                 estadoMarcacion === 1 || estadoMarcacion === 2) {
                 disabled = true;
             }
-            // Cualquier otro caso → BLOQUEADO por defecto
+            // Cualquier otro caso ? BLOQUEADO por defecto
             else {
                 disabled = true;
             }
@@ -220,17 +257,17 @@ import { sendSomething } from "./send";
 
             let disabled;
 
-            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            // Estados 0 (pendiente/rechazado) ? EDICIÓN TOTAL
             if (horariosValidado === 0 && estadoMarcacion === 0) {
                 disabled = false;
             }
 
-            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) ? BLOQUEADO
             else if (horariosValidado === 1 || horariosValidado === 2 ||
                 estadoMarcacion === 1 || estadoMarcacion === 2) {
                 disabled = true;
             }
-            // Cualquier otro caso → BLOQUEADO por defecto
+            // Cualquier otro caso ? BLOQUEADO por defecto
             else {
                 disabled = true;
             }
@@ -270,17 +307,17 @@ import { sendSomething } from "./send";
 
             let disabled;
 
-            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            // Estados 0 (pendiente/rechazado) ? EDICIÓN TOTAL
             if (horariosValidado === 0 && estadoMarcacion === 0) {
                 disabled = false;
             }
 
-            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) ? BLOQUEADO
             else if (horariosValidado === 1 || horariosValidado === 2 ||
                 estadoMarcacion === 1 || estadoMarcacion === 2) {
                 disabled = true;
             }
-            // Cualquier otro caso → BLOQUEADO por defecto
+            // Cualquier otro caso ? BLOQUEADO por defecto
             else {
                 disabled = true;
             }
@@ -313,17 +350,17 @@ import { sendSomething } from "./send";
 
             let disabled;
 
-            // Estados 0 (pendiente/rechazado) → EDICIÓN TOTAL
+            // Estados 0 (pendiente/rechazado) ? EDICIÓN TOTAL
             if (horariosValidado === 0 && estadoMarcacion === 0) {
                 disabled = false;
             }
 
-            // Estados 1 (aprobado) o 2 (generado/bloqueado) → BLOQUEADO
+            // Estados 1 (aprobado) o 2 (generado/bloqueado) ? BLOQUEADO
             else if (horariosValidado === 1 || horariosValidado === 2 ||
                 estadoMarcacion === 1 || estadoMarcacion === 2) {
                 disabled = true;
             }
-            // Cualquier otro caso → BLOQUEADO por defecto
+            // Cualquier otro caso ? BLOQUEADO por defecto
             else {
                 disabled = true;
             }
@@ -377,15 +414,14 @@ import { sendSomething } from "./send";
         }
     },
     // ELIMINA completamente la columna horas_log
-    {
+      {
         accessorKey: 'tardanza', // tardanza
         header: 'TARDANZA',
         cell: ({ row }) => {
             const tardanza = row.original.tardanza;
             return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
         }
-    },
-    {
+    },{
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
         cell: ({ row }) => {

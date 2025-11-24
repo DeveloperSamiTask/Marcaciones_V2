@@ -2,17 +2,7 @@ import { Users } from 'lucide-react';
 import { EmployeeRow } from './EmployeeRow';
 import { Employee, DaySchedule, Modality } from '../../types/schedule';
 import { ScrollArea } from '../ui-new/scroll-area';
-import { useState, useEffect } from 'react';
-
-// ❌ ELIMINAR ESTO de aquí (está FUERA del componente)
-/*
-const [feriadosData, setFeriadosData] = useState<{
-    [employeeId: string]: {
-        feriadoDisponible: any[];
-        feriadoFuturo: any[];
-    };
-}>({});
-*/
+import { useState, useEffect, useCallback } from 'react';
 
 interface EmployeeListProps {
     employees: Employee[];
@@ -42,7 +32,7 @@ export function EmployeeList({
     defaultExitTime
 }: EmployeeListProps) {
 
-    // ✅ MOVER el useState AQUÍ DENTRO del componente
+    // ✅ Estado para feriados
     const [feriadosData, setFeriadosData] = useState<{
         [employeeId: string]: {
             feriadoDisponible: any[];
@@ -50,37 +40,110 @@ export function EmployeeList({
         };
     }>({});
 
-    // Validar que cada empleado tenga al menos 1 día de descanso
-    const getRestDayCount = (employeeId: string) => {
-        const empSchedule = scheduleData[employeeId];
-        if (!empSchedule) return 0;
+    // 🔥 NUEVO: Estado para permisos TD
+    const [permisosTDData, setPermisosTDData] = useState<{
+        [employeeId: string]: any[];
+    }>({});
 
-        return Object.values(empSchedule).filter(day => day.status === 'Descanso').length;
-    };
+    // ✅ Cache de requests en progreso
+    const [loadingData, setLoadingData] = useState<Set<string>>(new Set());
 
-    const handleToggleWithFeriados = async (employeeId: string) => {
-        // 1. Lógica actual de toggle
+    // 🔥 FUNCIÓN PARA CARGAR FERIADOS + TD
+    const fetchDatosEmpleado = useCallback(async (employeeId: string) => {
+        if (loadingData.has(employeeId) || (feriadosData[employeeId] && permisosTDData[employeeId])) {
+            return; // Ya está cargando o ya tiene datos
+        }
+
+        console.log('🚀 Cargando datos para empleado:', employeeId);
+
+        setLoadingData(prev => new Set(prev).add(employeeId));
+
+        try {
+            // ✅ Cargar feriados
+            const resFeriados = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
+            if (!resFeriados.ok) throw new Error('Error al cargar feriados');
+            const dataFeriados = await resFeriados.json();
+
+            // 🔥 Cargar permisos TD
+            const resTD = await fetch(`/horarios/getTDDisponibles?empleado_id=${employeeId}`);
+            if (!resTD.ok) throw new Error('Error al cargar TD');
+            const dataTD = await resTD.json();
+
+            console.log('✅ Datos cargados para empleado:', employeeId, {
+                feriados_disponibles: dataFeriados.feriadoDisponible?.length || 0,
+                feriados_futuros: dataFeriados.feriadoFuturo?.length || 0,
+                permisos_td: dataTD.length || 0
+            });
+
+            // Guardar ambos en estado
+            setFeriadosData(prev => ({
+                ...prev,
+                [employeeId]: {
+                    feriadoDisponible: dataFeriados.feriadoDisponible || [],
+                    feriadoFuturo: dataFeriados.feriadoFuturo || []
+                }
+            }));
+
+            setPermisosTDData(prev => ({
+                ...prev,
+                [employeeId]: dataTD || []
+            }));
+
+        } catch (error) {
+            console.error('❌ Error cargando datos:', employeeId, error);
+
+            // Guardar estructuras vacías
+            setFeriadosData(prev => ({
+                ...prev,
+                [employeeId]: {
+                    feriadoDisponible: [],
+                    feriadoFuturo: []
+                }
+            }));
+
+            setPermisosTDData(prev => ({
+                ...prev,
+                [employeeId]: []
+            }));
+
+        } finally {
+            setLoadingData(prev => {
+                const next = new Set(prev);
+                next.delete(employeeId);
+                return next;
+            });
+        }
+    }, [loadingData, feriadosData, permisosTDData]);
+
+    // ✅ Handler de toggle con carga de datos
+    const handleToggleConDatos = async (employeeId: string) => {
+        console.log('💥 Toggle empleado:', employeeId);
+
+        // Toggle UI (inmediato)
         onToggleEmployee(employeeId);
 
-        // 2. 🆕 SOLO si se está EXPANDIENDO y no tenemos datos
-        const isExpanding = !expandedEmployees.has(employeeId);
-        if (isExpanding && !feriadosData[employeeId]) {
-            try {
-                // Llamada SILENCIOSA
-                const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
-                const data = await response.json();
-
-                // Guardar en estado PERO no mostrar nada
-                setFeriadosData(prev => ({
-                    ...prev,
-                    [employeeId]: data
-                }));
-            } catch (error) {
-                // Silencio - si falla, no pasa nada
-                console.log('Error cargando feriados:', error);
-            }
+        // Si se expandió, cargar datos
+        if (!expandedEmployees.has(employeeId)) {
+            await fetchDatosEmpleado(employeeId);
         }
     };
+
+    // ✅ Pre-cargar datos de empleados ya expandidos con C/CA/TD
+    useEffect(() => {
+        expandedEmployees.forEach(employeeId => {
+            const empSchedule = scheduleData[employeeId];
+            if (empSchedule) {
+                const necesitaDatos = Object.values(empSchedule).some(
+                    day => day.status === 'C' || day.status === 'CA' || day.status === 'TD'
+                );
+
+                if (necesitaDatos && !feriadosData[employeeId] && !permisosTDData[employeeId]) {
+                    console.log('🎯 Pre-cargando datos para empleado expandido:', employeeId);
+                    fetchDatosEmpleado(employeeId);
+                }
+            }
+        });
+    }, [expandedEmployees, scheduleData]);
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
@@ -102,11 +165,16 @@ export function EmployeeList({
                     </div>
                     <span className="text-xs text-gray-600">
                         {employees.length} empleados
+                        {loadingData.size > 0 && (
+                            <span className="ml-2 text-blue-600">
+                                (Cargando datos: {loadingData.size})
+                            </span>
+                        )}
                     </span>
                 </div>
             </div>
 
-            {/* Content area: hace crecer el scroll correctamente */}
+            {/* Content */}
             <div className="flex-1 overflow-hidden">
                 <ScrollArea className="h-full">
                     <div className="divide-y">
@@ -116,7 +184,6 @@ export function EmployeeList({
                             </div>
                         ) : (
                             paginatedEmployees.map(employee => {
-                                // 🆕 CALCULAR SI TIENE VACACIONES O DESCANSO
                                 const employeeSchedule = scheduleData[employee.id] || {};
                                 const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
                                 const tieneDescanso = Object.values(employeeSchedule).some(day => day.status === 'D');
@@ -127,15 +194,16 @@ export function EmployeeList({
                                         key={employee.id}
                                         employee={employee}
                                         isExpanded={expandedEmployees.has(employee.id)}
-                                        onToggle={handleToggleWithFeriados} // 🆕 CAMBIAR por el nuevo handle
+                                        onToggle={handleToggleConDatos}
                                         weekDates={weekDates}
                                         scheduleData={employeeSchedule}
                                         onFieldChange={onFieldChange}
                                         defaultEntryTime={defaultEntryTime}
                                         defaultExitTime={defaultExitTime}
-                                        // 🆕 SOLO ERROR si: está expandido + necesita descanso + no tiene descanso
                                         hasRestDayValidationError={expandedEmployees.has(employee.id) && necesitaDescanso}
                                         feriadosData={feriadosData[employee.id] || null}
+                                        permisosTDData={permisosTDData[employee.id] || null} // 🔥 NUEVA PROP
+                                        isLoadingData={loadingData.has(employee.id)}
                                     />
                                 );
                             })
@@ -144,7 +212,7 @@ export function EmployeeList({
                 </ScrollArea>
             </div>
 
-            {/* Paginación FUERA del ScrollArea — siempre visible */}
+            {/* Paginación */}
             {totalPages > 1 && (
                 <div className="flex justify-center items-center gap-2 py-3 border-t bg-gray-50">
                     <button

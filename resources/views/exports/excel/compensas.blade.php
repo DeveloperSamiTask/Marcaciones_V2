@@ -34,6 +34,7 @@
                 <th>JORNADA</th>
                 <th>TOTAL</th>
                 <th>FERIADOS</th>
+                <th>TDS</th>
             </tr>
         @else
             <tr>
@@ -72,6 +73,18 @@
                             -
                         @endif
                     </td>
+                    <!-- change background color td -->
+                    <td style="{{ !empty($item['permisos_td']) ? 'background:#91FF80;' : '' }}">
+                        @if (!empty($item['permisos_td']))
+                            @foreach ($item['permisos_td'] as $td)
+                                ({{ \Carbon\Carbon::parse($td['fecha'])->format('d/m/Y') }})
+                                <br>
+                            @endforeach
+                        @endif
+                    </td>
+
+
+
                 </tr>
             @endforeach
         @else

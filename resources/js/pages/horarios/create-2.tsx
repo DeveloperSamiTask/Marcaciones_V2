@@ -586,7 +586,10 @@ export default function App({ empleados, empresas, url }) {
         let totalMinutos = 0;
 
         Object.values(employeeSchedule).forEach(dia => {
-            if (dia.status === 'L' && dia.entryTime && dia.exitTime && dia.entryTime !== '00:00') {
+            // 🆕 CONTAR MÚLTIPLES ESTADOS, NO SOLO 'L'
+            const estadosQueCuentan = ['L', 'PE', 'V', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'FL', 'SP', 'M', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'TD'];
+
+            if (estadosQueCuentan.includes(dia.status) && dia.entryTime && dia.exitTime && dia.entryTime !== '00:00') {
                 const entradaMin = tiempoAMinutos(dia.entryTime);
                 const salidaMin = tiempoAMinutos(dia.exitTime);
                 let minutosDia = salidaMin - entradaMin;

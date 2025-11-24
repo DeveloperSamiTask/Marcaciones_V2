@@ -5,18 +5,21 @@ import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { ArrowUpDown } from 'lucide-react';
 
-interface Pendiente{
-    id: number
-    empleado: string
-    dni: string
-    fecha_ingreso: string
-    jornada: string
-    area: string
+interface Pendiente {
+    id: number;
+    empleado: string;
+    dni: string;
+    fecha_ingreso: string;
+    jornada: string;
+    area: string;
     feriados: {
         id: number;
         fecha: string;
         nombre: string;
-    }[]
+    }[];
+    permisos_td: {
+        fecha: string;
+    }[];
 }
 
 export const columnsPendientes: ColumnDef<Pendiente>[] = [
@@ -38,7 +41,7 @@ export const columnsPendientes: ColumnDef<Pendiente>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => row.original.empleado
+        cell: ({ row }) => row.original.empleado,
     },
     {
         accessorKey: 'dni',
@@ -69,7 +72,7 @@ export const columnsPendientes: ColumnDef<Pendiente>[] = [
     {
         accessorKey: 'total',
         header: 'TOTAL',
-        cell: ({row}) => <span className='text-red-500 font-semibold'>{row.original.feriados.length}</span>
+        cell: ({ row }) => <span className="font-semibold text-red-500">{row.original.feriados.length}</span>,
     },
     {
         accessorKey: 'feriados',
@@ -77,17 +80,30 @@ export const columnsPendientes: ColumnDef<Pendiente>[] = [
         cell: ({ row }) => {
             const feriados = row.original.feriados;
             return (
-             <div className="flex flex-col gap-1 font-semibold">
-                {feriados.map((feriado, index) => (
-                    <span key={index}>
-                        {feriado.nombre ?? 'Sin nombre'} - ({format(feriado.fecha, 'dd/MM/yyyy') ?? 'Sin fecha'})
-                    </span>
-                ))}
-            </div>
-            )
-        }
+                <div className="flex flex-col gap-1 font-semibold">
+                    {feriados.map((feriado, index) => (
+                        <span key={index}>
+                            {feriado.nombre ?? 'Sin nombre'} - ({format(feriado.fecha, 'dd/MM/yyyy') ?? 'Sin fecha'})
+                        </span>
+                    ))}
+                </div>
+            );
+        },
     },
-
+    {
+        accessorKey: 'tds',
+        header: 'TD',
+        cell: ({ row }) => {
+            const tds = row.original.permisos_td;
+            return (
+                <div className="felx-col flex gap-1 font-semibold">
+                    {tds.map((td, index) => (
+                        <span key={index}>{format(td.fecha, 'dd/MM/yyyy')}</span>
+                    ))}
+                </div>
+            );
+        },
+    },
     {
         accessorKey: 'estado',
         header: ({ column }) => {
