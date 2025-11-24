@@ -190,10 +190,21 @@ class PermisoController extends Controller
             ->whereDate('fecha', $permiso->fecha)
             ->first();
 
+        // 🆕 DEFINIR ESTADOS QUE CUENTAN SEGÚN FASE
+        if ($permiso->estado == 0) {
+            // FASE 1 - PENDIENTE: solo cuenta 'L'
+            $estadosQueCuentan = ['L'];
+        } else if ($permiso->estado == 1) {
+            // FASE 2 - APROBADO: cuenta múltiples estados
+            $estadosQueCuentan = ['L', 'PE', 'V', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'FL', 'SP', 'M', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'TD'];
+        }
+
         // ✅ CALCULAR CORRECTAMENTE
         foreach ($horarios as $horario) {
-            if ($horario->estado == 'L') {
-                // Calcular minutos del día
+            $minutosDia = 0;
+
+            // 🆕 SOLO CALCULAR SI TIENE HORARIOS VÁLIDOS
+            if ($horario->ingreso && $horario->salida && $horario->ingreso != '00:00' && $horario->salida != '00:00') {
                 $minutosDia = $horario->ingreso->diffInMinutes($horario->salida);
 
                 // Restar refrigerio POR DÍA
@@ -201,25 +212,17 @@ class PermisoController extends Controller
                     $minutosDia -= 60;
                 }
 
-                // ✅ EXCLUIR el día del permiso del total
-                /*
-                 if ($horario->fecha->format('Y-m-d') !== $permiso->fecha->format('Y-m-d')) {
+                // 🆕 SUMAR AL TOTAL SOLO SI EL ESTADO CUENTA
+                if (in_array($horario->estado, $estadosQueCuentan)) {
                     $totalHorasTrabajadas += $minutosDia;
                 }
-                */
-                $totalHorasTrabajadas += $minutosDia;
-
-                $horasPorDia[$horario->fecha->format('Y-m-d')] = $minutosDia;
             }
-        }
-        // Calcular tiempo del permiso
-        $tiempoLaboral = $permisoLaboral->ingreso->diffInMinutes($permisoLaboral->salida);
-        if ($tiempoLaboral > 360) {
-            $tiempoLaboral -= 60;
+
+            // 🆕 GUARDAR EN horas_por_dia PARA TODOS LOS ESTADOS
+            $horasPorDia[$horario->fecha->format('Y-m-d')] = $minutosDia;
         }
 
-        // ✅ Ahora sí es correcto: suma sin duplicar el día del permiso
-        // $tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
+        // Calcular tiempo extra
         $tiempoExtra = max(0, $totalHorasTrabajadas - ($jornada == 1 ? 2880 : 1410));
 
         return response()->json([

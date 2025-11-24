@@ -91,11 +91,36 @@ export default function SearchHorario({ permisoId, jornada }: { permisoId: numbe
                                 {dataExtra.horarios.map((horario, index) => {
                                     const estado = horario.estado as keyof typeof estadoBadgeVariants;
                                     const badgeConfig = estadoBadgeVariants[estado] || { variant: "outline", label: estado };
+                                    let minutosDia = 0;
+
+                                    if (horario.estado === 'L') {
+                                        // Usar cálculo del backend para LABORAL
+                                        const fechaKey = horario.fecha.split('T')[0];
+                                        minutosDia = dataExtra.horas_por_dia[fechaKey] || 0;
+                                    }
+                                    else if (horario.estado === 'D') {
+                                        // DESCANSO → siempre 0
+                                        minutosDia = 0;
+                                    }
+                                    else if (horario.ingreso && horario.salida && horario.ingreso !== '00:00' && horario.salida !== '00:00') {
+                                        // 🆕 CALCULAR PARA OTROS ESTADOS CON HORARIOS
+                                        const [horaIng, minIng] = horario.ingreso.split(':').map(Number);
+                                        const [horaSal, minSal] = horario.salida.split(':').map(Number);
+
+                                        minutosDia = (horaSal * 60 + minSal) - (horaIng * 60 + minIng);
+
+                                        // Aplicar refrigerio si > 6 horas
+                                        if (minutosDia > 360) {
+                                            minutosDia -= 60;
+                                        }
+                                    }
                                     return (
                                         <div key={index} className="p-2 border rounded">
                                             <p className='flex gap-3 items-center'>
                                                 {`${format(horario.fecha, 'd/MM/yyyy')} - ${horario.ingreso} a ${horario.salida}`}
-                                                <span className="text-green-600 font-mono">  ({formatMinutes(dataExtra.horas_por_dia[horario.fecha.split('T')[0]])}) </span>
+                                                <span className="text-green-600 font-mono">
+                                                    ({formatMinutes(minutosDia)}) {/* 🆕 USAR CÁLCULO FRONTEND */}
+                                                </span>
                                                 <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
                                             </p>
                                         </div>

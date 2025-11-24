@@ -303,11 +303,11 @@ export default function App({ empleados, empresas, url }) {
                 status: 'L' as const,
             };
 
-            // 🔥 CASO 1: Cambiar a NO LABORAL (D, V, C, CA, etc.)
+            // 🔥 CASO 1: Cambiar a NO LABORAL , solo D genera 00:00
             if (field === 'status' && value !== 'L') {
                 const newDayData = {
-                    entryTime: '00:00',
-                    exitTime: '00:00',
+                    entryTime: value === 'D' ? '00:00' : dayData.entryTime,  // 🆕 SOLO 'D' PONE 00:00
+                    exitTime: value === 'D' ? '00:00' : dayData.exitTime,
                     status: value as DaySchedule['status'],
                 };
 
@@ -388,6 +388,7 @@ export default function App({ empleados, empresas, url }) {
         }
     };
 
+    //Evitar que cree horarios de semanas anteriores
     const handleSaveSchedules = async () => {
         console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
 

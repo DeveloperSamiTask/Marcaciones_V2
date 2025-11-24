@@ -160,13 +160,24 @@ class SolicitudHorasExtrasPTController extends Controller
 
             // PASO 6: CÁLCULO DE HORAS (LÓGICA CORREGIDA)
             foreach ($horarios as $horario) {
+
                 if ($horario->estado == 'L') {
-                    // 🔥 CALCULAR MINUTOS DEL DÍA PRIMERO
+                    // Calcular minutos del día
                     $minutosDia = $horario->ingreso->diffInMinutes($horario->salida);
 
-                    // 🔥 RESTAR REFRIGERIO POR DÍA
+                    // Restar refrigerio POR DÍA
                     if ($minutosDia > 360) {
                         $minutosDia -= 60;
+
+                    } elseif ($horario->ingreso && $horario->salida && $horario->ingreso != '00:00' && $horario->salida != '00:00') {
+                        $minutosDia = $horario->ingreso->diffInMinutes($horario->salida);
+                        if ($minutosDia > 360) {
+                            $minutosDia -= 60;
+                        }
+                    }
+                    // 🆕 PARA "D" (DESCANSO) → 0 MINUTOS
+                    else {
+                        $minutosDia = 0;
                     }
 
                     // ✅ EXCLUIR el día del permiso del total
@@ -188,8 +199,8 @@ class SolicitudHorasExtrasPTController extends Controller
             }
 
             // Calcular tiempo extra
-            //$tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
-            $tiempoExtra = max(0, $totalHorasTrabajadas  - ($jornada == 1 ? 2880 : 1410));
+            // $tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
+            $tiempoExtra = max(0, $totalHorasTrabajadas - ($jornada == 1 ? 2880 : 1410));
 
             return response()->json([
                 'horarios' => $horarios,

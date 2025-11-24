@@ -143,6 +143,10 @@ export function WeekScheduleTable({
                         const tipoFeriado = dayData?.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
                         const feriadosList = feriadosActuales?.[tipoFeriado] || [];
 
+                        const esDescanso = dayData?.status === 'D';
+                        const entradaValue = esDescanso ? '00:00' : (dayData?.entryTime || '00:00');
+                        const salidaValue = esDescanso ? '00:00' : (dayData?.exitTime || '00:00');
+
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">
                                 {/* Día */}
@@ -159,7 +163,7 @@ export function WeekScheduleTable({
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        value={isHorarioBloqueado ? '00:00' : (dayData?.entryTime || '00:00')}
+                                        value={entradaValue}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"
@@ -170,7 +174,7 @@ export function WeekScheduleTable({
                                 <td className="p-2">
                                     <Input
                                         type="time"
-                                        value={isHorarioBloqueado ? '00:00' : (dayData?.exitTime || '00:00')}
+                                        value={salidaValue}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
                                         disabled={isHorarioBloqueado}
                                         className="w-full text-xs h-8"
