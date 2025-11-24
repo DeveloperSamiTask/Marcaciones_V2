@@ -174,39 +174,61 @@ class PermisoController extends Controller
 
     public function showHorarios(Permiso $permiso): JsonResponse
     {
-        $jornada = $permiso->empleado->jornada_id; // 1: jornada completa, 2: part time
-        $inicioSemana = $permiso->fecha->copy()->startOfWeek(Carbon::MONDAY); // lunes
-        $finSemana = $permiso->fecha->copy()->endOfWeek(Carbon::SUNDAY); // domingo
+        $jornada = $permiso->empleado->jornada_id;
+        $inicioSemana = $permiso->fecha->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemana = $permiso->fecha->copy()->endOfWeek(Carbon::SUNDAY);
         $totalHorasTrabajadas = 0;
+        $horasPorDia = [];
 
-        // lista de horarios de la semana del permiso
         $horarios = Horario::where('empleado_id', $permiso->empleado_id)
             ->whereBetween('fecha', [$inicioSemana, $finSemana])
             ->where('estado', '!=', 'PE')
             ->orderBy('fecha')
             ->get();
 
-        // horario que se desea aprobar
         $permisoLaboral = Horario::where('empleado_id', $permiso->empleado_id)
             ->whereDate('fecha', $permiso->fecha)
             ->first();
 
-        foreach ($horarios as $horario) { // preguntar despues de cuantas horas se resta 60 min de refrigerio
+        // ✅ CALCULAR CORRECTAMENTE
+        foreach ($horarios as $horario) {
             if ($horario->estado == 'L') {
-                $totalHorasTrabajadas += $horario->ingreso->diffInMinutes($horario->salida);
-                if ($totalHorasTrabajadas >= 360) { // si el horario programado es 6 horas a mas se resta 60 min de refirgerio
-                    $totalHorasTrabajadas -= 60;
+                // Calcular minutos del día
+                $minutosDia = $horario->ingreso->diffInMinutes($horario->salida);
+
+                // Restar refrigerio POR DÍA
+                if ($minutosDia > 360) {
+                    $minutosDia -= 60;
                 }
+
+                // ✅ EXCLUIR el día del permiso del total
+                /*
+                 if ($horario->fecha->format('Y-m-d') !== $permiso->fecha->format('Y-m-d')) {
+                    $totalHorasTrabajadas += $minutosDia;
+                }
+                */
+                $totalHorasTrabajadas += $minutosDia;
+
+                $horasPorDia[$horario->fecha->format('Y-m-d')] = $minutosDia;
             }
         }
-
+        // Calcular tiempo del permiso
         $tiempoLaboral = $permisoLaboral->ingreso->diffInMinutes($permisoLaboral->salida);
-        if ($tiempoLaboral >= 360) {// si el horario programado es 6 horas a mas se resta 60 min de refirgerio
+        if ($tiempoLaboral > 360) {
             $tiempoLaboral -= 60;
         }
-        $tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
 
-        return response()->json(['horarios' => $horarios, 'extra' => $tiempoExtra, 'laboral' => $totalHorasTrabajadas, 'horarioExtra' => $permisoLaboral]);
+        // ✅ Ahora sí es correcto: suma sin duplicar el día del permiso
+        // $tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
+        $tiempoExtra = max(0, $totalHorasTrabajadas - ($jornada == 1 ? 2880 : 1410));
+
+        return response()->json([
+            'horarios' => $horarios,
+            'extra' => $tiempoExtra,
+            'laboral' => $totalHorasTrabajadas,
+            'horarioExtra' => $permisoLaboral,
+            'horas_por_dia' => $horasPorDia,
+        ]);
     }
 
     public function store(Request $request)

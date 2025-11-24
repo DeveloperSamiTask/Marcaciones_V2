@@ -538,28 +538,68 @@ class HorarioController extends Controller
             throw new Exception("No se pueden crear horarios para fechas anteriores al ingreso del empleado {$empleado->nombre_completo} ($fechaFormateada)");
         }
 
-        // 🆕 2. Validar que no se modifiquen fechas pasadas
+        // 2. Validar que no se modifiquen fechas pasadas
         $inicioSemanaActual = Carbon::now()->startOfWeek(Carbon::MONDAY);
         if ($fechaCarbon->lt($inicioSemanaActual)) {
             throw new Exception("No se pueden crear o modificar horarios de semanas anteriores a la actual ({$fechaCarbon->format('d/m/Y')}).");
         }
 
-        // 2. Calcular horas semanales existentes
-        $inicioSemana = $fechaCarbon->copy()->startOfWeek(Carbon::MONDAY);
-        $finSemana = $fechaCarbon->copy()->endOfWeek(Carbon::SUNDAY);
-        $horasSemanal = 0;
-
-        $permisosHSeliminados = Permiso::where('empleado_id', $empleadoId)
-            ->where('tipo_id', 2) // Solo permisos de horas extras
+        // 🔥 3. ELIMINAR TODOS LOS PERMISOS DE ESTA FECHA (EXCEPTO RECHAZADOS)
+        // Esto asegura que siempre partas desde cero al editar
+        $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
             ->whereDate('fecha', $fechaCarbon)
-            ->where('estado', '!=', 2) // No eliminar los rechazados
+            ->where('estado', '!=', 2) // No eliminar rechazados
             ->delete();
 
-        if ($permisosHSeliminados > 0) {
-            Log::info("🧹 ELIMINADOS $permisosHSeliminados permisos de HS - empleado $empleadoId, fecha $fecha");
+        if ($permisosEliminados > 0) {
+            Log::info("🧹 ELIMINADOS $permisosEliminados permisos totales - empleado $empleadoId, fecha $fecha");
         }
 
-        // 3. Crear o actualizar horario
+        // 4. Calcular horas semanales para creación de HE en FT
+        $inicioSemana = $fechaCarbon->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemana = $fechaCarbon->copy()->endOfWeek(Carbon::SUNDAY);
+
+        $horasSemanales = 0;
+        $horariosSemanales = Horario::where('empleado_id', $empleadoId)
+            ->whereBetween('fecha', [$inicioSemana, $finSemana])
+            ->where('fecha', '!=', $fechaCarbon) // Excluir día actual
+            ->where('fecha', '<', $fechaCarbon)
+            ->where('estado', 'L')
+            ->get();
+
+        foreach ($horariosSemanales as $horario) {
+            if ($horario->ingreso && $horario->salida) {
+                $minutos = $horario->ingreso->diffInMinutes($horario->salida);
+
+                // 🔥 RESTAR REFRIGERIO POR DÍA
+                if ($minutos > 360) {
+                    $minutos -= 60;
+                }
+
+                $horasSemanales += $minutos;
+            }
+        }
+
+        // Sumar horas del día actual si es laboral
+        if ($estado === 'L') {
+            $ingresoCarbon = Carbon::parse($ingreso);
+            $salidaCarbon = Carbon::parse($salida);
+            $minutosDelDia = $ingresoCarbon->diffInMinutes($salidaCarbon);
+
+            // 🔥 RESTAR REFRIGERIO DEL DÍA ACTUAL
+            if ($minutosDelDia > 360) {
+                $minutosDelDia -= 60;
+            }
+
+            $horasSemanales += $minutosDelDia;
+        }
+
+        Log::info("📊 HORAS SEMANALES - empleado $empleadoId, fecha $fecha: $horasSemanales minutos (".round($horasSemanales / 60, 2).' horas)');
+
+        $empleadoEsFullTime = ($empleado->jornada_id === 1);
+        $excedeHorasMaximas = ($horasSemanales > 2880); // Solo si EXCEDE, no iguala
+
+        // 5. Crear o actualizar horario
         $horario = Horario::updateOrCreate(
             [
                 'empleado_id' => $empleadoId,
@@ -569,49 +609,44 @@ class HorarioController extends Controller
                 'ingreso' => $ingreso,
                 'salida' => $salida,
                 'descripcion' => $descripcion,
-                'estado' => ($estado === 'L') ? 'L' : 'PE',  // ← Aquí SÍ es $estado (parámetro del método)
+                'estado' => ($estado === 'L') ? 'L' : 'PE',
             ]
         );
 
-        /* -------------------- CODIGO PARA ELIMINAR PERMISOS -------------------- */
-        // busca permisos para eliminar
-        $estadosQueGeneranPermisos = [
-            'D', 'C', 'CA', 'AHE', 'CHE', 'F', 'FL', 'SP', 'V', 'M', 'SN', 'ST',
-            'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'PE', 'TD',
-        ];
-
-        $tiposTodosEstados = PermisoTipo::whereIn('codigo', $estadosQueGeneranPermisos)->pluck('id');
-
-        $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
-            ->whereDate('fecha', $fechaCarbon)
-            ->whereIn('tipo_id', $tiposTodosEstados)
-            ->where('estado', '!=', 2) // No eliminar los rechazados
-            ->delete();
-
-        if ($permisosEliminados > 0) {
-            Log::info("🧹 ELIMINADOS $permisosEliminados permisos existentes - empleado $empleadoId, fecha $fecha");
-        }
-
-        // 🆕 LIMPIAR RELACIÓN CON FERIADOS SI YA NO ES C/CA
+        // 🔥 6. LIMPIAR RELACIÓN CON FERIADOS SI YA NO ES C/CA
         if ($estado !== 'C' && $estado !== 'CA') {
             $horario->feriados()->detach();
         }
 
-        // 🆕 ASOCIAR FERIADO SI ES C/CA
+        // 🔥 7. ASOCIAR FERIADO SI ES C/CA
         if (($estado === 'C' || $estado === 'CA') && $feriado) {
             $feriadoObj = Feriado::find($feriado);
             if ($feriadoObj) {
-                $horario->feriados()->sync([$feriado]); // Usar sync para evitar duplicados
-
+                $horario->feriados()->sync([$feriado]);
                 Log::info("✅ ASOCIADO feriado {$feriadoObj->nombre} - empleado $empleadoId, fecha $fecha");
             }
         }
 
-        // 🆕 CREAR NUEVO PERMISO SOLO SI ES NO-LABORAL
+        // 🔥 8. CREAR PERMISOS SEGÚN EL NUEVO ESTADO
+        $empleadoEsFullTime = ($empleado->jornada_id === 1);
+        $excedeHorasMaximas = ($horasSemanales > 2880); // 48h en minutos
+
+        // A. CREAR PERMISO DE HE SI EXCEDE 48H (SOLO FULL TIME)
+        if ($empleadoEsFullTime && $excedeHorasMaximas && $estado === 'L') {
+            Permiso::create([
+                'empleado_id' => $empleadoId,
+                'tipo_id' => 2, // HE
+                'fecha' => $fechaCarbon,
+                'motivo' => 'HORARIO PROGRAMADO EXTRA',
+                'estado' => 0,
+            ]);
+            Log::info("✅ CREADO permiso HE - empleado $empleadoId, fecha $fecha");
+        }
+
+        // B. CREAR PERMISO SI ES DÍA NO LABORAL
         if ($estado !== 'L') {
             $tipoPermiso = PermisoTipo::firstWhere('codigo', $estado);
             if ($tipoPermiso) {
-                // 🆕 CREAR EL PERMISO PRIMERO para luego actualizar el motivo si es C/CA
                 $permisoData = [
                     'empleado_id' => $empleadoId,
                     'tipo_id' => $tipoPermiso->id,
@@ -620,7 +655,7 @@ class HorarioController extends Controller
                     'estado' => 0,
                 ];
 
-                // 🆕 SI ES C/CA Y TIENE FERIADO, AGREGAR AL MOTIVO
+                // Si es C/CA y tiene feriado, agregar al motivo
                 if (($estado === 'C' || $estado === 'CA') && $feriado) {
                     $feriadoObj = Feriado::find($feriado);
                     if ($feriadoObj) {

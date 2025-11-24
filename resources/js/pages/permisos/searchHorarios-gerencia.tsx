@@ -12,6 +12,7 @@ type HorarioExtraProps = {
     extra: number;
     laboral: number;
     horarioExtra: Horario;
+    horas_por_dia: { [fecha: string]: number };
 } | null
 
 const estadoBadgeVariants = {
@@ -89,7 +90,7 @@ export default function DetalleSolicitudHE({ solicitud }: { solicitud: any }) {
                         dataExtra && dataExtra.horarios && dataExtra.horarios.length > 0 ? (
                             <>
                                 <h1 className='text-blue-400 font-medium text-xl'>
-                                    Horas semanales permitidas: {dataExtra.jornada == 1 ? '48:00' : '23:30'}
+                                    Horas mensuales permitidas: {dataExtra.jornada == 1 ? '48:00' : '93:00'}
                                 </h1>
                                 {dataExtra.horarios.map((horario, index) => {
                                     const estado = horario.estado; // Ya viene del backend
@@ -98,6 +99,7 @@ export default function DetalleSolicitudHE({ solicitud }: { solicitud: any }) {
                                         <div key={index} className="p-2 border rounded">
                                             <p className='flex gap-3 items-center'>
                                                 {`${format(new Date(horario.fecha), 'd/MM/yyyy')} - ${horario.ingreso} a ${horario.salida} `}
+                                                 <span className="text-green-600 font-mono">  ({formatMinutes(dataExtra.horas_por_dia[horario.fecha.split('T')[0]])}) </span>
                                                 <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>
                                             </p>
                                         </div>

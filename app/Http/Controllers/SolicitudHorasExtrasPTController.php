@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\VerificarHorasExtrasPartTime;
 use App\Models\Empresa;
 use App\Models\Horario;
 use App\Models\Permiso;
@@ -10,9 +11,8 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
-use App\Jobs\VerificarHorasExtrasPartTime;
+use Inertia\Inertia;
 
 class SolicitudHorasExtrasPTController extends Controller
 {
@@ -144,6 +144,7 @@ class SolicitudHorasExtrasPTController extends Controller
             $inicioSemana = $permiso->fecha->copy()->startOfWeek(Carbon::MONDAY);
             $finSemana = $permiso->fecha->copy()->endOfWeek(Carbon::SUNDAY);
             $totalHorasTrabajadas = 0;
+            $horasPorDia = [];
 
             // PASO 4: HORARIOS DE LA SEMANA
             $horarios = Horario::where('empleado_id', $permiso->empleado_id)
@@ -157,22 +158,38 @@ class SolicitudHorasExtrasPTController extends Controller
                 ->whereDate('fecha', $permiso->fecha)
                 ->first();
 
-            // PASO 6: CÁLCULO DE HORAS (TU LÓGICA EXISTENTE)
+            // PASO 6: CÁLCULO DE HORAS (LÓGICA CORREGIDA)
             foreach ($horarios as $horario) {
                 if ($horario->estado == 'L') {
-                    $totalHorasTrabajadas += $horario->ingreso->diffInMinutes($horario->salida);
-                    if ($totalHorasTrabajadas >= 360) {
-                        $totalHorasTrabajadas -= 60;
+                    // 🔥 CALCULAR MINUTOS DEL DÍA PRIMERO
+                    $minutosDia = $horario->ingreso->diffInMinutes($horario->salida);
+
+                    // 🔥 RESTAR REFRIGERIO POR DÍA
+                    if ($minutosDia > 360) {
+                        $minutosDia -= 60;
                     }
+
+                    // ✅ EXCLUIR el día del permiso del total
+                    /*
+                     if ($horario->fecha->format('Y-m-d') !== $permiso->fecha->format('Y-m-d')) {
+                        $totalHorasTrabajadas += $minutosDia;
+                    }
+                    */
+                    $totalHorasTrabajadas += $minutosDia;
+
+                    $horasPorDia[$horario->fecha->format('Y-m-d')] = $minutosDia;
                 }
             }
 
+            // Calcular tiempo del permiso
             $tiempoLaboral = $permisoLaboral ? $permisoLaboral->ingreso->diffInMinutes($permisoLaboral->salida) : 0;
-            if ($tiempoLaboral >= 360) {
+            if ($tiempoLaboral > 360) {
                 $tiempoLaboral -= 60;
             }
 
-            $tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
+            // Calcular tiempo extra
+            //$tiempoExtra = max(0, $totalHorasTrabajadas + $tiempoLaboral - ($jornada == 1 ? 2880 : 1410));
+            $tiempoExtra = max(0, $totalHorasTrabajadas  - ($jornada == 1 ? 2880 : 1410));
 
             return response()->json([
                 'horarios' => $horarios,
@@ -181,6 +198,7 @@ class SolicitudHorasExtrasPTController extends Controller
                 'horarioExtra' => $permisoLaboral,
                 'jornada' => $jornada,
                 'empleado' => $permiso->empleado,
+                'horas_por_dia' => $horasPorDia, // 🆕 Por si lo necesitas en el frontend
             ]);
 
         } catch (Exception $e) {

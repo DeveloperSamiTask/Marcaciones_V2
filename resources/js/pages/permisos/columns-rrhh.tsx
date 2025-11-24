@@ -72,7 +72,7 @@ export const columnsSolicitudesHERRHH: ColumnDef<any>[] = [
             return <span>{row.original.fecha_limite_aprobacion}</span>;
         }
     },
-        {
+    {
         accessorKey: 'fecha_aprobacion',
         header: 'F. REVISION',
         cell: ({ row }) => {
@@ -115,4 +115,19 @@ export const columnsSolicitudesHERRHH: ColumnDef<any>[] = [
         },
     },
     // 🚨 SIN COLUMNA DE ACCIONES - SOLO LECTURA PARA RRHH
+    {
+        id: 'actions',
+        cell: ({ row }) => {
+            const solicitud = row.original;
+            const { auth } = usePage<SharedData>().props;
+            const isAdmin = auth.user.rol_id !== 4;
+
+            return (
+                <div className="flex items-center gap-2">
+                    {/* DETALLE - SIEMPRE VISIBLE */}
+                    <DetalleSolicitudHE key={`detalle-${solicitud.id}`} solicitud={solicitud} />
+                </div>
+            );
+        },
+    }
 ];

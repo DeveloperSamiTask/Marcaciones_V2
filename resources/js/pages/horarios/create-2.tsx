@@ -150,7 +150,7 @@ export default function App({ empleados, empresas, url }) {
         const newExpanded = new Set<string>();
 
         filteredEmployees.forEach(employee => {
-            newExpanded.add(employee.id); // Expandir
+            newExpanded.add(employee.id);
 
             if (!newData[employee.id]) {
                 newData[employee.id] = {};
@@ -158,13 +158,23 @@ export default function App({ empleados, empresas, url }) {
 
             weekDates.forEach(date => {
                 const dateStr = formatDate(date);
+                const existingStatus = newData[employee.id][dateStr]?.status || 'L';
 
-                // 🆕 SIEMPRE ACTUALIZAR, NO SOLO CREAR
-                newData[employee.id][dateStr] = {
-                    entryTime: currentBaseSchedule.entryTime,
-                    exitTime: currentBaseSchedule.exitTime,
-                    status: newData[employee.id][dateStr]?.status || 'L', // 🆕 Respetar estado existente
-                };
+                // 🔥 SI ES DÍA NO LABORAL, MANTENER 00:00
+                if (existingStatus !== 'L') {
+                    newData[employee.id][dateStr] = {
+                        entryTime: '00:00',
+                        exitTime: '00:00',
+                        status: existingStatus,
+                    };
+                } else {
+                    // 🔥 SI ES LABORAL, APLICAR HORARIO BASE
+                    newData[employee.id][dateStr] = {
+                        entryTime: currentBaseSchedule.entryTime,
+                        exitTime: currentBaseSchedule.exitTime,
+                        status: 'L',
+                    };
+                }
             });
         });
 
@@ -278,6 +288,7 @@ export default function App({ empleados, empresas, url }) {
         });
     };
 
+    /* ----------------------- Seteo de horas por dia  ----------------------- */
     const handleFieldChange = (
         employeeId: string,
         date: string,
@@ -364,7 +375,7 @@ export default function App({ empleados, empresas, url }) {
             };
         });
     };
-
+    /* ----------------------------------------------------------------------------------------------------*/
     const getFeriadosEmpleado = async (employeeId: string) => {
         try {
             const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
@@ -401,24 +412,14 @@ export default function App({ empleados, empresas, url }) {
             const employeeSchedule = scheduleData[employee.id] || {};
             const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
 
-            /*MAXIMO PARA FULL TIME
-             if (employee.jornada_id === 1) {
-                // MÁXIMO (lo que ya tienes)
-                if (horasSemanales > 2880) { // 48 horas en minutos
-                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas)`);
+            if (employee.jornada_id === 1) {
+                // 🆕 MÍNIMO PARA FULL TIME (47 horas = 2820 minutos)
+                if (horasSemanales < 2820) {
+                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas para Full Time)`);
                     hasValidationErrors = true;
                     return;
                 }
-            }*/
-
-
-            // 🆕 MÍNIMO PARA FULL TIME (47 horas = 2820 minutos)
-            if (horasSemanales < 2820) {
-                toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas para Full Time)`);
-                hasValidationErrors = true;
-                return;
             }
-
             // 🆕 VALIDAR PART TIME (jornada_id === 2)
             if (employee.jornada_id === 2) {
                 // MÍNIMO PARA PART TIME (23.5 horas = 1410 minutos)
@@ -429,10 +430,7 @@ export default function App({ empleados, empresas, url }) {
                 }
             }
         }
-
         if (hasValidationErrors) return;
-
-
         /* ------------------- 🔥 CARGAR FERIADOS PARA EMPLEADOS CON C O CA ------------------- */
         const empleadosConCompensacion = filteredEmployees.filter(emp => {
             const schedule = scheduleData[emp.id] || {};
