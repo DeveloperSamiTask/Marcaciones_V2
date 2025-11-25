@@ -37,9 +37,9 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -63,6 +63,14 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
         );
     }, [selectedEmpresa, dateRange]);
 
+    // Después de tus estados, agrega este efecto:
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
+
     useEffect(() => {
         if (selectedEmpresa && dateRange?.to) {
             setIsFiltering(true);
@@ -70,6 +78,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
             return () => clearTimeout(timer);
         }
     }, [selectedEmpresa, dateRange, applyFilters]);
+
 
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
@@ -107,7 +116,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                         <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Lista de horarios</h2>
                         <Button key="nuevo-horario" asChild>
                             <Link href={route('horarios.create-2')} prefetch>
-                                <Plus/>
+                                <Plus />
                                 <span className="hidden sm:inline">Nuevo horario</span>
                             </Link>
                         </Button>
@@ -115,6 +124,17 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
                         {auth.user.rol_id != 4 && (
+                            <SelectFilter
+                                items={empresas}
+                                selected={selectedEmpresa}
+                                onSelect={setSelectedEmpresa}
+                                getValue={(empresa) => empresa.id}
+                                displayValue={(empresa) => empresa.razonsocial}
+                                placeholder="SELECCIONAR EMPRESA"
+                            />
+                        )}
+
+                        {auth.user.name === 'MMILUSKA' && (
                             <SelectFilter
                                 items={empresas}
                                 selected={selectedEmpresa}

@@ -29,21 +29,42 @@ class HorarioController extends Controller
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        $user = $request->user();
 
-        $horarios = Horario::whereHas('empleado', function ($query) use ($request) {
-            $query->where('empresa_id', $request->empresa)->whereNull('fecha_cese')
-                ->when($request->user()->rol_id == 4, function ($q) use ($request) {
-                    $q->where('jefe_id', $request->user()->empleado_id);
-                });
-        })
-            ->with('empleado.area')
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+        if ($user->name === 'MMILUSKA') {
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('razonsocial', ['YAKU PARK S.A.C.', 'DREAMS COMPANY PERU S.A.C', 'CHAXRA S.A.C.'])
+                ->get(['id', 'razonsocial']);
+
+        } else {
+            // Para otros usuarios, todas las empresas
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        }
+        $horarios = Horario::with('empleado.area')
+            ->whereHas('empleado', function ($query) use ($request, $user, $empresas) {
+                $query->where('empresa_id', $request->empresa)
+                    ->whereNull('fecha_cese');
+
+                // MILUSKA ve todos los empleados de sus empresas, sin filtro de jefe
+                if ($user->name === 'MMILUSKA') {
+                    $query->whereIn('empresa_id', $empresas->pluck('id'));
+                }
+                // Otros usuarios con rol_id 4 solo ven sus subordinados
+                elseif ($user->rol_id == 4) {
+                    $query->where('jefe_id', $user->empleado_id);
+                }
+            })
+            ->when($request->fechaInicio && $request->fechaFin, function ($query) use ($request) {
+                $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
+            })
             ->orderBy('fecha')
             ->get();
+
         // ->paginate($filters['perPage'] ?? 10);
 
         session(['horarios_url' => $request->fullUrl()]);
+
+
 
         return Inertia::render('horarios/index', [
             'horarios' => $horarios,
@@ -548,7 +569,8 @@ class HorarioController extends Controller
         // Esto asegura que siempre partas desde cero al editar
         $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
             ->whereDate('fecha', $fechaCarbon)
-            ->where('estado', '!=', 2 , 1) // No eliminar rechazados
+            ->where('estado', '!=', 2, 1) // No eliminar rechazados
+
             ->delete();
 
         if ($permisosEliminados > 0) {

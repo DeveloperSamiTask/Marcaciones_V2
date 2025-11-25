@@ -17,12 +17,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Inertia\Response;
 
 class AsistenciaController extends Controller
 {
     // validacion
-    public function index(Request $request)// : Response
+    public function index(Request $request)
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -31,18 +30,45 @@ class AsistenciaController extends Controller
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        $fechaInicio = Carbon::parse($request->fechaInicio)->startOfDay(); // 00:00:00
-        $fechaFin = Carbon::parse($request->fechaFin)->endOfDay(); // 23:59:59
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        $fechaInicio = Carbon::parse($request->fechaInicio)->startOfDay();
+        $fechaFin = Carbon::parse($request->fechaFin)->endOfDay();
+
+        $user = $request->user();
+
+        if ($user->name === 'MMILUSKA') {
+            // BLOQUE MILUSKA - 3 EMPRESAS, SIN FILTRO DE ENCARGADO
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [4, 10, 11])
+                ->get(['id', 'razonsocial']);
+
+            // ***** RESPETAR EMPRESA SELECCIONADA SI ES DE SUS 3 EMPRESAS *****
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
+                ? $request->empresa
+                : ($empresas->first()->id ?? null);
+
+            $encargadoFiltro = null; // MILUSKA NO USA ENCARGADO
+
+        } else {
+            // BLOQUE NORMAL - EMPRESA SELECCIONADA, CON ENCARGADO
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+            $empresaFiltro = $request->empresa;
+            $encargadoFiltro = $request->encargado;
+        }
+
         $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
-        $motivos = Asistencia::where('empleado_id', $request->encargado)
-            ->where('empresa_id', $request->empresa)
+
+        $motivos = Asistencia::where('empresa_id', $empresaFiltro)
+            ->when($encargadoFiltro, function ($query) use ($encargadoFiltro) {
+                $query->where('empleado_id', $encargadoFiltro);
+            })
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
             ->where('semana', "Del {$fechaInicio->format('d/m/Y')} al {$fechaFin->format('d/m/Y')}")
             ->count();
 
-        $asistencias = Asistencia::where('empleado_id', $request->encargado)
-            ->where('empresa_id', $request->empresa)
+        $asistencias = Asistencia::where('empresa_id', $empresaFiltro)
+            ->when($encargadoFiltro, function ($query) use ($encargadoFiltro) {
+                $query->where('empleado_id', $encargadoFiltro);
+            })
             ->with(['empleado.area'])
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
             ->orderBy('fecha', 'desc')
@@ -66,9 +92,7 @@ class AsistenciaController extends Controller
             'pendientes' => $asistencias->get('pendientes', collect()),
             'aprobados' => $asistencias->get('aprobados', collect()),
             'rechazados' => $asistencias->get('rechazados', collect()),
-            'rechazados' => $asistencias->get('rechazados', collect()),
         ]);
-
     }
 
     public function store(Request $request)

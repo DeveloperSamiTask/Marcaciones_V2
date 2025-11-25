@@ -93,6 +93,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('marcaciones', MarcacionController::class)->except(['show']);
     Route::group(['prefix' => 'marcaciones', 'as' => 'marcaciones.'], function () {
         Route::get('reales', [MarcacionController::class, 'real'])->name('reales');
+        Route::get('reales/miluska', [MarcacionController::class, 'realMiluska'])->name('reales.miluska'); // ← CORREGIDO
         Route::get('ediciones', [MarcacionController::class, 'edicion'])->name('ediciones');
         Route::post('download', [MarcacionController::class, 'download'])->name('download');
         Route::post('{marcacion}/upload', [MarcacionController::class, 'upload'])->name('upload');
@@ -102,6 +103,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Asistencias
     Route::resource('asistencias', AsistenciaController::class);
     Route::post('asistencias/{asistenciaDetalle}/horas-extra/', [AsistenciaController::class, 'updateHorasExtra'])->name('asistencias.horasExtra');
+    Route::get('asistencias/miluska', [AsistenciaController::class, 'indexMiluska'])->name('asistencias.miluska');
 
     // Memorandums
     Route::resource('memorandums', MemorandumController::class)->except(['show']);
@@ -161,6 +163,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/solicitudes-he-pt/rrhh', [SolicitudHorasExtrasPTController::class, 'indexRRHH'])->name('solicitudes-he-pt.rrhh');
 
     Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes']);
+
+    // miluska
+
 
 });
 

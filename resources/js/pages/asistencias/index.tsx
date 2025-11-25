@@ -55,9 +55,9 @@ export default function IndexAsistencia({
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -82,6 +82,14 @@ export default function IndexAsistencia({
             },
         );
     }, [selectedEmpresa, selectedEncargado, dateRange]);
+
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
+
 
     // carga automatica en tiempo real
     useEffect(() => {
@@ -131,6 +139,18 @@ export default function IndexAsistencia({
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
                             {auth.user.rol_id != 4 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+
+                            )}
+
+                            {auth.user.name === 'MMILUSKA' && (
                                 <SelectFilter
                                     items={empresas}
                                     selected={selectedEmpresa}

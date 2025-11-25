@@ -69,6 +69,13 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
         );
     }, [selectedEmpresa, selectedEncargado, dateRange]);
 
+     useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
+
     // carga automatica en tiempo real
     useEffect(() => {
         if (selectedEmpresa && dateRange?.to && selectedEncargado) {
@@ -127,6 +134,17 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                     placeholder="SELECCIONAR EMPRESA"
                                 />
                             )}
+
+                             {auth.user.name === 'MMILUSKA' && (
+                            <SelectFilter
+                                items={empresas}
+                                selected={selectedEmpresa}
+                                onSelect={setSelectedEmpresa}
+                                getValue={(empresa) => empresa.id}
+                                displayValue={(empresa) => empresa.razonsocial}
+                                placeholder="SELECCIONAR EMPRESA"
+                            />
+                        )}
 
                             <DateRangeFilter
                                 dateRange={dateRange}

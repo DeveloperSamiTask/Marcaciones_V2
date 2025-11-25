@@ -53,9 +53,9 @@ export default function IndexSuspension({
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -81,9 +81,15 @@ export default function IndexSuspension({
         );
     }, [selectedEmpresa, selectedEncargado, dateRange]);
 
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
     // carga automatica en tiempo real
     useEffect(() => {
-        if(!selectedEmpresa || !dateRange?.to){
+        if (!selectedEmpresa || !dateRange?.to) {
             setSelectedEncargado(null);
         }
 
@@ -131,7 +137,7 @@ export default function IndexSuspension({
                         <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Lista de suspensiones y amonestaciones</h2>
                         <Button key="nuevo-horario" asChild>
                             <Link href={route('suspensiones.create')} prefetch>
-                                <Plus/>
+                                <Plus />
                                 <span className="hidden sm:inline">Nuevo registro</span>
                             </Link>
                         </Button>
@@ -139,6 +145,17 @@ export default function IndexSuspension({
 
                     <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
                         {auth.user.rol_id != 4 && (
+                            <SelectFilter
+                                items={empresas}
+                                selected={selectedEmpresa}
+                                onSelect={setSelectedEmpresa}
+                                getValue={(empresa) => empresa.id}
+                                displayValue={(empresa) => empresa.razonsocial}
+                                placeholder="SELECCIONAR EMPRESA"
+                            />
+                        )}
+
+                        {auth.user.name === 'MMILUSKA' && (
                             <SelectFilter
                                 items={empresas}
                                 selected={selectedEmpresa}
@@ -171,13 +188,13 @@ export default function IndexSuspension({
                         <TabsList className="w-full">
                             <TabsTrigger value="amonestaciones"
                                 className="data-[state=active]:bg-warning dark:data-[state=active]:bg-warning dark:data-[state=active]:text-warning-foreground"
-                                // disabled={auth.user.rol_id == 4}
-                                >
+                            // disabled={auth.user.rol_id == 4}
+                            >
                                 AMONESTACIONES
                             </TabsTrigger>
                             <TabsTrigger value="suspensiones"
                                 className="data-[state=active]:bg-destructive dark:data-[state=active]:bg-destructive data-[state=active]:text-white dark:data-[state=active]:text-foreground"
-                                >
+                            >
                                 SUSPENSIONES
                             </TabsTrigger>
                         </TabsList>

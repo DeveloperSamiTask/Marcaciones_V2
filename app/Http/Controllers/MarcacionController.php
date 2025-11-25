@@ -27,8 +27,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class MarcacionController extends Controller
 {
-
-    public function index(Request $request)//: Response
+    public function index(Request $request)// : Response
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -129,7 +128,7 @@ class MarcacionController extends Controller
         ]);
     }
 
-    public function real(Request $request) //: Response
+    public function real(Request $request)
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -138,19 +137,37 @@ class MarcacionController extends Controller
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        $user = $request->user();
         $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
-        $empleadosDnis = Empleado::query()
-            ->where('empresa_id', $request->empresa)
-            ->when($request->encargado, fn($query) => $query->where('jefe_id', $request->encargado))
-            ->when($request->fechaFin, function ($query) use ($request) {
-                $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
-            })
-            ->whereNull('fecha_cese')
-            ->pluck('dni');
+        // PASO 1: FILTRAR EMPRESAS PARA MILUSKA
+        if ($user->name === 'MMILUSKA') {
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [4, 10, 11])
+                ->get(['id', 'razonsocial']);
 
-        /* jala la hora de la otra bd de la marcacion real */
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
+        ? $request->empresa
+        : ($empresas->first()->id ?? null);
+
+            // CONSULTA SEPARADA PARA MILUSKA - SIN FILTRO DE ENCARGADO
+            $empleadosDnis = Empleado::where('empresa_id', $empresaFiltro)
+                ->whereNull('fecha_cese')
+                ->pluck('dni');
+
+        } else {
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
+            // CONSULTA NORMAL PARA OTROS USUARIOS - CON FILTRO DE ENCARGADO
+            $empleadosDnis = Empleado::where('empresa_id', $request->empresa)
+                ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
+                ->when($request->fechaFin, function ($query) use ($request) {
+                    $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
+                })
+                ->whereNull('fecha_cese')
+                ->pluck('dni');
+        }
+
         $marcaciones = Zktimems::query()
             ->with(['empleado' => function ($query) {
                 $query->select('id', 'dni', 'nombres', 'apellidos');
@@ -168,7 +185,7 @@ class MarcacionController extends Controller
         ]);
     }
 
-    /*Enviar las marcaciones a asistencias */
+    /* Enviar las marcaciones a asistencias */
     public function store(StoreMarcacionRequest $request)
     {
         $data = $request->validated();
@@ -465,7 +482,7 @@ class MarcacionController extends Controller
                 if ($request->hasFile('sustento')) { // verificamos que haya un archivo comrpobante
                     $file = $request->file('sustento');
                     // $path = Storage::put('comprobantes', $file);
-                    $path = $file->store('asistencia/' . $marcacion->id, 'public'); // Almacenar el archivo en la carpeta public del storage
+                    $path = $file->store('asistencia/'.$marcacion->id, 'public'); // Almacenar el archivo en la carpeta public del storage
                     $marcacion->update(['sustento' => "storage/$path"]);
                 }
             });
@@ -494,13 +511,13 @@ class MarcacionController extends Controller
                     ->whereBetween('fecha', [$data['fecha'], now()->toDateString()])
                     ->get()
                     ->keyBy(function ($horario) {
-                        return $horario->fecha->format('Y-m-d') . '-' . $horario->empleado_id;
+                        return $horario->fecha->format('Y-m-d').'-'.$horario->empleado_id;
                     });
 
                 Zktimems::whereBetween('fecha', [$data['fecha'], now()->toDateString()])
                     ->whereIn('tarjeta', $dnis->keys())
                     ->get(['tarjeta', 'fecha', 'hora'])
-                    ->groupBy(fn($item) => $item->fecha->format('Y-m-d') . '-' . $item->tarjeta)
+                    ->groupBy(fn ($item) => $item->fecha->format('Y-m-d').'-'.$item->tarjeta)
                     ->each(function ($items) use ($dnis, $horarios) {
                         $item = $items->first();
                         $horas = $items->pluck('hora')->filter()->unique()->sort()->values();
@@ -516,7 +533,7 @@ class MarcacionController extends Controller
 
                         $empleadoId = $dnis->get($item->tarjeta);
                         $fecha = $item->fecha;
-                        $fechaKey = $fecha->format('Y-m-d') . '-' . $empleadoId;
+                        $fechaKey = $fecha->format('Y-m-d').'-'.$empleadoId;
 
                         // Buscar el horario en la colección cargada
                         $horario = $horarios->get($fechaKey);
@@ -531,7 +548,7 @@ class MarcacionController extends Controller
                                 ->where('estado', '!=', 2) // que no esté rechazado
                                 ->exists();
 
-                            if (!$permisoExistente) {
+                            if (! $permisoExistente) {
                                 Permiso::create([
                                     'empleado_id' => $empleadoId,
                                     'tipo_id' => 24, // TRABAJO DIA DESCANSO
@@ -553,7 +570,7 @@ class MarcacionController extends Controller
                             ->whereDate('fecha', $fecha)
                             ->first();
 
-                        if (!$marcacion) {
+                        if (! $marcacion) {
                             $marcacion = Marcacion::create([
                                 'empleado_id' => $empleadoId,
                                 'fecha' => $fecha,

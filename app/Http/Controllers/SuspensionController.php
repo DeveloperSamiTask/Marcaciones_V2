@@ -26,11 +26,32 @@ class SuspensionController extends Controller
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        $user = $request->user();
+
+        if ($user->name === 'MMILUSKA') {
+            // MILUSKA - 3 EMPRESAS, SIN FILTRO DE ENCARGADO
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [4, 10, 11])
+                ->get(['id', 'razonsocial']);
+
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
+                ? $request->empresa
+                : ($empresas->first()->id ?? null);
+
+            $encargadoFiltro = null;
+
+        } else {
+            // USUARIOS NORMALES
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+            $empresaFiltro = $request->empresa;
+            $encargadoFiltro = $request->encargado;
+        }
+
         $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
-        $lista = Suspension::whereHas('empleado', function ($query) use ($request) {
-            $query->when($request->encargado, fn ($q) => $q->where('jefe_id', $request->encargado)) // muestra segun el valor seleccionado en la vista (para administradores o rrhh)
-                ->where('empresa_id', $request->empresa)
+
+        $lista = Suspension::whereHas('empleado', function ($query) use ($empresaFiltro, $encargadoFiltro) {
+            $query->where('empresa_id', $empresaFiltro)
+                ->when($encargadoFiltro, fn ($q) => $q->where('jefe_id', $encargadoFiltro))
                 ->whereNull('fecha_cese');
         })
             ->with('empleado')

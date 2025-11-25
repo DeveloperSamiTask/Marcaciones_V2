@@ -6,14 +6,12 @@ use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Horario;
 use App\Models\Marcacion;
-use App\Models\Suspension;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Inertia\Response;
 
 class MemorandumController extends Controller
 {
-    public function index(Request $request) //: Response
+    public function index(Request $request)
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -22,24 +20,53 @@ class MemorandumController extends Controller
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        $user = $request->user();
 
-        $empleadoIds = Empleado::where('empresa_id', $request->empresa)
-            ->whereNull('fecha_cese')
-            ->when($request->user()->rol_id == 4, fn($q) => $q->where('jefe_id', $request->user()->empleado_id))
-            ->pluck('id');
+        if ($user->name === 'MMILUSKA') {
+            // ========== BLOQUE MILUSKA ==========
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [4, 10, 11])
+                ->get(['id', 'razonsocial']);
 
+            // EMPRESA FILTRO PARA MILUSKA
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
+                ? $request->empresa
+                : [4, 10, 11];
+
+            // EMPLEADOS PARA MILUSKA
+            if (is_array($empresaFiltro)) {
+                $empleadoIds = Empleado::whereIn('empresa_id', $empresaFiltro)
+                    ->whereNull('fecha_cese')
+                    ->pluck('id');
+            } else {
+                $empleadoIds = Empleado::where('empresa_id', $empresaFiltro)
+                    ->whereNull('fecha_cese')
+                    ->pluck('id');
+            }
+
+        } else {
+            // ========== BLOQUE NORMAL ==========
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
+            // EMPLEADOS PARA USUARIOS NORMALES
+            $empleadoIds = Empleado::where('empresa_id', $request->empresa)
+                ->whereNull('fecha_cese')
+                ->when($user->rol_id == 4, fn ($q) => $q->where('jefe_id', $user->empleado_id))
+                ->pluck('id');
+        }
+
+        // CONSULTA DE MEMORANDUMS (IGUAL PARA AMBOS)
         $memorandums = Marcacion::with([
-            'empleado:id,empresa_id,jefe_id,jornada_id,area_id,nombres,apellidos', // Limitar columnas
-            'empleado.horarios' => fn($q) => $q
+            'empleado:id,empresa_id,jefe_id,jornada_id,area_id,nombres,apellidos',
+            'empleado.horarios' => fn ($q) => $q
                 ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-                ->select('id', 'empleado_id', 'fecha', 'ingreso', 'salida', 'estado'), // Solo columnas necesarias
-            'empleado.suspensiones' => fn($q) => $q
+                ->select('id', 'empleado_id', 'fecha', 'ingreso', 'salida', 'estado'),
+            'empleado.suspensiones' => fn ($q) => $q
                 ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
                 ->where('codigo', 'like', 'A%')
                 ->select('id', 'empleado_id', 'fecha', 'tipo'),
             'empleado.jornada:id,nombre',
-            'empleado.area:id,nombre'
+            'empleado.area:id,nombre',
         ])
             ->whereIn('empleado_id', $empleadoIds)
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])

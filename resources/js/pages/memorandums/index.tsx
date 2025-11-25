@@ -35,7 +35,7 @@ type Filters = {
     fechaFin?: string;
 };
 
-export default function IndexMemorandum({ memorandums, empresas, filters } : { memorandums : Memorandum[]; empresas: Empresa[]; filters: Filters }) {
+export default function IndexMemorandum({ memorandums, empresas, filters }: { memorandums: Memorandum[]; empresas: Empresa[]; filters: Filters }) {
     const { auth } = usePage<SharedData>().props;
 
     // valores iniciales
@@ -45,14 +45,14 @@ export default function IndexMemorandum({ memorandums, empresas, filters } : { m
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
     const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(initialState.empresa);
-    const [selectedTipo, setSelectedTipo] = useState<string >(initialState.tipo);
+    const [selectedTipo, setSelectedTipo] = useState<string>(initialState.tipo);
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialState.dateRange);
     const [isFiltering, setIsFiltering] = useState(false);
 
@@ -81,6 +81,13 @@ export default function IndexMemorandum({ memorandums, empresas, filters } : { m
             return () => clearTimeout(timer);
         }
     }, [selectedEmpresa, selectedTipo, dateRange, applyFilters]);
+
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
 
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
@@ -121,6 +128,17 @@ export default function IndexMemorandum({ memorandums, empresas, filters } : { m
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
                             {auth.user.rol_id != 4 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
+                            {auth.user.name === 'MMILUSKA' && (
                                 <SelectFilter
                                     items={empresas}
                                     selected={selectedEmpresa}

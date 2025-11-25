@@ -114,16 +114,16 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
     const showData = selectedEmpresa && dateRange?.from && dateRange?.to;
 
 
-    console.log('=== DEBUG OPERACIONES ===');
-    console.log('Total marcaciones:', marcaciones.length);
+    //console.log('=== DEBUG OPERACIONES ===');
+    //console.log('Total marcaciones:', marcaciones.length);
 
     const marcacionesOperaciones = marcaciones.filter(m =>
         m.empleado?.area_id === 2
     );
-    console.log('Marcaciones de OPERACIONES:', marcacionesOperaciones.length);
+    //console.log('Marcaciones de OPERACIONES:', marcacionesOperaciones.length);
 
     const marcacionesOperacionesSinHorario = marcacionesOperaciones.filter(m => !m.horario);
-    console.log('Operaciones SIN horario:', marcacionesOperacionesSinHorario.length);
+    //console.log('Operaciones SIN horario:', marcacionesOperacionesSinHorario.length);
 
     // Mostrar detalles de los empleados afectados
     marcacionesOperacionesSinHorario.forEach(marcacion => {

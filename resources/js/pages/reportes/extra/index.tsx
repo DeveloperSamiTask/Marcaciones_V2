@@ -60,9 +60,9 @@ export default function IndexHorasExtra({
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -102,6 +102,13 @@ export default function IndexHorasExtra({
         }
     }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters]);
 
+
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
         <div className="flex flex-col items-center justify-center p-8">
@@ -160,6 +167,18 @@ export default function IndexHorasExtra({
                                     placeholder="SELECCIONAR EMPRESA"
                                 />
                             )}
+
+                            {auth.user.name === 'MMILUSKA' && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
 
                             <DateRangeFilter
                                 dateRange={dateRange}
