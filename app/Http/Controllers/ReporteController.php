@@ -432,9 +432,8 @@ class ReporteController extends Controller
             ->get()
             ->groupBy(function ($item) {
                 return match ($item->tipo_id) {
-                    4 => 'compensa',
+                    4, 24 => 'compensa',
                     16 => 'compensa_adelantada',
-                    24 => 'TD'
                 };
             });
 

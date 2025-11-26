@@ -847,7 +847,9 @@ class HorarioController extends Controller
 
                 if ($permiso_td_id) {
                     $permiso_td_id->estado = 1;
+                    $permiso_td_id->motivo = "TD consumido - " . $fechaCarbon->format('d/m/Y');
                     $permiso_td_id->save();
+
                     $horario->estado = 'TD';
                     $horario->save();
                     Log::info("✅ ACTUALIZADO permiso TD específico - empleado $empleadoId, fecha $fecha, permiso_id: $permiso_td_id, estado: 0 → 1");
@@ -1063,27 +1065,29 @@ class HorarioController extends Controller
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->get();
-        Log::info('🔵 EDIT METHOD - Empleado:', [
+        /*
+            Log::info('🔵 EDIT METHOD - Empleado:', [
 
-            'horas_semanal_trabajadas' => $empleado->horas_semanal_trabajadas,
-            'horas_trabajadas' => $empleado->horas_trabajadas,
-            'jornada_id' => $empleado->jornada_id,
-            'horas' => $empleado->horas,
+        'horas_semanal_trabajadas' => $empleado->horas_semanal_trabajadas,
+        'horas_trabajadas' => $empleado->horas_trabajadas,
+        'jornada_id' => $empleado->jornada_id,
+        'horas' => $empleado->horas,
         ]);
 
         Log::info('🔵 EDIT METHOD - Cálculos finales:', [
-            'horas_semanal_calculadas' => $horasSemanal,
-            'horas_mensual_calculadas' => $horas / 60,
-            'horas_semanal_guardadas' => $empleado->horas_semanal_trabajadas,
-            'horas_mensual_guardadas' => $empleado->horas_trabajadas,
+        'horas_semanal_calculadas' => $horasSemanal,
+        'horas_mensual_calculadas' => $horas / 60,
+        'horas_semanal_guardadas' => $empleado->horas_semanal_trabajadas,
+        'horas_mensual_guardadas' => $empleado->horas_trabajadas,
         ]);
 
         Log::info('🔵 HORARIOS ENCONTRADOS - Semana:', [
-            'inicio_semana' => $inicioSemana,
-            'fin_semana' => $finSemana,
-            'horarios_count' => $empleado->horarios->count(),
-            'horarios_laborales' => $empleado->horarios->where('estado', 'L')->pluck('fecha', 'id'),
+        'inicio_semana' => $inicioSemana,
+        'fin_semana' => $finSemana,
+        'horarios_count' => $empleado->horarios->count(),
+        'horarios_laborales' => $empleado->horarios->where('estado', 'L')->pluck('fecha', 'id'),
         ]);
+        */
 
         return Inertia::render('horarios/edit', [
             'empleado' => $empleado,

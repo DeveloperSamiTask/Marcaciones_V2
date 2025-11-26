@@ -64,6 +64,7 @@ export default function IndexReporteCompensas({
     encargados,
     filters,
     compensas_TD,
+    permisos_td
 }: {
     pendientes: Pendiente[];
     compensas: Permiso[];
@@ -261,7 +262,7 @@ export default function IndexReporteCompensas({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-compensas" columns={columns} data={compensas} />
+                                        <DataTable key="datatable-reporte-compensas" columns={columns}  data={compensas} />
                                     )}
                                 </TabsContent>
 
