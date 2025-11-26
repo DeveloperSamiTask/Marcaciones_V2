@@ -129,61 +129,76 @@ class MarcacionController extends Controller
     }
 
     public function real(Request $request)
-    {
-        $filters = $request->validate([
-            'empresa' => 'nullable|integer|exists:empresas,id',
-            'encargado' => 'nullable|integer|exists:empleados,id',
-            'fechaInicio' => 'nullable|date',
-            'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
-        ]);
+{
+    $filters = $request->validate([
+        'empresa' => 'nullable|integer|exists:empresas,id',
+        'encargado' => 'nullable|integer|exists:empleados,id',
+        'fechaInicio' => 'nullable|date',
+        'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+    ]);
 
-        $user = $request->user();
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
+    $user = $request->user();
+    $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
-        // PASO 1: FILTRAR EMPRESAS PARA MILUSKA
-        if ($user->name === 'MMILUSKA') {
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [4, 10, 11])
-                ->get(['id', 'razonsocial']);
+    // PASO 1: FILTRAR EMPRESAS SEGÚN USUARIO
+    if ($user->name === 'ANGELES TERRONES MILUSKA') {
+        $empresas = Empresa::where('estado', 1)
+            ->whereIn('id', [4, 10, 11])
+            ->get(['id', 'razonsocial']);
 
-            $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
-        ? $request->empresa
-        : ($empresas->first()->id ?? null);
+        $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
+            ? $request->empresa
+            : ($empresas->first()->id ?? null);
 
-            // CONSULTA SEPARADA PARA MILUSKA - SIN FILTRO DE ENCARGADO
-            $empleadosDnis = Empleado::where('empresa_id', $empresaFiltro)
-                ->whereNull('fecha_cese')
-                ->pluck('dni');
+        // CONSULTA SEPARADA PARA MILUSKA - SIN FILTRO DE ENCARGADO
+        $empleadosDnis = Empleado::where('empresa_id', $empresaFiltro)
+            ->whereNull('fecha_cese')
+            ->pluck('dni');
 
-        } else {
-            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+    } elseif ($user->id === 73) {
+        // USUARIO ID 73 SOLO VE EMPRESAS 1 Y 5
+        $empresas = Empresa::where('estado', 1)
+            ->whereIn('id', [1, 5])
+            ->get(['id', 'razonsocial']);
 
-            // CONSULTA NORMAL PARA OTROS USUARIOS - CON FILTRO DE ENCARGADO
-            $empleadosDnis = Empleado::where('empresa_id', $request->empresa)
-                ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
-                ->when($request->fechaFin, function ($query) use ($request) {
-                    $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
-                })
-                ->whereNull('fecha_cese')
-                ->pluck('dni');
-        }
+        $empresaFiltro = $request->empresa && in_array($request->empresa, [1, 5])
+            ? $request->empresa
+            : ($empresas->first()->id ?? null);
 
-        $marcaciones = Zktimems::query()
-            ->with(['empleado' => function ($query) {
-                $query->select('id', 'dni', 'nombres', 'apellidos');
-            }])
-            ->whereIn('tarjeta', $empleadosDnis)
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->get(['hora', 'tarjeta', 'fecha']);
+        // CONSULTA PARA USUARIO 73 - SIN FILTRO DE ENCARGADO
+        $empleadosDnis = Empleado::where('empresa_id', $empresaFiltro)
+            ->whereNull('fecha_cese')
+            ->pluck('dni');
 
-        return Inertia::render('marcaciones/reales/index', [
-            'marcaciones' => $marcaciones,
-            'empresas' => $empresas,
-            'encargados' => $encargados,
-            'filters' => $filters,
-            'csrf_token' => csrf_token(),
-        ]);
+    } else {
+        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
+        // CONSULTA NORMAL PARA OTROS USUARIOS - CON FILTRO DE ENCARGADO
+        $empleadosDnis = Empleado::where('empresa_id', $request->empresa)
+            ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
+            ->when($request->fechaFin, function ($query) use ($request) {
+                $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
+            })
+            ->whereNull('fecha_cese')
+            ->pluck('dni');
     }
+
+    $marcaciones = Zktimems::query()
+        ->with(['empleado' => function ($query) {
+            $query->select('id', 'dni', 'nombres', 'apellidos');
+        }])
+        ->whereIn('tarjeta', $empleadosDnis)
+        ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+        ->get(['hora', 'tarjeta', 'fecha']);
+
+    return Inertia::render('marcaciones/reales/index', [
+        'marcaciones' => $marcaciones,
+        'empresas' => $empresas,
+        'encargados' => $encargados,
+        'filters' => $filters,
+        'csrf_token' => csrf_token(),
+    ]);
+}
 
     /* Enviar las marcaciones a asistencias */
     public function store(StoreMarcacionRequest $request)

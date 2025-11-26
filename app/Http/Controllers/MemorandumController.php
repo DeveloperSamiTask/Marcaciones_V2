@@ -22,7 +22,7 @@ class MemorandumController extends Controller
 
         $user = $request->user();
 
-        if ($user->name === 'MMILUSKA') {
+        if ($user->name === 'ANGELES TERRONES MILUSKA') {
             // ========== BLOQUE MILUSKA ==========
             $empresas = Empresa::where('estado', 1)
                 ->whereIn('id', [4, 10, 11])
@@ -34,6 +34,28 @@ class MemorandumController extends Controller
                 : [4, 10, 11];
 
             // EMPLEADOS PARA MILUSKA
+            if (is_array($empresaFiltro)) {
+                $empleadoIds = Empleado::whereIn('empresa_id', $empresaFiltro)
+                    ->whereNull('fecha_cese')
+                    ->pluck('id');
+            } else {
+                $empleadoIds = Empleado::where('empresa_id', $empresaFiltro)
+                    ->whereNull('fecha_cese')
+                    ->pluck('id');
+            }
+
+        } elseif ($user->id === 73) {
+            // ========== BLOQUE USUARIO 73 ==========
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [1, 5])
+                ->get(['id', 'razonsocial']);
+
+            // EMPRESA FILTRO PARA USUARIO 73
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [1, 5])
+                ? $request->empresa
+                : [1, 5];
+
+            // EMPLEADOS PARA USUARIO 73
             if (is_array($empresaFiltro)) {
                 $empleadoIds = Empleado::whereIn('empresa_id', $empresaFiltro)
                     ->whereNull('fecha_cese')

@@ -91,8 +91,13 @@ export default function IndexTareo({ tareos, empresas, areas, jornadas, filters 
         setSelectedEmpresa(empresaId);
         setSelectedArea(null); // Resetear área al cambiar de empresa
     };
-
-    // carga automatica en tiempo real
+     useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
+    // carg a automatica en tiempo real
     useEffect(() => {
         if ((selectedEmpresa && selectedJornada && dateRange?.to) || selectedArea) {
             setIsFiltering(true);
@@ -103,7 +108,7 @@ export default function IndexTareo({ tareos, empresas, areas, jornadas, filters 
 
      useEffect(() => {
         // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
-        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
             setSelectedEmpresa(empresas[0].id);
         }
     }, [empresas, selectedEmpresa, auth.user.name]);
@@ -166,7 +171,7 @@ export default function IndexTareo({ tareos, empresas, areas, jornadas, filters 
                                 />
                             )}
 
-                              {auth.user.name === 'MMILUSKA' && (
+                              {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
                                 <SelectFilter
                                     items={empresas}
                                     selected={selectedEmpresa}
@@ -176,7 +181,16 @@ export default function IndexTareo({ tareos, empresas, areas, jornadas, filters 
                                     placeholder="SELECCIONAR EMPRESA"
                                 />
                             )}
-
+                            {auth.user.id === 73 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
                             <DateRangeFilter
                                 dateRange={dateRange}
                                 setDateRange={setDateRange}

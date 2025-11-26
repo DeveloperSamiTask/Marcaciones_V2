@@ -35,18 +35,29 @@ class AsistenciaController extends Controller
 
         $user = $request->user();
 
-        if ($user->name === 'MMILUSKA') {
+        if ($user->name === 'ANGELES TERRONES MILUSKA') {
             // BLOQUE MILUSKA - 3 EMPRESAS, SIN FILTRO DE ENCARGADO
             $empresas = Empresa::where('estado', 1)
                 ->whereIn('id', [4, 10, 11])
                 ->get(['id', 'razonsocial']);
 
-            // ***** RESPETAR EMPRESA SELECCIONADA SI ES DE SUS 3 EMPRESAS *****
             $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
                 ? $request->empresa
                 : ($empresas->first()->id ?? null);
 
             $encargadoFiltro = null; // MILUSKA NO USA ENCARGADO
+
+        } elseif ($user->id === 73) {
+            // BLOQUE USUARIO 73 - EMPRESAS 1 Y 5, SIN FILTRO DE ENCARGADO
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [1, 5])
+                ->get(['id', 'razonsocial']);
+
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [1, 5])
+                ? $request->empresa
+                : ($empresas->first()->id ?? null);
+
+            $encargadoFiltro = null; // USUARIO 73 NO USA ENCARGADO
 
         } else {
             // BLOQUE NORMAL - EMPRESA SELECCIONADA, CON ENCARGADO

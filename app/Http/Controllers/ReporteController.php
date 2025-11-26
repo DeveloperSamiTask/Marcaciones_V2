@@ -40,7 +40,7 @@ class ReporteController extends Controller
         $user = $request->user();
         $jornadas = Jornada::get(['id', 'nombre']);
 
-        if ($user->name === 'MMILUSKA') {
+        if ($user->name === 'ANGELES TERRONES MILUSKA') {
             // ========== BLOQUE MILUSKA ==========
             $empresas = Empresa::where('estado', 1)
                 ->whereIn('id', [4, 10, 11])
@@ -66,6 +66,32 @@ class ReporteController extends Controller
                 $empleadosQuery->where('empresa_id', $empresaFiltro);
             }
 
+        } elseif ($user->id === 73) {
+            // ========== BLOQUE USUARIO 73 ==========
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [1, 5])
+                ->get(['id', 'razonsocial']);
+
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [1, 5])
+                ? $request->empresa
+                : [1, 5];
+
+            // ÁREAS PARA USUARIO 73
+            if (is_array($empresaFiltro)) {
+                $areas = Area::where('estado', 1)->whereIn('empresa_id', $empresaFiltro)->get(['id', 'nombre']);
+            } else {
+                $areas = Area::where('estado', 1)->where('empresa_id', $empresaFiltro)->get(['id', 'nombre']);
+            }
+
+            // EMPLEADOS PARA USUARIO 73
+            $empleadosQuery = Empleado::query();
+
+            if (is_array($empresaFiltro)) {
+                $empleadosQuery->whereIn('empresa_id', $empresaFiltro);
+            } else {
+                $empleadosQuery->where('empresa_id', $empresaFiltro);
+            }
+
         } else {
             // ========== BLOQUE NORMAL ==========
             $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
@@ -76,7 +102,7 @@ class ReporteController extends Controller
                 ->when($user->rol_id == 4, fn ($q) => $q->where('jefe_id', $user->empleado_id));
         }
 
-        // CONSULTA COMÚN DE EMPLEADOS
+        // CONSULTA COMÚN DE EMPLEADOS (EL RESTO DEL CÓDIGO IGUAL)
         $empleados = $empleadosQuery
             ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'horas', 'jornada_id', 'empresa_id', 'fecha_ingreso')
             ->with(['area:id,nombre', 'horarios' => function ($q) use ($request) {
@@ -312,7 +338,7 @@ class ReporteController extends Controller
 
         $user = $request->user();
 
-        if ($user->name === 'MMILUSKA') {
+        if ($user->name === 'ANGELES TERRONES MILUSKA') {
             // ========== BLOQUE MILUSKA ==========
             $empresas = Empresa::where('estado', 1)
                 ->whereIn('id', [4, 10, 11])
@@ -323,6 +349,18 @@ class ReporteController extends Controller
                 : [4, 10, 11];
 
             $encargadoFiltro = null; // MILUSKA NO USA ENCARGADO
+
+        } elseif ($user->id === 73) {
+            // ========== BLOQUE USUARIO 73 ==========
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [1, 5])
+                ->get(['id', 'razonsocial']);
+
+            $empresaFiltro = $request->empresa && in_array($request->empresa, [1, 5])
+                ? $request->empresa
+                : [1, 5];
+
+            $encargadoFiltro = null; // USUARIO 73 NO USA ENCARGADO
 
         } else {
             // ========== BLOQUE NORMAL ==========
@@ -432,122 +470,125 @@ class ReporteController extends Controller
         return Excel::download(new CompensaExport($data, $tipo), 'compensas.xlsx');
     }
 
-    public function extraIndex(Request $request)
-    {
-        $filters = $request->validate([
-            'empresa' => 'nullable|integer|exists:empresas,id',
-            'encargado' => 'nullable|integer|exists:empleados,id',
-            'fechaInicio' => 'nullable|date',
-            'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
-        ]);
+   public function extraIndex(Request $request)
+{
+    $filters = $request->validate([
+        'empresa' => 'nullable|integer|exists:empresas,id',
+        'encargado' => 'nullable|integer|exists:empleados,id',
+        'fechaInicio' => 'nullable|date',
+        'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+    ]);
 
-        $user = $request->user();
+    $user = $request->user();
 
-        if ($user->name === 'MMILUSKA') {
-            // ========== BLOQUE MILUSKA ==========
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [4, 10, 11])
-                ->get(['id', 'razonsocial']);
+    // EMPRESAS SEGÚN USUARIO
+    if ($user->name === 'ANGELES TERRONES MILUSKA') {
+        $empresas = Empresa::where('estado', 1)
+            ->whereIn('id', [4, 10, 11])
+            ->get(['id', 'razonsocial']);
+    } elseif ($user->id === 73) {
+        $empresas = Empresa::where('estado', 1)
+            ->whereIn('id', [1, 5])
+            ->get(['id', 'razonsocial']);
+    } else {
+        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+    }
 
-            $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
-                ? $request->empresa
-                : [4, 10, 11];
+    $encargados = User::with('empleado')->where('estado', 1)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
-            $encargadoFiltro = null; // MILUSKA NO USA ENCARGADO
-
-        } else {
-            // ========== BLOQUE NORMAL ==========
-            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-            $empresaFiltro = $request->empresa;
-            $encargadoFiltro = $request->encargado;
-        }
-
-        $encargados = User::with('empleado')->where('estado', 1)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
-
-        // EMPLEADOS
-        $empleadosQuery = Empleado::query();
-
-        if (is_array($empresaFiltro)) {
-            $empleadosQuery->whereIn('empresa_id', $empresaFiltro);
-        } else {
-            $empleadosQuery->where('empresa_id', $empresaFiltro);
-        }
-
-        $empleados = $empleadosQuery
-            ->when($encargadoFiltro, fn ($q) => $q->where('jefe_id', $encargadoFiltro))
-            ->when($user->rol_id == 4 && ! $encargadoFiltro, fn ($q) => $q->where('jefe_id', $user->empleado_id))
-            ->with(['area:id,nombre', 'jornada:id,nombre', 'horarios' => function ($q) use ($request) {
-                $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-            }, 'marcaciones' => function ($q) use ($request) {
-                $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-            }])
-            ->when($request->fechaFin, function ($query) use ($request) {
-                $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
-            })
-            ->whereNull('fecha_cese')
-            ->orderBy('apellidos')
-            ->get();
-
-        // ... resto del código igual (cálculos de extras)
-        $pendientes = collect();
-        $revision = collect();
-        $aprobados = collect();
-
-        $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
-            $empleadoMarcaciones = $empleado->marcaciones ?? collect();
-            $horas = 0;
-            $extra = 0;
-            $estados_extras = [];
-
-            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$extra, &$estados_extras) {
-                $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
-                $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
-
-                if ($horario && $marcacion->ingreso && $marcacion->salida) {
-                    $extra += max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
-                    $estados_extras[] = $marcacion->estado_horas_extra;
-                }
-            });
-
-            $estadoFinal = null;
-            if (! empty($estados_extras)) {
-                if (in_array(0, $estados_extras)) {
-                    $estadoFinal = 'pendientes';
-                } elseif (in_array(2, $estados_extras)) {
-                    $estadoFinal = 'revision';
-                } else {
-                    $estadoFinal = 'aprobados';
-                }
+    // EMPLEADOS - FILTRO SIMPLIFICADO
+    $empleados = Empleado::query()
+        ->when($user->rol_id == 4 && $user->id !== 73, fn ($q) => $q->where('jefe_id', $user->empleado_id)) // USUARIO 73 NO USA FILTRO DE JEFE
+        ->when($user->name === 'ANGELES TERRONES MILUSKA', function ($q) use ($request) {
+            // MILUSKA SOLO VE EMPRESAS 4, 10, 11
+            if ($request->empresa && in_array($request->empresa, [4, 10, 11])) {
+                $q->where('empresa_id', $request->empresa);
+            } else {
+                $q->whereIn('empresa_id', [4, 10, 11]);
             }
+        }, function ($q) use ($request, $user) {
+            // OTROS USUARIOS - FILTRO NORMAL
+            if ($request->empresa) {
+                $q->where('empresa_id', $request->empresa);
+            }
+            // USUARIO 73 SOLO VE EMPRESAS 1 Y 5
+            elseif ($user->id === 73) {
+                $q->whereIn('empresa_id', [1, 5]);
+            }
+        })
+        ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id', 'fecha_ingreso')
+        ->with(['area:id,nombre', 'jornada:id,nombre', 'horarios' => function ($q) use ($request) {
+            $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
+        }, 'marcaciones' => function ($q) use ($request) {
+            $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
+        }])
+        ->when($request->fechaFin, function ($query) use ($request) {
+            $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
+        })
+        ->whereNull('fecha_cese')
+        ->orderBy('apellidos')
+        ->get();
 
-            if ($extra > 0) {
-                $item = [
-                    'empleado' => $empleado,
-                    'horas' => 0,
-                    'extra' => $extra,
-                    'estado' => $estadoFinal,
-                ];
+    // ... resto del código igual (cálculos de extras)
+    $pendientes = collect();
+    $revision = collect();
+    $aprobados = collect();
 
-                if ($estadoFinal === 'pendientes') {
-                    $pendientes->push($item);
-                } elseif ($estadoFinal === 'revision') {
-                    $revision->push($item);
-                } elseif ($estadoFinal === 'aprobados') {
-                    $aprobados->push($item);
-                }
+    $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
+        $empleadoMarcaciones = $empleado->marcaciones ?? collect();
+        $horas = 0;
+        $extra = 0;
+        $estados_extras = [];
+
+        $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$extra, &$estados_extras) {
+            $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
+            $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
+
+            if ($horario && $marcacion->ingreso && $marcacion->salida) {
+                $extra += max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
+                $estados_extras[] = $marcacion->estado_horas_extra;
             }
         });
 
-        return Inertia::render('reportes/extra/index', [
-            'filters' => $filters,
-            'empresas' => $empresas,
-            'encargados' => $encargados,
-            'pendientes' => $pendientes,
-            'revision' => $revision,
-            'aprobados' => $aprobados,
-            'csrf_token' => csrf_token(),
-        ]);
-    }
+        $estadoFinal = null;
+        if (! empty($estados_extras)) {
+            if (in_array(0, $estados_extras)) {
+                $estadoFinal = 'pendientes';
+            } elseif (in_array(2, $estados_extras)) {
+                $estadoFinal = 'revision';
+            } else {
+                $estadoFinal = 'aprobados';
+            }
+        }
+
+        if ($extra > 0) {
+            $item = [
+                'empleado' => $empleado,
+                'horas' => 0,
+                'extra' => $extra,
+                'estado' => $estadoFinal,
+            ];
+
+            if ($estadoFinal === 'pendientes') {
+                $pendientes->push($item);
+            } elseif ($estadoFinal === 'revision') {
+                $revision->push($item);
+            } elseif ($estadoFinal === 'aprobados') {
+                $aprobados->push($item);
+            }
+        }
+    });
+
+    return Inertia::render('reportes/extra/index', [
+        'filters' => $filters,
+        'empresas' => $empresas,
+        'encargados' => $encargados,
+        'pendientes' => $pendientes,
+        'revision' => $revision,
+        'aprobados' => $aprobados,
+        'csrf_token' => csrf_token(),
+    ]);
+}
 
     public function extraDownload(Request $request)
     {

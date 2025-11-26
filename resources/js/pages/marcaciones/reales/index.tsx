@@ -41,9 +41,9 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -69,9 +69,16 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
         );
     }, [selectedEmpresa, selectedEncargado, dateRange]);
 
-     useEffect(() => {
+    useEffect(() => {
         // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
-        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
+
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
             setSelectedEmpresa(empresas[0].id);
         }
     }, [empresas, selectedEmpresa, auth.user.name]);
@@ -135,16 +142,27 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                 />
                             )}
 
-                             {auth.user.name === 'MMILUSKA' && (
-                            <SelectFilter
-                                items={empresas}
-                                selected={selectedEmpresa}
-                                onSelect={setSelectedEmpresa}
-                                getValue={(empresa) => empresa.id}
-                                displayValue={(empresa) => empresa.razonsocial}
-                                placeholder="SELECCIONAR EMPRESA"
-                            />
-                        )}
+                            {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
+                            {auth.user.id === 73 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
 
                             <DateRangeFilter
                                 dateRange={dateRange}
@@ -152,7 +170,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                 placeholder="SELECCIONAR RANGO DE FECHAS"
                             />
 
-                            {auth.user.rol_id != 4 &&(
+                            {auth.user.rol_id != 4 && (
                                 <SelectFilter
                                     items={encargados}
                                     selected={selectedEncargado}

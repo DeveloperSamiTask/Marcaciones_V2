@@ -21,7 +21,9 @@ use Inertia\Inertia;
 
 class HorarioController extends Controller
 {
-    public function index(Request $request)
+
+    /*
+            public function index(Request $request)
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -31,26 +33,40 @@ class HorarioController extends Controller
 
         $user = $request->user();
 
-        if ($user->name === 'MMILUSKA') {
+        // FILTRO DE EMPRESAS SEGÚN USUARIO
+        if ($user->name === 'ANGELES TERRONES MILUSKA') {
             $empresas = Empresa::where('estado', 1)
                 ->whereIn('razonsocial', ['YAKU PARK S.A.C.', 'DREAMS COMPANY PERU S.A.C', 'CHAXRA S.A.C.'])
                 ->get(['id', 'razonsocial']);
-
+        } elseif ($user->id === 73) {
+            // USUARIO ID 73 SOLO VE EMPRESAS 1 Y 5
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [1, 5])
+                ->get(['id', 'razonsocial']);
         } else {
             // Para otros usuarios, todas las empresas
             $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
         }
+
         $horarios = Horario::with('empleado.area')
             ->whereHas('empleado', function ($query) use ($request, $user, $empresas) {
-                $query->where('empresa_id', $request->empresa)
-                    ->whereNull('fecha_cese');
+                $query->whereNull('fecha_cese');
 
-                // MILUSKA ve todos los empleados de sus empresas, sin filtro de jefe
-                if ($user->name === 'MMILUSKA') {
-                    $query->whereIn('empresa_id', $empresas->pluck('id'));
+                // FILTRO POR EMPRESA SELECCIONADA - ESTO ES LO QUE FALTA
+                if ($request->empresa) {
+                    $query->where('empresa_id', $request->empresa);
                 }
-                // Otros usuarios con rol_id 4 solo ven sus subordinados
-                elseif ($user->rol_id == 4) {
+                // SI NO HAY EMPRESA SELECCIONADA, APLICAR FILTRO POR USUARIO
+                else {
+                    if ($user->name === 'ANGELES TERRONES MILUSKA') {
+                        $query->whereIn('empresa_id', $empresas->pluck('id'));
+                    } elseif ($user->id === 73) {
+                        $query->whereIn('empresa_id', [1, 5]);
+                    }
+                }
+
+                // FILTRO POR JEFE (SOLO PARA ROL 4 QUE NO SON MILUSKA NI USUARIO 73)
+                if ($user->rol_id == 4 && $user->name !== 'ANGELES TERRONES MILUSKA' && $user->id !== 73) {
                     $query->where('jefe_id', $user->empleado_id);
                 }
             })
@@ -58,19 +74,86 @@ class HorarioController extends Controller
                 $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
             })
             ->orderBy('fecha')
+            ->orderBy('empleado_id') // Orden adicional para mejor organización
             ->get();
 
-        // ->paginate($filters['perPage'] ?? 10);
-
         session(['horarios_url' => $request->fullUrl()]);
-
-
 
         return Inertia::render('horarios/index', [
             'horarios' => $horarios,
             'empresas' => $empresas,
             'filters' => $filters,
         ]);
+    }
+    */
+
+    public function index(Request $request)
+    {
+        try {
+            $filters = $request->validate([
+                'empresa' => 'nullable|integer',
+                'fechaInicio' => 'nullable|date',
+                'fechaFin' => 'nullable|date',
+            ]);
+
+            $user = $request->user();
+
+            // EMPRESAS según usuario
+            if ($user->name === 'ANGELES TERRONES MILUSKA') {
+                $empresas = Empresa::where('estado', 1)
+                    ->whereIn('id', [4, 10, 11])
+                    ->get(['id', 'razonsocial']);
+            } elseif ($user->id === 73) {
+                $empresas = Empresa::where('estado', 1)
+                    ->whereIn('id', [1, 5])
+                    ->get(['id', 'razonsocial']);
+            } else {
+                $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+            }
+
+            // OBTENER SOLO EMPLEADOS ACTIVOS DE LA EMPRESA SELECCIONADA
+            $empleadoIds = [];
+            if ($request->empresa) {
+                $empleadoIds = Empleado::where('empresa_id', $request->empresa)
+                    ->whereNull('fecha_cese')
+                    ->when($user->rol_id == 4 && $user->name !== 'ANGELES TERRONES MILUSKA' && $user->id !== 73,
+                        fn ($q) => $q->where('jefe_id', $user->empleado_id))
+                    ->pluck('id')
+                    ->toArray();
+            }
+
+            // CONSULTA OPTIMIZADA - SOLO HORARIOS DE EMPLEADOS ACTIVOS
+            $horarios = [];
+            if (! empty($empleadoIds) && $request->fechaInicio && $request->fechaFin) {
+                $horarios = Horario::whereIn('empleado_id', $empleadoIds)
+                    ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+                    ->with(['empleado' => function ($q) {
+                        $q->select('id', 'nombres', 'apellidos', 'empresa_id')
+                            ->with(['area' => function ($q) {
+                                $q->select('id', 'nombre');
+                            }]);
+                    }])
+                    ->select('id', 'empleado_id', 'fecha', 'ingreso', 'salida', 'estado')
+                    ->orderBy('fecha', 'desc')
+                    ->orderBy('empleado_id')
+                    ->limit(500) // MÁXIMO 500 REGISTROS
+                    ->get();
+            }
+
+            return Inertia::render('horarios/index', [
+                'horarios' => $horarios,
+                'empresas' => $empresas,
+                'filters' => $filters,
+            ]);
+
+        } catch (\Exception $e) {
+
+            return Inertia::render('horarios/index', [
+                'horarios' => [],
+                'empresas' => Empresa::where('estado', 1)->get(['id', 'razonsocial']),
+                'filters' => $request->all(),
+            ]);
+        }
     }
 
     public function create(Request $request)

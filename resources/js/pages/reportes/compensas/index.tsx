@@ -113,7 +113,12 @@ export default function IndexReporteCompensas({
         setSelectedEmpresa(empresaId);
         setSelectedEncargado(null); // Resetear área al cambiar de empresa
     };
-
+     useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
     // carga automatica en tiempo real
     useEffect(() => {
         if ((selectedEmpresa && dateRange?.to) || selectedEncargado) {
@@ -124,7 +129,7 @@ export default function IndexReporteCompensas({
     }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters]);
     useEffect(() => {
         // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
-        if (auth.user.name === 'MMILUSKA' && !selectedEmpresa && empresas.length > 0) {
+        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
             setSelectedEmpresa(empresas[0].id);
         }
     }, [empresas, selectedEmpresa, auth.user.name]);
@@ -188,7 +193,17 @@ export default function IndexReporteCompensas({
                                 />
                             )}
 
-                            {auth.user.name === 'MMILUSKA' && (
+                            {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+                               {auth.user.id === 73 && (
                                 <SelectFilter
                                     items={empresas}
                                     selected={selectedEmpresa}
