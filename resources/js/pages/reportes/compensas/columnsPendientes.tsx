@@ -95,9 +95,10 @@ export const columnsPendientes: ColumnDef<Pendiente>[] = [
         header: 'TD',
         cell: ({ row }) => {
             const tds = row.original.permisos_td;
+            const tdsPendientes = tds.filter(td => td.estado === 0);
             return (
                 <div className="felx-col flex gap-1 font-semibold">
-                    {tds.map((td, index) => (
+                    {tdsPendientes.map((td, index) => (
                         <span key={index}>{format(td.fecha, 'dd/MM/yyyy')}</span>
                     ))}
                 </div>

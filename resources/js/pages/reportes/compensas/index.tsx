@@ -63,13 +63,16 @@ export default function IndexReporteCompensas({
     empresas,
     encargados,
     filters,
+    compensas_TD,
 }: {
     pendientes: Pendiente[];
     compensas: Permiso[];
     compensas_adelantadas: Permiso[];
+
     empresas: Empresa[];
     encargados: Encargado[];
     filters: Filters;
+    compensas_TD: Permiso[];
 }) {
     const { auth } = usePage<SharedData>().props;
 
@@ -248,7 +251,7 @@ export default function IndexReporteCompensas({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-compensas" columns={columnsPendientes} data={pendientes} />
+                                        <DataTable key="datatable-reporte-compensas" columns={columnsPendientes} data={pendientes}   />
                                     )}
                                 </TabsContent>
 
