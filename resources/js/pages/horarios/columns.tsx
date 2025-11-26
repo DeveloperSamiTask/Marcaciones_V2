@@ -37,7 +37,7 @@ const estadoBadgeVariants = {
     HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
 
-    TD: { label: 'TRABAJÓ DIA DE DESCANSO', variant: 'info'}
+    TD: { label: 'TRABAJÓ DIA DE DESCANSO', variant: 'info' }
 } as const;
 
 export const columns: ColumnDef<Horario>[] = [
@@ -127,15 +127,17 @@ export const columns: ColumnDef<Horario>[] = [
         cell: ({ row }) => {
             const horario = row.original;
 
-            return (horario.estado !== 'PE' && horario.validado == 0 &&  (
-                <div className="flex items-center gap-2">
-                    <Button asChild key={`edit-horario-${horario.id}`} size="sm">
-                        <Link href={route('horarios.edit', horario.id)}>
-                            <SquarePen />
-                        </Link>
-                    </Button>
-                </div>)
+            return (
+                horario.estado !== 'PE' && horario.validado == 0 && (
+                    <div className="flex items-center gap-2">
+                        <Button asChild key={`edit-horario-${horario.id}`} size="sm">
+                            <Link href={route('horarios.edit', horario.id)}>
+                                <SquarePen />
+                            </Link>
+                        </Button>
+                    </div>
+                )
             );
         },
-    },
+    }
 ];

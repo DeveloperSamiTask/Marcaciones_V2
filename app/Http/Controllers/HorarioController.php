@@ -21,9 +21,9 @@ use Inertia\Inertia;
 
 class HorarioController extends Controller
 {
-
     /*
-            public function index(Request $request)
+           Segundo cambio
+    public function index(Request $request)
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -87,7 +87,9 @@ class HorarioController extends Controller
     }
     */
 
-    public function index(Request $request)
+    /*
+        primer cambio
+ public function index(Request $request)
     {
         try {
             $filters = $request->validate([
@@ -154,6 +156,83 @@ class HorarioController extends Controller
                 'filters' => $request->all(),
             ]);
         }
+    }
+    */
+
+    public function index(Request $request)
+    {
+        $filters = $request->validate([
+            'empresa' => 'nullable|integer|exists:empresas,id',
+            'fechaInicio' => 'nullable|date',
+            'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+        ]);
+
+        $user = $request->user();
+
+        // EMPRESAS según usuario
+        if ($user->name === 'ANGELES TERRONES MILUSKA') {
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [4, 10, 11])
+                ->get(['id', 'razonsocial']);
+        } elseif ($user->id === 73) {
+            $empresas = Empresa::where('estado', 1)
+                ->whereIn('id', [1, 5])
+                ->get(['id', 'razonsocial']);
+        } else {
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        }
+
+        // OPTIMIZACIÓN: Si no hay fechas, retornar vacío inmediatamente
+        if (! $request->fechaInicio || ! $request->fechaFin) {
+            return Inertia::render('horarios/index', [
+                'horarios' => [],
+                'empresas' => $empresas,
+                'filters' => $filters,
+            ]);
+        }
+
+        $horarios = Horario::whereHas('empleado', function ($query) use ($request, $user) {
+            $query->whereNull('fecha_cese');
+
+            // FILTRO POR EMPRESA
+            if ($request->empresa) {
+                $query->where('empresa_id', $request->empresa);
+            }
+            // SI NO HAY EMPRESA SELECCIONADA, APLICAR RESTRICCIONES POR USUARIO
+            else {
+                if ($user->name === 'ANGELES TERRONES MILUSKA') {
+                    $query->whereIn('empresa_id', [4, 10, 11]);
+                } elseif ($user->id === 73) {
+                    $query->whereIn('empresa_id', [1, 5]);
+                }
+            }
+
+            // SOLO ROL 4 NORMAL USA FILTRO DE JEFE
+            if ($user->rol_id == 4 && $user->name !== 'ANGELES TERRONES MILUSKA' && $user->id !== 73) {
+                $query->where('jefe_id', $user->empleado_id);
+            }
+        })
+            ->with(['empleado' => function ($query) {
+                // OPTIMIZACIÓN: Cargar solo lo necesario
+                $query->select('id', 'nombres', 'apellidos', 'empresa_id')
+                    ->with(['area' => function ($q) {
+                        $q->select('id', 'nombre');
+                    }]);
+            }])
+            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->select('id', 'empleado_id', 'fecha', 'ingreso', 'salida', 'estado', 'validado') // Solo columnas necesarias
+            ->orderBy('fecha', 'desc') // Más recientes primero
+            ->orderBy('empleado_id')
+            ->limit(500) // MÁXIMO 500 REGISTROS
+            ->get();
+
+        session(['horarios_url' => $request->fullUrl()]);
+
+        return Inertia::render('horarios/index', [
+            'horarios' => $horarios,
+            'empresas' => $empresas,
+            'filters' => $filters,
+        ]);
     }
 
     public function create(Request $request)
@@ -458,6 +537,7 @@ class HorarioController extends Controller
             'entries.*.salida' => 'required|date_format:H:i',
             'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D,AHE,C,CA,CHE,FL,SP,M,SN,ST,SFI,FI,FJ,LCG,LSG,LP,LM,LF,TD',
             'entries.*.feriado' => 'nullable|integer|exists:feriados,id',
+            'entries.*.permiso_td_id' => 'nullable|integer|exists:permisos,id',
         ]);
 
         // 🔥 VALIDAR HORARIOS 00:00
@@ -485,11 +565,14 @@ class HorarioController extends Controller
                         $entry['salida'],
                         $entry['estado'],
                         '',
-                        $entry['feriado'] ?? null
+                        $entry['feriado'] ?? null,
+                        $entry['permiso_td_id'] ?? null
                     );
                     // Log::info('🔍 FECHA QUE ENTRA:',  $entry['fecha']);
                     $contador++;
                     $empleadoIds[] = $entry['empleado_id'];
+
+                    Log::info('TD del trabajador:'.$entry['permiso_td_id']);
                 }
             });
 
@@ -630,8 +713,13 @@ class HorarioController extends Controller
     }
 
     private function procesarUnDia($empleadoId, $fecha, $ingreso, $salida, $estado, $descripcion = '',
-        $feriado = null)
+        $feriado = null, $permiso_td_id = null)
     {
+
+        if ($estado === 'TD') {
+            Log::info("🎯 ESTADO TD DETECTADO - empleado $empleadoId, fecha $fecha, permiso_td_id: ".($permiso_td_id ?? 'NULL'));
+        }
+
         $empleado = Empleado::findOrFail($empleadoId);
         $fechaCarbon = Carbon::parse($fecha);
 
@@ -652,7 +740,7 @@ class HorarioController extends Controller
         // Esto asegura que siempre partas desde cero al editar
         $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
             ->whereDate('fecha', $fechaCarbon)
-            ->where('estado', '!=', 2, 1) // No eliminar rechazados
+            ->whereNotIn('estado', [1, 2]) // ❌ NO eliminar aprobados (1) ni rechazados (2) // No eliminar rechazados
 
             ->delete();
 
@@ -748,8 +836,26 @@ class HorarioController extends Controller
             Log::info("✅ CREADO permiso HE - empleado $empleadoId, fecha $fecha");
         }
 
+        // CONSUMIR UN TD
+        if ($estado == 'TD') {
+            // 🔥 SI SE ENVIÓ UN permiso_td_id ESPECÍFICO, ACTUALIZAR ESE PERMISO
+            if ($permiso_td_id) {
+                $permiso_td_id = Permiso::where('id', $permiso_td_id)
+                    ->where('empleado_id', $empleadoId)
+                    ->where('estado', 0)
+                    ->first();
+
+                if ($permiso_td_id) {
+                    $permiso_td_id->estado = 1;
+                    $permiso_td_id->save();
+                    $horario->estado = 'TD';
+                    $horario->save();
+                    Log::info("✅ ACTUALIZADO permiso TD específico - empleado $empleadoId, fecha $fecha, permiso_id: $permiso_td_id, estado: 0 → 1");
+                }
+            }
+        }
         // B. CREAR PERMISO SI ES DÍA NO LABORAL
-        if ($estado !== 'L') {
+        if ($estado !== 'L' && $estado !== 'TD') {
             $tipoPermiso = PermisoTipo::firstWhere('codigo', $estado);
             if ($tipoPermiso) {
                 $permisoData = [

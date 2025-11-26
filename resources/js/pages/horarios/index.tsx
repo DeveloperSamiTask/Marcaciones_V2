@@ -65,11 +65,18 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
 
     // Efecto para seleccionar automáticamente la primera empresa disponible para usuarios especiales
     useEffect(() => {
-        const isSpecialUser = auth.user.name === 'MMILUSKA' || auth.user.id === 73;
-        if (isSpecialUser && !selectedEmpresa && empresas.length > 0) {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
             setSelectedEmpresa(empresas[0].id);
         }
-    }, [empresas, selectedEmpresa, auth.user.name, auth.user.id]);
+    }, [empresas, selectedEmpresa, auth.user.name]);
+
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
 
     useEffect(() => {
         if (selectedEmpresa && dateRange?.to) {
@@ -78,12 +85,6 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
             return () => clearTimeout(timer);
         }
     }, [selectedEmpresa, dateRange, applyFilters]);
-
-    // Determinar qué usuarios pueden seleccionar empresa
-    const canSelectEmpresa =
-        auth.user.rol_id !== 4 ||
-        auth.user.name === 'MMILUSKA' ||
-        auth.user.id === 73;
 
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
@@ -120,7 +121,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                     <div className="flex items-center justify-between">
                         <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Lista de horarios</h2>
                         <Button key="nuevo-horario" asChild>
-                            <Link href={route('horarios.create')} prefetch>
+                            <Link href={route('horarios.create-2')} prefetch>
                                 <Plus />
                                 <span className="hidden sm:inline">Nuevo horario</span>
                             </Link>
@@ -128,7 +129,29 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
-                        {canSelectEmpresa && (
+                           {auth.user.rol_id != 4 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
+                        {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
+                            <SelectFilter
+                                items={empresas}
+                                selected={selectedEmpresa}
+                                onSelect={setSelectedEmpresa}
+                                getValue={(empresa) => empresa.id}
+                                displayValue={(empresa) => empresa.razonsocial}
+                                placeholder="SELECCIONAR EMPRESA"
+                            />
+                        )}
+
+                        {auth.user.id === 73 && (
                             <SelectFilter
                                 items={empresas}
                                 selected={selectedEmpresa}
