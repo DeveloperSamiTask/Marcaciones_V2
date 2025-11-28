@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\VerificarHorasExtrasPartTime;
+use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Horario;
 use App\Models\Permiso;
@@ -21,31 +22,40 @@ class SolicitudHorasExtrasPTController extends Controller
      */
     public function enviarTodaLasSolicitudes()
     {
-        // 1. BUSCAR TODAS LAS SOLICITUDES DE
-        $todasLasSolicitudes = SolicitudHorasExtrasPT::all();
+        Log::info('⚡ INICIANDO FLUJO MANUAL DE VERIFICACIÓN HORAS EXTRAS PT');
 
-        Log::info('📧 ENVIANDO  ACUMULADA - Solicitudes encontradas: '.$todasLasSolicitudes->count());
+        // 1. 🗓️ DEFINIR EL RANGO DE TIEMPO (EJ. LAS ÚLTIMAS 2 SEMANAS O EL MES COMPLETO)
+        // Opción B: Todo el mes actual (Recomendado para verificar las 93h)
+        $fechaFin = Carbon::now()->endOfDay();
+        $fechaInicio = Carbon::now()->startOfMonth()->startOfDay();
 
-        // 2. SI HAY , ENVIAR
-        if ($todasLasSolicitudes->count() > 0) {
-            // USAR TU MISMO MÉTODO DE ENVÍO DEL JOB
-            $job = new VerificarHorasExtrasPartTime(collect(), now(), now());
-            $job->enviarNotificacionAgrupada($todasLasSolicitudes);
+        Log::info("📅 RANGO DE VERIFICACIÓN: Desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}");
 
-            Log::info('✅  ENVIADA - Total: '.$todasLasSolicitudes->count().' solicitudes');
+        // 2. 👥 BUSCAR TODOS LOS EMPLEADOS PART-TIME
+        $empleadosPartTime = Empleado::where('jornada_id', 2)
+            ->whereNull('fecha_cese')
+            ->get();
 
-            return response()->json([
-                'success' => true,
-                'message' => "Se enviaron {$todasLasSolicitudes->count()} solicitudes acumuladas",
-            ]);
-        } else {
-            Log::info('📭 NO HAY  PARA ENVIAR');
+        Log::info('👥 EMPLEADOS PART-TIME ENCONTRADOS: '.$empleadosPartTime->count());
 
+        if ($empleadosPartTime->count() === 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'No hay solicitudes acumuladas para enviar',
+                'message' => 'No se encontraron empleados Part-Time para verificar.',
             ]);
         }
+
+        // 3. 🏃 DESPACHAR/EJECUTAR EL JOB DE VERIFICACIÓ
+        // ⚠️ Esto puede causar timeout si hay muchos empleados, pero es bueno para debugging.
+        $job = new VerificarHorasExtrasPartTime($empleadosPartTime, $fechaInicio, $fechaFin);
+        $job->handle();
+
+        // 4. 📝 BUSCAR LAS NUEVAS SOLICITUDES GENERADAS (Opcional, para la respuesta)
+        // Devolvemos el feedback
+        return response()->json([
+            'success' => true,
+            'message' => "Se inició la verificación de {$empleadosPartTime->count()} empleados PT desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}. Las notificaciones serán enviadas por el Job.",
+        ]);
     }
 
     public function index()

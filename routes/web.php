@@ -64,7 +64,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/horarios/nuevo2', [HorarioController::class, 'create_2'])->name('horarios.create-2');
 
-     Route::get('/horarios/nuevo', [HorarioController::class, 'create'])->name('horarios.create');
+    Route::get('/horarios/nuevo', [HorarioController::class, 'create'])->name('horarios.create');
 
     Route::get('/horarios/empleados', [HorarioController::class, 'empleadosPorEmpresa'])
         ->name('horarios.empleados');
@@ -166,8 +166,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes']);
 
+    
     // miluska
-
 
 });
 

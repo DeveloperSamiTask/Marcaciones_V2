@@ -572,7 +572,6 @@ class HorarioController extends Controller
                     $contador++;
                     $empleadoIds[] = $entry['empleado_id'];
 
-                    Log::info('TD del trabajador:'.$entry['permiso_td_id']);
                 }
             });
 
@@ -586,13 +585,7 @@ class HorarioController extends Controller
                 ->where('jornada_id', 2)
                 ->get();
 
-            Log::info('🚀 DISPATCHING VerificarHorasExtrasPartTime job', [
-                'count' => $empleadosPartTime->count(),
-                'empleados' => $empleadosPartTime->pluck('id', 'nombres')->toArray(),
-                'jornada_ids' => $empleadosPartTime->pluck('jornada_id')->toArray(),
-            ]);
-
-            \App\Jobs\VerificarHorasExtrasPartTime::dispatch($empleadosPartTime, $fechaMinima, $fechaMaxima);
+            // \App\Jobs\VerificarHorasExtrasPartTime::dispatch($empleadosPartTime, $fechaMinima, $fechaMaxima);
 
             return redirect()->back()->with('success', "✅ {$contador} horarios guardados correctamente");
 
@@ -731,10 +724,12 @@ class HorarioController extends Controller
         }
 
         // 2. Validar que no se modifiquen fechas pasadas
-        $inicioSemanaActual = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        /*
+         $inicioSemanaActual = Carbon::now()->startOfWeek(Carbon::MONDAY);
         if ($fechaCarbon->lt($inicioSemanaActual)) {
             throw new Exception("No se pueden crear o modificar horarios de semanas anteriores a la actual ({$fechaCarbon->format('d/m/Y')}).");
         }
+        */
 
         // 🔥 3. ELIMINAR TODOS LOS PERMISOS DE ESTA FECHA (EXCEPTO RECHAZADOS)
         // Esto asegura que siempre partas desde cero al editar
@@ -816,7 +811,7 @@ class HorarioController extends Controller
             $feriadoObj = Feriado::find($feriado);
             if ($feriadoObj) {
                 $horario->feriados()->sync([$feriado]);
-                Log::info("✅ ASOCIADO feriado {$feriadoObj->nombre} - empleado $empleadoId, fecha $fecha");
+                // Log::info("✅ ASOCIADO feriado {$feriadoObj->nombre} - empleado $empleadoId, fecha $fecha");
             }
         }
 
@@ -833,7 +828,7 @@ class HorarioController extends Controller
                 'motivo' => 'HORARIO PROGRAMADO EXTRA',
                 'estado' => 0,
             ]);
-            Log::info("✅ CREADO permiso HE - empleado $empleadoId, fecha $fecha");
+            //  Log::info("✅ CREADO permiso HE - empleado $empleadoId, fecha $fecha");
         }
 
         // CONSUMIR UN TD
@@ -847,7 +842,7 @@ class HorarioController extends Controller
 
                 if ($permiso_td_id) {
                     $permiso_td_id->estado = 1;
-                    $permiso_td_id->motivo = "TD consumido - " . $fechaCarbon->format('d/m/Y');
+                    $permiso_td_id->motivo = 'TD consumido - '.$fechaCarbon->format('d/m/Y');
                     $permiso_td_id->save();
 
                     $horario->estado = 'TD';
@@ -877,7 +872,7 @@ class HorarioController extends Controller
                 }
 
                 Permiso::create($permisoData);
-                Log::info("✅ CREADO permiso {$estado} - empleado $empleadoId, fecha $fecha");
+                //   Log::info("✅ CREADO permiso {$estado} - empleado $empleadoId, fecha $fecha");
             }
         }
 
@@ -1065,6 +1060,14 @@ class HorarioController extends Controller
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->get();
+
+        $diasTDDisponibles = Permiso::query()
+            ->where('empleado_id', $horario->empleado_id)
+            ->where('tipo_id', 24)
+            ->where('estado', 0)
+            ->select([ 'fecha'])
+            ->orderBy('fecha', 'asc')
+            ->get();
         /*
             Log::info('🔵 EDIT METHOD - Empleado:', [
 
@@ -1094,6 +1097,7 @@ class HorarioController extends Controller
             'horario' => $horario,
             'feriadoDisponible' => $feriadoDisponible,
             'feriadoFuturo' => $feriadoFuturo,
+            'diasTD' => $diasTDDisponibles,
             'url' => session('horarios_url', route('horarios.index')),
         ]);
     }

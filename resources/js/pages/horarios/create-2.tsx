@@ -305,9 +305,15 @@ export default function App({ empleados, empresas, url }) {
 
             // 🔥 CASO 1: Cambiar a NO LABORAL , solo D genera 00:00
             if (field === 'status' && value !== 'L') {
+
+                // 🔥 Definimos qué estados deben forzar el 00:00
+                const shouldResetTimes = (value === 'D' || value === 'SP');
+
                 const newDayData = {
-                    entryTime: value === 'D' ? '00:00' : dayData.entryTime,  // 🆕 SOLO 'D' PONE 00:00
-                    exitTime: value === 'D' ? '00:00' : dayData.exitTime,
+                    // Si es 'D' o 'SP', forzamos '00:00'. Si es otro estado (V, F, M, etc.),
+                    // mantenemos la hora que estaba (aunque luego no se sume, para referencia visual).
+                    entryTime: shouldResetTimes ? '00:00' : dayData.entryTime,
+                    exitTime: shouldResetTimes ? '00:00' : dayData.exitTime,
                     status: value as DaySchedule['status'],
                 };
 
@@ -401,8 +407,9 @@ export default function App({ empleados, empresas, url }) {
     };
 
 
+    //validaciones , descansos , TD , Compensas
     const handleSaveSchedules = async () => {
-        console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
+        // ==================== EVITAR CREAR HORARIOS ON FECHAS PASADAS ====================
 
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
@@ -418,20 +425,40 @@ export default function App({ empleados, empresas, url }) {
             return;
         }
 
+
         const entries = [];
         let hasValidationErrors = false;
+        console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
+
+
 
         // ==================== VALIDACIONES DE HORAS SEMANALES ====================
         filteredEmployees.forEach(employee => {
-            if (employee.jornada_id === 1) {
-                const employeeSchedule = scheduleData[employee.id] || {};
-                const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
+            const employeeSchedule = scheduleData[employee.id] || {};
+            const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
 
+            if (employee.jornada_id === 1) { // FULL TIME
+                // No más de 48 horas
                 if (horasSemanales > 2880) {
-                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas)`);
+                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas para Full Time)`);
                     hasValidationErrors = true;
                     return;
                 }
+                // No menos de 47 horas
+                if (horasSemanales <= 2820) {
+                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas para Full Time)`);
+                    hasValidationErrors = true;
+                    return;
+                }
+            }
+            else if (employee.jornada_id === 2) { // PART TIME
+                // No menos de 23.5 horas
+                if (horasSemanales < 1410) {
+                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 23.5 horas mínimas para Part Time)`);
+                    hasValidationErrors = true;
+                    return;
+                }
+                // Part Time no debería tener máximo? O agregas si necesitas
             }
         });
 

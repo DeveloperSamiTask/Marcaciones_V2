@@ -17,6 +17,7 @@ import { FormEventHandler, useEffect, useState } from 'react';
 import { Label as LabelChart, PolarRadiusAxis, RadialBar, RadialBarChart } from 'recharts';
 import { toast } from 'sonner';
 
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Horarios',
@@ -51,7 +52,6 @@ const estadoOptions = [
     { value: 'LM', label: 'LICENCIA POR MATERNIDAD' },
     { value: 'LF', label: 'LICENCIA POR FALLECIMIENTO' },
     { value: 'PE', label: 'PENDIENTE' },
-
     { value: 'TD', label: 'TRABAJO DIA DESCANSO' },
 ];
 
@@ -65,6 +65,14 @@ type HorarioForm = {
     feriado?: string;
     extras?: string;
 };
+
+
+type Feriado = { id: number | string; fecha: string; nombre: string };
+type Empleado = { id: number, jornada_id: number, horas_semanal_trabajadas?: number, horas?: number, horas_trabajadas?: number };
+type Horario = { id: number, empleado_id: number, fecha: string, ingreso: string, salida: string, estado: string, descripcion: string };
+type HorarioData = { ingreso: string, salida: string, estado: string, feriado: string, extras: string, descripcion: string };
+type SharedData = { auth: any };
+type ChartConfig = { [key: string]: { label: string, color: string } };
 
 const formatHours = (hours: number | false): string => {
     if (typeof hours !== 'number') return '-';
@@ -84,32 +92,45 @@ const formatMinutes = (minutes: number | false): string => {
     return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
 };
 
-const FeriadoInfo = ({ feriado, tipo }: { feriado: Feriado[]; tipo: string }) => {
 
+
+
+const FeriadoInfo = ({ feriado, tipo }: { feriado: Feriado[]; tipo: string }) => {
     if (!feriado.length) {
         return (
-            <div className="text-red-500">
-                <p>No tiene feriados disponibles</p>
+            <div className="text-red-500 mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                <p>
+                    {tipo === 'TD'
+                        ? '🚫 No tiene días de Permiso TD disponibles para consumir.'
+                        : '🚫 No tiene feriados disponibles para compensar.'
+                    }
+                </p>
             </div>
         );
     }
+
 
     // Filtrar datos según el tipo
     const lista = tipo === 'CA' ? [feriado[0]] : feriado;
 
     return (
-        <div className="col-span-1 space-y-6 sm:col-span-2">
+        <div className="col-span-1 space-y-6 sm:col-span-2 mt-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                {tipo === 'TD' ? 'Días TD Disponibles' : 'Feriados Disponibles'}
+            </h4>
             <div className="grid gap-2">
                 {lista.map((item, index) => (
-                    <div key={index} className="text-teal-600">
+                    <div key={item.id} className="text-teal-600 dark:text-teal-400 text-sm">
                         <p>
-                            <strong>Nombre: </strong> {item.nombre}
+                            <strong>Tipo: </strong> {tipo}
                         </p>
                         <p>
-                            <strong>Fecha: </strong> {format(item.fecha, 'dd/MM/yyyy')}
+                            <strong>Referencia: </strong> {item.nombre}
                         </p>
-                        {/* Línea divisoria opcional entre elementos (excepto el último) */}
-                        {index < lista.length - 1 && <hr className="my-2 border-gray-200 dark:border-neutral-800" />}
+                        <p>
+                            <strong>Fecha: </strong> <span className="font-medium">{format(new Date(item.fecha), 'dd/MM/yyyy')}</span>
+                        </p>
+                        {index < lista.length - 1 && <hr className="my-2 border-gray-200 dark:border-neutral-700" />}
                     </div>
                 ))}
             </div>
@@ -128,8 +149,10 @@ const chartConfig = {
     },
 } satisfies ChartConfig;
 
-export default function EditHorario({ horario, empleado, feriadoDisponible, feriadoFuturo, url }:
-    { horario: Horario; empleado: Empleado; feriadoDisponible: Feriado[]; feriadoFuturo: Feriado[]; url: string }) {
+
+
+export default function EditHorario({ horario, empleado, feriadoDisponible, feriadoFuturo, diasTD, url }:
+    { horario: Horario; empleado: Empleado; feriadoDisponible: Feriado[]; feriadoFuturo: Feriado[]; diasTD: Feriado[]; url: string }) {
 
     const chartData = [{ horas: empleado.horas ?? 0, horas_trabajadas: empleado.horas_trabajadas ?? 0 }];
     const chartDataSemanal = [{ horas: empleado.jornada_id == 1 ? 48 : 23.5, horas_trabajadas: empleado.horas_semanal_trabajadas ? empleado.horas_semanal_trabajadas / 60 : 0 }];
@@ -155,8 +178,6 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
             return;
         }
 
-
-
         setExcedente(false);
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
@@ -181,6 +202,28 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         setData('estado', value);
         setData('feriado', '');
         setData('extras', extras);
+
+
+        const getDiaMasAntiguo = (dias: Feriado[]) => {
+            // Ordena del más antiguo al más reciente y toma el primero (el que se debe consumir)
+            return [...dias]
+                .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())[0];
+        };
+
+        // 🔥 Integración: Agregamos 'TD' al mapa de selección automática
+        const diaMap = {
+            C: getDiaMasAntiguo(feriadoDisponible),
+            CA: getDiaMasAntiguo(feriadoFuturo),
+            TD: getDiaMasAntiguo(diasTD),
+        };
+
+        const selectedDia = diaMap[value as keyof typeof diaMap];
+        if (selectedDia) {
+            // Si es C/CA: se guarda el ID del FERIADO
+            // Si es TD: se guarda el ID del PERMISO TD (tipo 24, estado 0)
+            setData('feriado', selectedDia.id.toString());
+        }
+
 
         const getFeriadoMasAntiguo = (feriados: Feriado[]) => {
             return [...feriados]
@@ -345,6 +388,10 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <InputError message={errors.ingreso} />
                                     </div>
 
+
+
+
+
                                     <div className="grid gap-2">
                                         <Label htmlFor="salida">HORA DE SALIDA</Label>
 
@@ -394,6 +441,15 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
 
 
 
+
+
+
+
+
+
+
+
+
                                     <div className="grid gap-2">
                                         <Label htmlFor="estado">ESTADO</Label>
 
@@ -424,16 +480,24 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <InputError message={errors.estado} />
                                     </div>
 
-                                    {(data.estado === 'C' || data.estado === 'CA') && (
+                                    {(data.estado === 'C' || data.estado === 'CA' || data.estado === 'TD') && (
                                         <FeriadoInfo
-                                            feriado={data.estado === 'C'
-                                                ? [...feriadoDisponible].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
-                                                : [...feriadoFuturo].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                            feriado={
+                                                data.estado === 'C'
+                                                    ? [...feriadoDisponible].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                                    : data.estado === 'CA'
+                                                        ? [...feriadoFuturo].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                                        // Usamos diasTD cuando el estado es TD
+                                                        : [...diasTD].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
                                             }
                                             tipo={data.estado}
                                         />
                                     )}
                                 </div>
+
+
+
+
 
 
 

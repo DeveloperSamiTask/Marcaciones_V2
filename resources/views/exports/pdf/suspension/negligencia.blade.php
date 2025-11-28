@@ -167,6 +167,9 @@
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         {{ $suspension->motivo }}
                     </p>
+
+
+
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
                         artículo 48 inciso

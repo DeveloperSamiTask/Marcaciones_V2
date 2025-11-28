@@ -38,7 +38,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         $solicitudesGeneradas = collect();
 
         foreach ($this->empleadosPartTime as $empleado) {
-            Log::info("🔎 Verificando: {$empleado->nombre_completo} - Empresa: {$empleado->empresa_id}");
+           // Log::info("🔎 Verificando: {$empleado->nombre_completo} - Empresa: {$empleado->empresa_id}");
             $solicitud = $this->verificarEmpleado($empleado);
             if ($solicitud) {
                 $solicitudesGeneradas[] = $solicitud;
@@ -48,7 +48,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         // 🟢 ENVIAR 1 SOLO EMAIL AGRUPADO CON TODAS LAS SOLICITUDES
         if (count($solicitudesGeneradas) > 0) {
             Log::info("📧 Enviando email agrupado con {$solicitudesGeneradas->count()} solicitudes");
-           // $this->enviarNotificacionAgrupada($solicitudesGeneradas);
+            $this->enviarNotificacionAgrupada($solicitudesGeneradas);
         } else {
             Log::info('📭 No hay solicitudes para notificar');
         }
@@ -85,6 +85,11 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         }
     }
 
+
+    /*
+    El conteo de horas es acumulativo desde la fecha ??? en la que se llama al Job en adelante.
+    Si cumple las 93h se genera una solicitud y empieza a contar desde el dia siguiente.
+    */
     private function verificarEmpleado($empleado)
     {
         Log::info("🔍 INICIANDO VERIFICACIÓN PARA: {$empleado->nombres}");
@@ -126,7 +131,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 $horasDia = $this->calcularHorasDia($horario);
                 $totalHoras += $horasDia;
 
-                Log::info("📅 {$empleado->nombres} - {$horario->fecha->format('d/m/Y')}: {$horario->ingreso} a {$horario->salida} = {$horasDia}h (Total: {$totalHoras}h)");
+              //  Log::info("📅 {$empleado->nombres} - {$horario->fecha->format('d/m/Y')}: {$horario->ingreso} a {$horario->salida} = {$horasDia}h (Total: {$totalHoras}h)");
 
                 if ($totalHoras >= 93 && ! $fechaCumplimiento) {
                     $fechaCumplimiento = $horario->fecha;
@@ -149,7 +154,8 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
     private function calcularHorasDia($horario)
     {
         // 🟢 DEBUG EXTRA PARA VER LOS DATOS REALES
-        Log::info('🔴 DEBUG CRUDO DEL HORARIO:', [
+        /*
+          Log::info('🔴 DEBUG CRUDO DEL HORARIO:', [
             'fecha' => $horario->fecha,
             'ingreso_tipo' => gettype($horario->ingreso),
             'ingreso_valor' => $horario->ingreso,
@@ -158,6 +164,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             'ingreso_es_carbon' => $horario->ingreso instanceof \Carbon\Carbon,
             'salida_es_carbon' => $horario->salida instanceof \Carbon\Carbon,
         ]);
+        */
 
         // 🟢 USAR SOLO LA HORA IGNORANDO LA FECHA CORRUPTA
         $horaEntrada = $horario->ingreso instanceof \Carbon\Carbon
@@ -168,19 +175,24 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             ? $horario->salida->format('H:i')
             : $horario->salida;
 
+        /*
         Log::info('🔴 DEBUG HORAS PROCESADAS:', [
             'hora_entrada' => $horaEntrada,
             'hora_salida' => $horaSalida,
         ]);
+        */
+
 
         // 🟢 COMBINAR CON LA FECHA REAL DEL HORARIO
         $entrada = \Carbon\Carbon::parse($horario->fecha->format('Y-m-d').' '.$horaEntrada);
         $salida = \Carbon\Carbon::parse($horario->fecha->format('Y-m-d').' '.$horaSalida);
 
-        Log::info('🔴 DEBUG FECHAS COMBINADAS:', [
+        /*
+           Log::info('🔴 DEBUG FECHAS COMBINADAS:', [
             'entrada' => $entrada,
             'salida' => $salida,
-        ]);
+        ]);s
+        */
 
         // 🟢 Detectar turno nocturno
         if ($salida < $entrada) {
@@ -191,12 +203,15 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         $minutosDia = $salida->diffInMinutes($entrada, false);
         $minutosDia = abs($minutosDia); // 🟢 CONVERTIR A POSITIVO
 
-        Log::info('🔴 DEBUG DIFERENCIA:', [
+        /*
+         Log::info('🔴 DEBUG DIFERENCIA:', [
             'entrada' => $entrada,
             'salida' => $salida,
             'diff_minutos' => $minutosDia,
             'diff_horas' => $minutosDia / 60,
         ]);
+        */
+
 
         $minutosDia = max(0, $minutosDia);
 
@@ -253,7 +268,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                     'permiso_HE_PT' => $solicitud->id,
                 ]);
 
-                Log::info("✅ Permiso creado - ID: {$permiso->id} - Vinculado a solicitud: {$solicitud->id}");
+               Log::info("✅ Permiso creado - ID: {$permiso->id} - Vinculado a solicitud: {$solicitud->id}");
 
             } catch (\Exception $e) {
                 Log::error('❌ Error creando permiso: '.$e->getMessage());

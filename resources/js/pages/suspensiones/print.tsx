@@ -62,6 +62,7 @@ export default function PrintSuspension({ suspension, isPrint }: { suspension: S
                     Indicar la fecha que se aplicara la suspension
                 </DialogDescription>
 
+                {/* Rango de suspensión - SOLO para suspensiones (S) que no han sido impresas */}
                 {!suspension.fecha_print && suspension.codigo[0] == 'S' && (
                     <div className="grid gap-2">
                         <label className="text-sm font-medium">Rango de suspensión</label>
@@ -73,7 +74,8 @@ export default function PrintSuspension({ suspension, isPrint }: { suspension: S
                     </div>
                 )}
 
-                {(suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && (
+                {/* Motivo - SOLO para amonestaciones (AM) de tipo negligencia o incumplimiento */}
+                {suspension.codigo[0] == 'A' && (suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && (
                     <div className="grid gap-2">
                         Motivo
                         <Textarea
@@ -89,7 +91,8 @@ export default function PrintSuspension({ suspension, isPrint }: { suspension: S
                     </div>
                 )}
 
-                {(suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && (
+                {/* Artículo - SOLO para amonestaciones (AM) de tipo negligencia o incumplimiento */}
+                {suspension.codigo[0] == 'A' && (suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && (
                     <div className="grid gap-2">
                         Articulo {suspension.codigo[0] == 'S' ? '48' : '38'}
                         <Textarea
@@ -102,7 +105,6 @@ export default function PrintSuspension({ suspension, isPrint }: { suspension: S
                             autoComplete="articulo"
                             placeholder="Describe el numero del articulo"
                         />
-
                     </div>
                 )}
 

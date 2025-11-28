@@ -404,11 +404,11 @@ class ReporteController extends Controller
 
                 $permisosTD = Permiso::where('empleado_id', $empleado->id)
                     ->whereIn('tipo_id', [24])
-                    ->whereIn('estado', [0, 1])
+                    ->whereIn('estado', [0])
                     ->select(['id', 'fecha', 'tipo_id', 'estado'])
                     ->get();
 
-                if ($feriados->isNotEmpty()) {
+                if ($feriados->isNotEmpty() || $permisosTD->isNotEmpty()) {
                     return [
                         'id' => $empleado->id,
                         'empleado' => $empleado->apellidos.' '.$empleado->nombres,
@@ -436,6 +436,8 @@ class ReporteController extends Controller
                     16 => 'compensa_adelantada',
                 };
             });
+
+
 
         return Inertia::render('reportes/compensas/index', [
             'filters' => $filters,

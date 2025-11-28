@@ -326,15 +326,32 @@ class SuspensionController extends Controller
         }
 
         // NEGLIGENCIA
+        // NEGLIGENCIA
         if ($suspension->tipo == 'negligencia') {
-            if ($usarA5 && isset($suspension->codigo[0]) && $suspension->codigo[0] == 'S') {
+            // Si es SUSPENSIÓN por acumulación (código empieza con 'S')
+            if (isset($suspension->codigo[0]) && $suspension->codigo[0] == 'S') {
+                // Cargar las 3 amonestaciones asociadas
+                $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)
+                    ->where('tipo', 'negligencia')
+                    ->orderBy('fecha', 'asc')
+                    ->get();
+
+                if ($usarA5) {
+                    return view('exports.pdf.suspension.negligencia_a5', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
+                }
+
+                return view('exports.pdf.suspension.negligencia', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
+            }
+
+            // Si es AMONESTACIÓN individual (código empieza con 'AM')
+            if ($usarA5) {
                 return view('exports.pdf.suspension.negligencia_a5', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
             }
 
             return view('exports.pdf.suspension.negligencia', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
-        // SUSPENSIÓN POR ACUMULACIÓN
+        // SUSPENSIÓN POR ACUMULACIÓN (FALLBACK)
         $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 
         if ($usarA5) {
