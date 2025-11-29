@@ -464,24 +464,6 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <InputError message={errors.descripcion} />
                                     </div>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                                     <div className="grid gap-2">
                                         <Label htmlFor="estado">ESTADO</Label>
 
@@ -526,23 +508,6 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         />
                                     )}
                                 </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
                                 <div className="flex items-center gap-4">
                                     <Button type='submit' variant={excedente ? 'info' : 'default'} disabled={processing} tabIndex={8}>

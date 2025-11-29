@@ -164,9 +164,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/solicitudes-he-pt/rrhh', [SolicitudHorasExtrasPTController::class, 'indexRRHH'])->name('solicitudes-he-pt.rrhh');
 
-    Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes']);
+    Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes'])->name('solicitudes-enviar-acumulada');
 
-    
+
     // miluska
 
 });

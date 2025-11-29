@@ -96,6 +96,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 
         $ultimaSolicitud = SolicitudHorasExtrasPT::where('empleado_id', $empleado->id)
             ->orderBy('fecha_deteccion', 'desc')
+            // ->where('estado' , '=' , 0)
             ->first();
 
         // 🟢 FIX: CONTAR DESDE EL DÍA DESPUÉS DE CUMPLIR 93H
@@ -229,12 +230,12 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
     private function generarSolicitud($empleado, $horasAcumuladas, $fechaCumplimiento, $fechaInicioConteo)
     {
         $solicitudExistente = SolicitudHorasExtrasPT::where('empleado_id', $empleado->id)
-            ->where('estado', '1')
+            ->where('estado', '0')
             ->first();
 
         Log::info("🔍 Verificando solicitud existente para empleado: {$empleado->id} - Existe: ".($solicitudExistente ? 'SÍ' : 'NO'));
 
-        if (! $solicitudExistente) {
+        if (!$solicitudExistente) {
             // CREAR SOLICITUD
             $solicitud = SolicitudHorasExtrasPT::create([
                 'empleado_id' => $empleado->id,

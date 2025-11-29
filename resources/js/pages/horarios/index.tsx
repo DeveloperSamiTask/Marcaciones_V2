@@ -14,6 +14,7 @@ import { CalendarIcon, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import { columns } from './columns';
+import { Zap } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -42,10 +43,11 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                 }
                 : undefined,
     };
-
+    const { props: inertiaProps } = usePage();
     const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(initialState.empresa);
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialState.dateRange);
     const [isFiltering, setIsFiltering] = useState(false);
+
 
     const applyFilters = useCallback(() => {
         router.get(
@@ -119,26 +121,46 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
             <div className="flex flex-1 flex-col p-8">
                 <div className="@container/main flex flex-1 flex-col gap-6">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Lista de horarios</h2>
-                        <Button key="nuevo-horario" asChild>
-                            <Link href={route('horarios.create-2')} prefetch>
-                                <Plus />
-                                <span className="hidden sm:inline">Nuevo horario</span>
-                            </Link>
-                        </Button>
+
+                        {/* Contenedor de la izquierda: Título */}
+                        <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">
+                            Lista de horarios
+                        </h2>
+
+                        {/* 💥 Nuevo Contenedor para AGRUPAR los botones y alinearlos a la derecha 💥 */}
+                        <div className="flex items-center space-x-2">
+
+                            {/* Botón 1 (Ejemplo: Nuevo Horario) */}
+                            <Button key="nuevo-horario" asChild>
+                                <Link href={route('horarios.create-2')} prefetch>
+                                    <Plus />
+                                    <span className="hidden sm:inline">Nuevo horario</span>
+                                </Link>
+                            </Button>
+
+                            {/* Botón 2 (Ejemplo: Ejecutar Verificación, si quieres usar el que discutimos antes) */}
+                            <Button key="ejecutar-verificacion" asChild>
+                                <Link href={route('solicitudes-enviar-acumulada')} prefetch>
+                                    <Zap /> {/* O el ícono que prefieras */}
+                                    <span className="hidden sm:inline">Verificar H.E.</span>
+                                </Link>
+                            </Button>
+
+                        </div>
+                        {/* -------------------------------------------------------------------------- */}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
-                           {auth.user.rol_id != 4 && (
-                                <SelectFilter
-                                    items={empresas}
-                                    selected={selectedEmpresa}
-                                    onSelect={setSelectedEmpresa}
-                                    getValue={(empresa) => empresa.id}
-                                    displayValue={(empresa) => empresa.razonsocial}
-                                    placeholder="SELECCIONAR EMPRESA"
-                                />
-                            )}
+                        {auth.user.rol_id != 4 && (
+                            <SelectFilter
+                                items={empresas}
+                                selected={selectedEmpresa}
+                                onSelect={setSelectedEmpresa}
+                                getValue={(empresa) => empresa.id}
+                                displayValue={(empresa) => empresa.razonsocial}
+                                placeholder="SELECCIONAR EMPRESA"
+                            />
+                        )}
 
                         {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
                             <SelectFilter

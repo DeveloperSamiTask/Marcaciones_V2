@@ -32,7 +32,13 @@ const estadoBadgeVariants = {
     PE: { label: '21.PENDIENTE', variant: 'warning' },
     HENA: { label: '22.H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     HE: { label: '23.HORAS EXTRA', variant: 'info' },
-    TD: { label: '24.TRABAJO DIA DESCANSO', variant: 'info' }
+    TD: { label: '24.TRABAJO DIA DESCANSO', variant: 'info' },
+
+    AS: { label: '25.APRB. SISTEMA', variant: 'destructive' },
+    AU: { label: '26.APRB. USER', variant: 'success' },
+    RU: { label: '27.RECHAZ. USER', variant: 'destructive' },
+    RS: { label: '28.RECHAZ. SISTEMA', variant: 'success' },
+
 } as const;
 
 export const columns: ColumnDef<Horario>[] = [

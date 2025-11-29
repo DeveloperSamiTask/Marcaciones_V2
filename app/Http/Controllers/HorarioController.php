@@ -1060,37 +1060,13 @@ class HorarioController extends Controller
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->get();
-
         $diasTDDisponibles = Permiso::query()
             ->where('empleado_id', $horario->empleado_id)
             ->where('tipo_id', 24)
             ->where('estado', 0)
-             ->select(['id', 'fecha', 'motivo'])
+            ->select(['id', 'fecha', 'motivo'])
             ->orderBy('fecha', 'asc')
             ->get();
-        /*
-            Log::info('🔵 EDIT METHOD - Empleado:', [
-
-        'horas_semanal_trabajadas' => $empleado->horas_semanal_trabajadas,
-        'horas_trabajadas' => $empleado->horas_trabajadas,
-        'jornada_id' => $empleado->jornada_id,
-        'horas' => $empleado->horas,
-        ]);
-
-        Log::info('🔵 EDIT METHOD - Cálculos finales:', [
-        'horas_semanal_calculadas' => $horasSemanal,
-        'horas_mensual_calculadas' => $horas / 60,
-        'horas_semanal_guardadas' => $empleado->horas_semanal_trabajadas,
-        'horas_mensual_guardadas' => $empleado->horas_trabajadas,
-        ]);
-
-        Log::info('🔵 HORARIOS ENCONTRADOS - Semana:', [
-        'inicio_semana' => $inicioSemana,
-        'fin_semana' => $finSemana,
-        'horarios_count' => $empleado->horarios->count(),
-        'horarios_laborales' => $empleado->horarios->where('estado', 'L')->pluck('fecha', 'id'),
-        ]);
-        */
 
         return Inertia::render('horarios/edit', [
             'empleado' => $empleado,
@@ -1100,6 +1076,34 @@ class HorarioController extends Controller
             'diasTD' => $diasTDDisponibles,
             'url' => session('horarios_url', route('horarios.index')),
         ]);
+
+        /*
+         Log::info('🔵 EDIT METHOD - Empleado:', [
+        'horas_semanal_trabajadas' => $empleado->horas_semanal_trabajadas,
+        'horas_trabajadas' => $empleado->horas_trabajadas,
+        'jornada_id' => $empleado->jornada_id,
+        'horas' => $empleado->horas,
+        ]);
+
+
+
+        Log::info('🔵 EDIT METHOD - Cálculos finales:', [
+        'horas_semanal_calculadas' => $horasSemanal,
+        'horas_mensual_calculadas' => $horas / 60,
+        'horas_semanal_guardadas' => $empleado->horas_semanal_trabajadas,
+        'horas_mensual_guardadas' => $empleado->horas_trabajadas,
+        ]);
+
+
+
+        Log::info('🔵 HORARIOS ENCONTRADOS - Semana:', [
+        'inicio_semana' => $inicioSemana,
+        'fin_semana' => $finSemana,
+        'horarios_count' => $empleado->horarios->count(),
+        'horarios_laborales' => $empleado->horarios->where('estado', 'L')->pluck('fecha', 'id'),
+        ]);
+        */
+
     }
 
     public function update(UpdateHorarioRequest $request, Horario $horario)
@@ -1127,7 +1131,7 @@ class HorarioController extends Controller
                         $permisoExistente->whereDate('fecha', $horario->fecha);
                     }
 
-                    //Logica parar editar TD de forma individual
+                    // Logica parar editar TD de forma individual
                     if ($data['estado'] === 'TD') {
 
                         $permisoConsumido = Permiso::find($data['feriado']);

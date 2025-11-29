@@ -40,6 +40,11 @@ const estadoBadgeVariants = {
     PE: { label: 'PENDIENTE', variant: 'warning' },
     HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
+    TD: { label: 'TRABAJÓ DIA DE DESCANSO', variant: 'info' },
+    AS: { label: 'APRB. SISTEMA', variant: 'destructive' },
+    AU: { label: 'APRB. USER', variant: 'success' },
+    RU: { label: 'RECHAZ. USER', variant: 'destructive' },
+    RS: { label: 'RECHAZ. SISTEMA', variant: 'success' },
 } as const;
 
 const formatMinutes = (minutes: number | false): string => {
@@ -99,7 +104,7 @@ export default function DetalleSolicitudHE({ solicitud }: { solicitud: any }) {
                                         <div key={index} className="p-2 border rounded">
                                             <p className='flex gap-3 items-center'>
                                                 {`${format(new Date(horario.fecha), 'd/MM/yyyy')} - ${horario.ingreso} a ${horario.salida} `}
-                                                 <span className="text-green-600 font-mono">  ({formatMinutes(dataExtra.horas_por_dia[horario.fecha.split('T')[0]])}) </span>
+                                                <span className="text-green-600 font-mono">  ({formatMinutes(dataExtra.horas_por_dia[horario.fecha.split('T')[0]])}) </span>
                                                 <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>
                                             </p>
                                         </div>

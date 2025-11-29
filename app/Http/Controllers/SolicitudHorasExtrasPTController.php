@@ -26,9 +26,13 @@ class SolicitudHorasExtrasPTController extends Controller
 
         // 1. 🗓️ DEFINIR EL RANGO DE TIEMPO (EJ. LAS ÚLTIMAS 2 SEMANAS O EL MES COMPLETO)
         // Opción B: Todo el mes actual (Recomendado para verificar las 93h)
-        $fechaFin = Carbon::now()->endOfDay();
+
         $fechaInicio = Carbon::now()->startOfMonth()->startOfDay();
 
+        // $fechaFin = Carbon::now()->endOfDay();
+
+        // pruebas
+        $fechaFin = Carbon::now()->addMonth()->endOfDay();
         Log::info("📅 RANGO DE VERIFICACIÓN: Desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}");
 
         // 2. 👥 BUSCAR TODOS LOS EMPLEADOS PART-TIME
@@ -52,10 +56,10 @@ class SolicitudHorasExtrasPTController extends Controller
 
         // 4. 📝 BUSCAR LAS NUEVAS SOLICITUDES GENERADAS (Opcional, para la respuesta)
         // Devolvemos el feedback
-        return response()->json([
-            'success' => true,
-            'message' => "Se inició la verificación de {$empleadosPartTime->count()} empleados PT desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}. Las notificaciones serán enviadas por el Job.",
-        ]);
+       // $mensaje = "Se inició la verificación de {$empleadosPartTime->count()} empleados PT desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}. Las notificaciones serán enviadas por el Job.";
+
+       $mensaje = "Se verifican : {$empleadosPartTime->count()}";
+        return redirect()->back()->with('success', $mensaje);
     }
 
     public function index()
@@ -131,6 +135,15 @@ class SolicitudHorasExtrasPTController extends Controller
                     ]);
 
                     // NO actualizamos el horario porque fue rechazado
+                }
+
+                // 3. ACTUALIZAR EL HORARIO (COMO EN TU MÉTODO UPDATE EXISTENTE)
+                $horario = Horario::where('empleado_id', $permiso->empleado_id)
+                    ->whereDate('fecha', $permiso->fecha)
+                    ->firstOrFail();
+
+                if ($horario) {
+                    $horario->update(['estado' => 'L']); // Como en tu código para tipo_id == 2
                 }
             });
 

@@ -40,6 +40,11 @@ const estadoBadgeVariants = {
     PE: { label: 'PENDIENTE', variant: 'warning' },
     HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
+TD: { label: 'TRABAJÓ DIA DE DESCANSO', variant: 'info' },
+     AS: { label: 'APRB. SISTEMA', variant: 'destructive' },
+    AU: { label: 'APRB. USER', variant: 'success' },
+    RU: { label: 'RECHAZ. USER', variant: 'destructive' },
+    RS: { label: 'RECHAZ. SISTEMA', variant: 'success' },
 } as const;
 
 const formatMinutes = (minutes: number | false): string => {
