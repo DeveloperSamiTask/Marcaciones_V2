@@ -267,7 +267,7 @@
 
                 <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
 
-                <table style="width:100%;">
+                <table style="width:100%; margin-top: 17px;">
                     <tbody>
                         <tr align="center">
                             <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt=""></td>

@@ -37,8 +37,8 @@
     <body>
         @php
             $codigo = [
-                'S' => 'SUSPENSION POR NEGLIGENCIA DE FUNCIONES',
                 'A' => 'AMONESTACION ESCRITA POR NEGLIGENCIA DE FUNCIONES',
+                'S' => 'SUSPENSION POR NEGLIGENCIA DE FUNCIONES',
             ];
         @endphp
         @if ($suspension->codigo[0] == 'S')
@@ -168,7 +168,27 @@
                         {{ $suspension->motivo }}
                     </p>
 
-
+                    @if ($suspension->codigo[0] == 'S' && isset($amonestaciones) && $amonestaciones->count() > 0)
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>MES</th>
+                                    <th>FECHA</th>
+                                    <th>DESCRIPCIÓN</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($amonestaciones as $item)
+                                    <tr>
+                                        <td style="text-transform: uppercase;">{{ $item->fecha->isoFormat('MMMM') }}
+                                        </td>
+                                        <td>{{ $item->fecha->format('d/m/Y') }}</td>
+                                        <td style="text-transform: uppercase;">{{ $codigo[$suspension->tipo] }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    @endif
 
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo

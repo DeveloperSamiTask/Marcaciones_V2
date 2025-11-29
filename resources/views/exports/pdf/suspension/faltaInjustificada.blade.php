@@ -162,7 +162,7 @@
                     decisión de la empresa de imponerle una sanción disciplinaria consistente en <strong>SUSPENSION POR
                         FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
                 </p>
-                
+
                 <li style="margin-left: 150px; margin-right: 230px;">
                     Por faltar injustificadamente a su centro de labores el dia
                     {{ $suspension->fecha->format('d/m/Y') }}

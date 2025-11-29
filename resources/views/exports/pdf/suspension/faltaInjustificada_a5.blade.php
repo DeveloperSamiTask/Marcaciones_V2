@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 
-<head>
+<!--  respaldo
+ <head>
     <meta charset="UTF-8">
     <style>
         @page {
-            size: A5 landscape;
+
             margin: 0;
         }
 
@@ -103,6 +104,137 @@
 
     </style>
 </head>
+-->
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            margin: 0;
+        }
+
+        body {
+            font-family: "Arial", sans-serif;
+            margin: 0;
+            /* Aumentar el padding del cuerpo para más espacio general */
+            padding: 12mm;
+            box-sizing: border-box;
+        }
+
+        .contenedor {
+            display: flex;
+            justify-content: space-between;
+            /* Aumentar el espacio entre los dos memorándums */
+            gap: 25px;
+            page-break-inside: avoid;
+            max-width: 100%;
+        }
+
+        .memorandum {
+            width: 50%;
+            box-sizing: border-box;
+            /* Aumentar el padding interno del memorándum */
+            padding: 12px;
+        }
+
+        h2 {
+            /* Aumento de tamaño */
+            font-size: 15px;
+            text-align: center;
+            text-decoration: underline;
+            /* Aumento de margen */
+            margin: 0 0 8px 0;
+        }
+
+        p {
+            /* Aumento de tamaño (Base) */
+            font-size: 12px;
+            text-align: justify;
+            /* Aumento de margen */
+            margin: 5px 0;
+            line-height: 1.4;
+            /* Ligeramente más espaciado */
+        }
+
+        .header-line {
+            /* Aumento de tamaño */
+            font-size: 12px;
+            text-align: left;
+            /* Aumento de margen */
+            margin: 4px 0;
+            line-height: 1.3;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #000;
+            /* Aumento de margen */
+            margin: 8px 0;
+        }
+
+        ul {
+            /* Aumento de margen */
+            margin: 6px 0;
+            /* Aumento de padding para indentación */
+            padding-left: 25px;
+        }
+
+        li {
+            /* Aumento de tamaño */
+            font-size: 12px;
+            /* Aumento de margen */
+            margin: 3px 0;
+            line-height: 1.3;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        /* Estilos para Tablas */
+        table {
+            /* Tomado de tu referencia: 14px */
+            font-size: 14px;
+            width: 100%;
+            border-collapse: collapse;
+            margin: 8px 0;
+        }
+
+        /* Estilos para Firmas */
+        .firmas {
+            /* Aumento de margen para separar del contenido */
+            margin-top: 20px;
+        }
+
+        .firmas img {
+            height: 50px;
+            /* Tamaño de imagen aumentado */
+            max-width: 100px;
+        }
+
+        .firmas table {
+            width: 100%;
+        }
+
+        .firmas td {
+            text-align: center;
+            vertical-align: bottom;
+        }
+
+        .lineas {
+            /* Aumento de margen */
+            margin-top: 6px;
+        }
+
+        .lineas td {
+            /* Aumento de tamaño */
+            font-size: 11px;
+            text-align: center;
+            /* Aumento de padding */
+            padding-top: 4px;
+        }
+    </style>
+</head>
 
 <body>
     <div class="contenedor">
@@ -127,17 +259,48 @@
             </p>
 
             @if (count($amonestaciones) > 0)
-                <ul>
-                    @foreach ($amonestaciones as $amonestacion)
-                        <li>Amonestación previa por falta injustificada el día
-                            {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.</li>
-                    @endforeach
-                </ul>
-            @else
-                <ul>
-                    <li>Por faltar injustificadamente a su centro de labores el día
-                        {{ $suspension->fecha->format('d/m/Y') }}.</li>
-                </ul>
+
+                {{-- CASO 1: Es una Suspensión por Acumulación (Muestra la tabla de amonestaciones previas) --}}
+
+                <div style="text-align: center; margin-left: 50px; margin-right: 50px;">
+
+                    {{-- Texto introductorio (Opcional, pero recomendado para la tabla) --}}
+
+
+                    <table style="text-align: center; width:100%; border-collapse: collapse;">
+                        <thead>
+                            <tr>
+                                <th
+                                    style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                    MES</th>
+                                <th
+                                    style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                    FECHA</th>
+                                <th
+                                    style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                    DESCRIPCIÓN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($amonestaciones as $item)
+                                <tr>
+                                    <td
+                                        style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                        {{ \Carbon\Carbon::parse($item->fecha)->isoFormat('MMMM') }}
+                                    </td>
+                                    <td
+                                        style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px;">
+                                        {{ \Carbon\Carbon::parse($item->fecha)->format('d/m/Y') }}
+                                    </td>
+                                    <td
+                                        style="font-size:7px; text-align:left; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                        Amonestación previa por falta injustificada
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
             @endif
 
             <p>
@@ -217,17 +380,46 @@
             </p>
 
             @if (count($amonestaciones) > 0)
-                <ul>
-                    @foreach ($amonestaciones as $amonestacion)
-                        <li>Amonestación previa por falta injustificada el día
-                            {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.</li>
-                    @endforeach
-                </ul>
-            @else
-                <ul>
-                    <li>Por faltar injustificadamente a su centro de labores el día
-                        {{ $suspension->fecha->format('d/m/Y') }}.</li>
-                </ul>
+
+                {{-- CASO 1: Es una Suspensión por Acumulación (Muestra la tabla de amonestaciones previas) --}}
+
+                <div style="text-align: center; margin-left: 50px; margin-right: 50px;">
+
+                    {{-- Texto introductorio (Opcional, pero recomendado para la tabla) --}}
+                    <table style="text-align: center; width:100%; border-collapse: collapse;">
+                        <thead>
+                            <tr>
+                                <th
+                                    style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                    MES</th>
+                                <th
+                                    style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                    FECHA</th>
+                                <th
+                                    style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                    DESCRIPCIÓN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($amonestaciones as $item)
+                                <tr>
+                                    <td
+                                        style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                        {{ \Carbon\Carbon::parse($item->fecha)->isoFormat('MMMM') }}
+                                    </td>
+                                    <td
+                                        style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px;">
+                                        {{ \Carbon\Carbon::parse($item->fecha)->format('d/m/Y') }}
+                                    </td>
+                                    <td
+                                        style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                        Amonestación previa por falta injustificada
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
             @endif
 
 
