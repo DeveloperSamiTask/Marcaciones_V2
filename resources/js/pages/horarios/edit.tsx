@@ -92,6 +92,12 @@ const formatMinutes = (minutes: number | false): string => {
     return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
 };
 
+// Función auxiliar para encontrar el día más antiguo (aplicable a Feriados y Permisos TD)
+const getDiaMasAntiguo = (dias: Feriado[]): Feriado | undefined => {
+    if (!dias || dias.length === 0) return undefined;
+    return [...dias]
+        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())[0];
+};
 
 
 
@@ -111,7 +117,7 @@ const FeriadoInfo = ({ feriado, tipo }: { feriado: Feriado[]; tipo: string }) =>
 
 
     // Filtrar datos según el tipo
-    const lista = tipo === 'CA' ? [feriado[0]] : feriado;
+    const lista = feriado;
 
     return (
         <div className="col-span-1 space-y-6 sm:col-span-2 mt-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
@@ -121,9 +127,6 @@ const FeriadoInfo = ({ feriado, tipo }: { feriado: Feriado[]; tipo: string }) =>
             <div className="grid gap-2">
                 {lista.map((item, index) => (
                     <div key={item.id} className="text-teal-600 dark:text-teal-400 text-sm">
-                        <p>
-                            <strong>Tipo: </strong> {tipo}
-                        </p>
                         <p>
                             <strong>Referencia: </strong> {item.nombre}
                         </p>
@@ -148,8 +151,6 @@ const chartConfig = {
         color: 'var(--chart-2)',
     },
 } satisfies ChartConfig;
-
-
 
 export default function EditHorario({ horario, empleado, feriadoDisponible, feriadoFuturo, diasTD, url }:
     { horario: Horario; empleado: Empleado; feriadoDisponible: Feriado[]; feriadoFuturo: Feriado[]; diasTD: Feriado[]; url: string }) {
@@ -199,6 +200,8 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
             });
         }
 
+
+
         setData('estado', value);
         setData('feriado', '');
         setData('extras', extras);
@@ -218,12 +221,13 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         };
 
         const selectedDia = diaMap[value as keyof typeof diaMap];
-        if (selectedDia) {
+
+        // 🔥 CORRECCIÓN CLAVE: Validamos que selectedDia exista Y que tenga un 'id' definido.
+        if (selectedDia && selectedDia.id !== undefined && selectedDia.id !== null) {
             // Si es C/CA: se guarda el ID del FERIADO
             // Si es TD: se guarda el ID del PERMISO TD (tipo 24, estado 0)
             setData('feriado', selectedDia.id.toString());
         }
-
 
         const getFeriadoMasAntiguo = (feriados: Feriado[]) => {
             return [...feriados]
@@ -240,6 +244,25 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         if (selectedFeriado) {
             setData('feriado', selectedFeriado.id.toString());
         }
+
+        // ... dentro de handleEstadoChange
+        if (value === 'C' || value === 'CA' || value === 'TD') {
+            if (selectedDia && selectedDia.id !== undefined && selectedDia.id !== null) {
+                // Éxito: Encontramos ID y lo asignamos.
+                setData('feriado', selectedDia.id.toString());
+            } else {
+                // Falla: No hay permisos/feriados disponibles.
+                // Esto evita que el campo 'feriado' se quede vacío, lo cual hace fallar la validación de Laravel.
+                setData('estado', horario.estado); // Revertir el cambio de estado
+                toast.error(`No hay ${value === 'TD' ? 'Permisos TD' : 'Feriados'} disponibles`);
+                return; // ¡Detener el proceso!
+            }
+        }
+
+        // Solo si todo salió bien, actualizamos el estado.
+        setData('estado', value);
+
+
     };
 
     useEffect(() => {
@@ -298,16 +321,25 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         patch(route('horarios.update', horario.id), {
             preserveScroll: true,
             onError: (errors) => {
-                const messageError = errors.message && errors.message != '' ? errors.message : 'Ocurrio un error inesperado';
-                toast.error(messageError, {
+                // 🔥 CAMBIO TEMPORAL PARA DEBUGGEAR 🔥
+                console.error("ERRORES COMPLETOS DE LARAVEL:", errors);
+
+                // Intentar mostrar la clave 'message' o la primera validación de campo
+                const detailedMessage =
+                    errors.message ||
+                    (errors.feriado ? `(Feriado Error: ${errors.feriado})` : null) ||
+                    'Ocurrio un error inesperado. Revisa la consola para más detalles.';
+
+                toast.error(detailedMessage, { // Usa detailedMessage
                     richColors: true,
                     position: 'top-center',
-                    duration: 6000,
+                    duration: 9000, // Aumentamos la duración para poder leerlo
                 });
+                // 🔥 Vuelve a la versión anterior (solo errors.message) cuando esto funcione.
             },
-            // onFinish: () => reset()
         });
     };
+
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

@@ -1065,7 +1065,7 @@ class HorarioController extends Controller
             ->where('empleado_id', $horario->empleado_id)
             ->where('tipo_id', 24)
             ->where('estado', 0)
-            ->select([ 'fecha'])
+             ->select(['id', 'fecha', 'motivo'])
             ->orderBy('fecha', 'asc')
             ->get();
         /*
@@ -1125,6 +1125,30 @@ class HorarioController extends Controller
                         $permisoExistente->whereBetween('fecha', [$inicioSemana, $finSemana]);
                     } else {
                         $permisoExistente->whereDate('fecha', $horario->fecha);
+                    }
+
+                    //Logica parar editar TD de forma individual
+                    if ($data['estado'] === 'TD') {
+
+                        $permisoConsumido = Permiso::find($data['feriado']);
+
+                        if ($permisoConsumido) {
+                            // 2. Cambiamos su estado de 0 (Disponible) a 1 (Consumido/Usado)
+                            $permisoConsumido->update(['estado' => 1]);
+
+                            // 3. Opcional: Establecemos el motivo del Permiso consumido para registrar la fecha del consumo
+                            $permisoConsumido->update(['motivo' => 'Consumido en Horario: '.$horario->fecha->format('d/m/Y')]);
+
+                            // 4. Establecemos el horario a estado 'TD' o 'PE' si aún requiere un paso final de aprobación.
+                            // Dado que está consumiendo un día que ya tenía disponible (estado 0),
+                            // podemos establecerlo a 'TD' (como aprobado) o mantener 'PE' si quieres que el supervisor vea el consumo.
+                            $horario->update(['estado' => 'TD']); // Ejemplo de aprobación directa (TD)
+
+                            return; // Terminamos la lógica de permisos aquí, no necesitamos crear un nuevo permiso para este día.
+
+                        } else {
+                            throw new \Exception('Permiso TD a consumir no encontrado.');
+                        }
                     }
 
                     if (! $permisoExistente->exists() || $data['estado'] == 'HE' || $data['estado'] == 'SP') {
