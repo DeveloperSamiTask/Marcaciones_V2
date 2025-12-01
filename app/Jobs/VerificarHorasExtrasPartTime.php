@@ -115,7 +115,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         // 🔥 CONVERTIR STRING A CARBON
         $fechaFinConteo = $this->fechaMaxima ? \Carbon\Carbon::parse($this->fechaMaxima) : now();
 
-        Log::info("📊 {$empleado->nombres} - Contando desde: {$fechaInicioConteo->format('d/m/Y')} hasta: {$fechaFinConteo->format('d/m/Y')}");
+        Log::info("📊 {$empleado->apellidos}.{$empleado->nombres} - Contando desde: {$fechaInicioConteo->format('d/m/Y')} hasta: {$fechaFinConteo->format('d/m/Y')}");
 
         $horarios = $empleado->horarios()
             ->where('fecha', '>=', $fechaInicioConteo)

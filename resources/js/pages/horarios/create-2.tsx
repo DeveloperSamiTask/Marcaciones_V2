@@ -420,10 +420,13 @@ export default function App({ empleados, empresas, url }) {
         inicioSemanaActual.setDate(hoy.getDate() - diffToMonday);
         inicioSemanaActual.setHours(0, 0, 0, 0);
 
-        if (currentWeekStart < inicioSemanaActual) {
+        /*
+              if (currentWeekStart < inicioSemanaActual) {
             toast.error('❌ No se pueden crear ni editar horarios de semanas anteriores');
             return;
         }
+        */
+
 
 
         const entries = [];

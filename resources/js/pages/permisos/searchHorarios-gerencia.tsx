@@ -119,9 +119,11 @@ export default function DetalleSolicitudHE({ solicitud }: { solicitud: any }) {
                                         {`${format(new Date(dataExtra.horarioExtra.fecha), 'd/MM/yyyy')} - ${dataExtra.horarioExtra.ingreso} a ${dataExtra.horarioExtra.salida} `}
                                     </p>
                                 )}
-                                <p className='text-red-400 font-mono text-lg'>
-                                    Tiempo extra: {formatMinutes(dataExtra.extra)}
-                                </p>
+
+
+                                <p className='text-red-400 font-mono text-lg'>Tiempo extra: {formatMinutes(dataExtra.extra)}</p>
+{/*
+                                 */}
                             </>
                         ) : (
                             <p>No hay horarios registrados.</p>

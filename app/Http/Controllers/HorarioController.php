@@ -717,11 +717,13 @@ class HorarioController extends Controller
         $fechaCarbon = Carbon::parse($fecha);
 
         // 1. Validar que no se creen horarios antes del ingreso
-        $fechaIngresoEmpleado = Carbon::parse($empleado->fecha_ingreso);
+        /*
+           $fechaIngresoEmpleado = Carbon::parse($empleado->fecha_ingreso);
         if ($fechaCarbon->lt($fechaIngresoEmpleado)) {
             $fechaFormateada = $fechaIngresoEmpleado->format('d/m/Y');
             throw new Exception("No se pueden crear horarios para fechas anteriores al ingreso del empleado {$empleado->nombre_completo} ($fechaFormateada)");
         }
+        */
 
         // 2. Validar que no se modifiquen fechas pasadas
         /*
@@ -994,19 +996,26 @@ class HorarioController extends Controller
         return response()->json($query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']));
     }
 
+
     public function edit(Request $request, Horario $horario)
     {
         $horario->load('empleado');
         $fechaHorario = $horario->fecha;
-        $fechaInicio = Carbon::now()->subMonth()->day(29)->startOfDay();
-        $fechaFin = Carbon::now()->day(28)->endOfDay();
+
+        // Rango de fechas mensual (Usado para el cálculo mensual)
+        $fechaInicio = Carbon::now()->subMonth()->day(1)->startOfDay();
+        $fechaFin = Carbon::now()->day(31)->endOfDay();
+        $fechas = CarbonPeriod::create($fechaInicio, $fechaFin);
+
+        // Rango de fechas semanal (Usado para el cálculo semanal, basado en el día del horario)
         $inicioSemana = $fechaHorario->copy()->startOfWeek(Carbon::MONDAY); // lunes
         $finSemana = $fechaHorario->copy()->endOfWeek(Carbon::SUNDAY); // domingo
-        $fechas = CarbonPeriod::create($fechaInicio, $fechaFin);
         $fechasSemanales = CarbonPeriod::create($inicioSemana, $finSemana);
-        $horas = 0;
-        $horasSemanal = 0;
 
+        $horas = 0; // Total de minutos trabajados en el mes (para horas_trabajadas)
+        $horasSemanal = 0; // Total de minutos programados/trabajados en la semana (para horas_semanal_trabajadas)
+
+        // 1. Cargar Horarios y Marcaciones del mes (Rango 1-31) para el cálculo mensual
         $empleado = Empleado::find($horario->empleado_id)
             ->load(['horarios' => function ($q) use ($fechaInicio, $fechaFin) {
                 $q->whereBetween('fecha', [$fechaInicio, $fechaFin]);
@@ -1014,33 +1023,71 @@ class HorarioController extends Controller
                 $q->whereBetween('fecha', [$fechaInicio, $fechaFin]);
             }]);
 
-        // horas trabajadas en el mes
+        // 2. Cargar Horarios de la semana específica (Rango inicioSemana-finSemana) para el cálculo semanal
+        // 🔥 ESTO SOLUCIONA EL PROBLEMA DE 00:00 AL EDITAR HORARIOS VIEJOS
+        $horariosSemanal = Horario::where('empleado_id', $horario->empleado_id)
+            ->whereBetween('fecha', [$inicioSemana, $finSemana])
+            ->get();
+
+        // horas trabajadas en el mes (NO MODIFICADO, USA MARCACIONES Y REFRIGERIO CONDICIONAL)
         foreach ($fechas as $fecha) {
             $horarioLaborado = $empleado->horarios->where('fecha', $fecha)->where('estado', 'L')->first();
             $marcacionLaborado = $empleado->marcaciones->firstWhere('fecha', $fecha);
-            if ($horarioLaborado && $marcacionLaborado && $marcacionLaborado->ingreso_refri) {
-                $partTime = $empleado->jornada_id == 2 && ! $marcacionLaborado->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
-                $horasTrabajadas = max(0, $horarioLaborado->ingreso->diffInMinutes($horarioLaborado->salida, false));
-                $horas += $horasTrabajadas - ($partTime ? 0 : 60); // no se descuenta la hora de refrigerio si es parttime y no tomo refrigerio
-            }
-        }
 
-        // horas programadas en la semana
-        foreach ($fechasSemanales as $fecha) {
-            $horarioLaboradoSemanal = $empleado->horarios->where('fecha', $fecha)->where('estado', 'L')->first();
-            // $marcacionLaboradoSemanal = $empleado->marcaciones->firstWhere('fecha', $fecha);
-            if ($horarioLaboradoSemanal) {
-                // $partTime = $empleado->jornada_id == 2 && !$marcacionLaboradoSemanal->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
-                // $horasTrabajadas = max(0, $horarioLaboradoSemanal->ingreso->diffInMinutes($horarioLaboradoSemanal->salida, false));
-                $horasSemanal += max(0, $horarioLaboradoSemanal->ingreso->diffInMinutes($horarioLaboradoSemanal->salida, false)); // se descuenta la hora de refrigerio
-                if ($horasSemanal >= 360) { // si el horario programado es 6 horas a mas se resta 60 min de refirgerio
-                    $horasSemanal -= 60;
+            // Asegurar que el horario existe y tiene horas de inicio/fin, y que cumple la lógica de marcaciones original
+            if ($horarioLaborado && $horarioLaborado->ingreso && $horarioLaborado->salida && $marcacionLaborado && $marcacionLaborado->ingreso_refri) {
+
+                $start = $horarioLaborado->ingreso;
+                $end = $horarioLaborado->salida;
+                $salidaAjustada = $end;
+
+                // ✅ CORRECCIÓN PARA TURNO NOCTURNO (Mensual)
+                if ($end->lessThan($start)) {
+                    $salidaAjustada = $end->copy()->addDay();
                 }
+
+                // Horas trabajadas brutas con corrección de turno nocturno
+                $horasTrabajadas = $start->diffInMinutes($salidaAjustada);
+
+                $partTime = $empleado->jornada_id == 2 && ! $marcacionLaborado->ingreso_refri; // se valida si se trata de partime y no tomo su refrigerio
+                // Aplicar descuento de refrigerio (60 min) solo si no es Part Time con refrigerio no tomado (lógica original)
+                $horas += max(0, $horasTrabajadas - ($partTime ? 0 : 60));
             }
         }
 
-        $empleado->horas_trabajadas = $horas / 60;
-        $empleado->horas_semanal_trabajadas = $horasSemanal;
+        // horas programadas en la semana (MODIFICADO PARA USAR CARGA SEMANAL Y CORREGIR 90:00)
+        foreach ($fechasSemanales as $fecha) {
+            // Utilizamos la colección $horariosSemanal cargada explícitamente.
+            $horarioLaboradoSemanal = $horariosSemanal->where('fecha', $fecha)->where('estado', 'L')->first();
+
+            // Solo sumamos si es estado 'L' y tiene horas de ingreso/salida
+            if ($horarioLaboradoSemanal && $horarioLaboradoSemanal->ingreso && $horarioLaboradoSemanal->salida) {
+
+                $start = $horarioLaboradoSemanal->ingreso;
+                $end = $horarioLaboradoSemanal->salida;
+                $salidaAjustada = $end;
+
+                // ✅ CORRECCIÓN PARA TURNO NOCTURNO (Semanal)
+                if ($end->lessThan($start)) {
+                    $salidaAjustada = $end->copy()->addDay();
+                }
+
+                // Calcular minutos brutos con corrección de turno nocturno
+                $minutosDelDia = $start->diffInMinutes($salidaAjustada);
+
+                // 🔥 CORRECCIÓN REFRIGERIO (Semanal): Se aplica el descuento de 60 minutos
+                // si la duración bruta del turno programado es >= 6 horas (360 min),
+                // independientemente de la Jornada ID, ya que un turno de 15 horas debe incluir descanso.
+                if ($minutosDelDia >= 360) {
+                    $minutosDelDia -= 60;
+                }
+
+                $horasSemanal += $minutosDelDia;
+            }
+        }
+
+        $empleado->horas_trabajadas = $horas / 60; // Total de horas mensuales (en horas)
+        $empleado->horas_semanal_trabajadas = $horasSemanal; // Total de minutos semanales (se convierte a minutos para el frontend)
 
         $fechasLorables = Horario::where('empleado_id', $horario->empleado_id) // fechas en las que el empleado a laborado
             ->where('estado', 'L')
@@ -1076,34 +1123,6 @@ class HorarioController extends Controller
             'diasTD' => $diasTDDisponibles,
             'url' => session('horarios_url', route('horarios.index')),
         ]);
-
-        /*
-         Log::info('🔵 EDIT METHOD - Empleado:', [
-        'horas_semanal_trabajadas' => $empleado->horas_semanal_trabajadas,
-        'horas_trabajadas' => $empleado->horas_trabajadas,
-        'jornada_id' => $empleado->jornada_id,
-        'horas' => $empleado->horas,
-        ]);
-
-
-
-        Log::info('🔵 EDIT METHOD - Cálculos finales:', [
-        'horas_semanal_calculadas' => $horasSemanal,
-        'horas_mensual_calculadas' => $horas / 60,
-        'horas_semanal_guardadas' => $empleado->horas_semanal_trabajadas,
-        'horas_mensual_guardadas' => $empleado->horas_trabajadas,
-        ]);
-
-
-
-        Log::info('🔵 HORARIOS ENCONTRADOS - Semana:', [
-        'inicio_semana' => $inicioSemana,
-        'fin_semana' => $finSemana,
-        'horarios_count' => $empleado->horarios->count(),
-        'horarios_laborales' => $empleado->horarios->where('estado', 'L')->pluck('fecha', 'id'),
-        ]);
-        */
-
     }
 
     public function update(UpdateHorarioRequest $request, Horario $horario)

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
@@ -32,8 +33,8 @@ class SolicitudHorasExtrasPT extends Model
         'fecha_cumplimiento_93h' => 'date',
         'fecha_inicio_extras' => 'date',
         'fecha_fin_extras' => 'date',
-        'fecha_limite_aprobacion' => 'datetime',
-        'fecha_aprobacion' => 'datetime',
+        'fecha_limite_aprobacion' => 'date',
+        'fecha_aprobacion' => 'date',
         'horas_acumuladas' => 'decimal:2',
     ];
 
@@ -41,44 +42,60 @@ class SolicitudHorasExtrasPT extends Model
     {
         parent::boot();
 
-        // Cada vez que alguien consulte esta mierda, verifica si ya se venció
-        static::retrieved(function ($solicitud) {
+        // Cada vez que alguien consulte , verifica si ya se venció
+
+        /*
+          static::retrieved(function ($solicitud) {
             $solicitud->verificarYaprobarSiVencida();
         });
+
+        */
+
+
+
     }
 
     public function verificarYaprobarSiVencida()
     {
-        // Si está pendiente, tiene fecha límite y YA PASARON MÁS DE 48 HORAS
-        if ($this->estado == 0 &&
-            $this->fecha_limite_aprobacion &&
-            now()->greaterThan($this->fecha_limite_aprobacion)) {
+        if ($this->estado == 0) {
+            // FORZAR LAS FECHAS A SOLO FECHA (sin hora) para comparar correctamente
+            // reducir la fecha de cumplimiento. en relacion a hoy.
+            $fechaCumplimiento = Carbon::parse($this->fecha_cumplimiento_93h)->startOfDay();
+            $hoy = Carbon::today(); // Solo la fecha de hoy, sin horas
 
-            $horasTranscurridas = now()->diffInHours($this->fecha_deteccion);
+            $diasTranscurridos = $fechaCumplimiento->diffInDays($hoy);
 
-            \Log::info("🔍 VERIFICANDO Solicitud {$this->id}: ".
-              "Horas transcurridas: {$horasTranscurridas}, ".
-              "Fecha límite: {$this->fecha_limite_aprobacion}, ".
-              'Ahora: '.now());
+            \Log::info("📅 Solicitud {$this->id}: {$diasTranscurridos} días desde {$fechaCumplimiento->format('Y-m-d')}");
 
-            if ($horasTranscurridas >= 48) {
+            if ($diasTranscurridos >= 2) {
+                \Log::info("✅ APROBADA Solicitud {$this->id} - Pasaron {$diasTranscurridos} días");
+
                 $this->update([
-                    'estado' => 1, // Cambia a aprobado
-                    'aprobado_por' => 'SISTEMA',
+                    'estado' => 1,
+                    'aprobado_por' => null,
                     'fecha_aprobacion' => now(),
                     'fecha_fin_extras' => $this->fecha_cumplimiento_93h,
                 ]);
 
-                \Log::info("🎉 SOLICITUD {$this->id} APROBADA CORRECTAMENTE por sistema");
-            } else {
-                \Log::info("❌ Aún no pasaron 48 horas exactas: {$horasTranscurridas} horas");
+                $permiso = \App\Models\Permiso::where('permiso_HE_PT', $this->id)->first();
+
+                if ($permiso) {
+                    $permiso->update([
+                        'estado' => 1, // Aprobado
+                        // Agrega otros campos si necesitas
+                    ]);
+                    \Log::info("📋 Permiso {$permiso->id} actualizado a estado 1");
+                } else {
+                    \Log::warning("⚠️ No se encontró permiso asociado a solicitud {$this->id}");
+                }
+
+                \Log::info("🎉 SOLICITUD {$this->id} APROBADA AUTOMÁTICAMENTE");
             }
-        } else {
-            \Log::info("🔍 Solicitud {$this->id} - No cumple condiciones para aprobación automática");
         }
     }
 
-    public function verificarAprobacionAutomatica()
+    /*
+     public function verificarAprobacionAutomatica()
     {
         // Si está pendiente (estado = 0) y tiene fecha límite
         if ($this->estado == 0 && $this->fecha_limite_aprobacion) {
@@ -93,7 +110,7 @@ class SolicitudHorasExtrasPT extends Model
                 // ¡APROBAR AUTOMÁTICAMENTE!
                 $this->update([
                     'estado' => 1, // Cambiar a aprobado
-                    'aprobado_por' => 'SISTEMA',
+                    'aprobado_por' => null,
                     'fecha_aprobacion' => now(),
                     'fecha_fin_extras' => $this->fecha_cumplimiento_93h,
                 ]);
@@ -103,6 +120,7 @@ class SolicitudHorasExtrasPT extends Model
             }
         }
     }
+    */
 
     // 🎯 RELACIÓN CON EMPLEADO
     public function empleado()
