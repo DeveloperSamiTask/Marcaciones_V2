@@ -179,6 +179,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
             return;
         }
 
+
         setExcedente(false);
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
@@ -189,6 +190,8 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         const total_semanal = empleado.horas_semanal_trabajadas ?? 0;
         let extras = '';
 
+
+        /*
         if (value == 'L' && total + total_semanal > horas) {
             value = 'HE';
             extras = formatMinutes(total + total_semanal - horas);
@@ -199,7 +202,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                 duration: 6000,
             });
         }
-
+      */
 
 
         setData('estado', value);
@@ -279,7 +282,8 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         setData('extras', '');
         setData('estado', data.estado == 'HE' ? 'L' : data.estado);
 
-        if (total + total_semanal > horas) {
+        /*
+         if (total + total_semanal > horas) {
             setExcedente(true);
             setData('estado', 'HE'); // lo enviamos en minutos
             setData('extras', formatMinutes(total + total_semanal - horas)); // lo enviamos en formato horas
@@ -290,8 +294,11 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
             });
         }
 
+        */
+
     }, [data.ingreso, data.salida])
 
+    /*
     useEffect(() => {
         console.log("🟢 EMPLEADO DATA:", {
             id: empleado.id,
@@ -315,6 +322,8 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
             descripcion: horario.descripcion
         });
     }, []);
+    */
+
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();

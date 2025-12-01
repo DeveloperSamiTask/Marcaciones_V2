@@ -12,6 +12,8 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: route('dashboard'),
         icon: LayoutGrid,
+        permissions: [1, 2, 3, 4]
+
     },
     {
         title: 'Empleados',
@@ -35,7 +37,7 @@ const mainNavItems: NavItem[] = [
         title: 'Horarios',
         href: route('horarios.index'),
         icon: ClockArrowUp,
-        permissions: [1, 2, 4]
+        permissions: [1, 2, 4, 5]
     },
     {
         title: 'Permisos',
@@ -65,7 +67,7 @@ const mainNavItems: NavItem[] = [
         title: 'Marcaciones',
         href: '',
         icon: ClipboardPenLine,
-        permissions: [1, 2, 4],
+        permissions: [1, 2, 4, 5],
         items: [
             {
                 title: 'Asistencia general',
@@ -85,7 +87,7 @@ const mainNavItems: NavItem[] = [
             {
                 title: 'Validaciones',
                 href: route('asistencias.index'),
-                permissions: [1, 2, 4]
+                permissions: [1, 2, 4, 5]
             },
         ],
     },
@@ -99,12 +101,12 @@ const mainNavItems: NavItem[] = [
         title: 'Suspensiones',
         href: '',
         icon: CircleX,
-        permissions: [1, 2, 4],
+        permissions: [1, 2, 4, 5],
         items: [
             {
                 title: 'Lista general',
                 href: route('suspensiones.index'),
-                permissions: [1, 2, 4]
+                permissions: [1, 2, 4, 5]
             },
             {
                 title: 'Crear nuevo',

@@ -26,9 +26,9 @@ export function ScheduleUpload({ weekStart, modality, employees, onSaveSchedule 
     const weekDates = getWeekDates(weekStart);
     const filteredEmployees = employees.filter(emp => emp.modality === modality);
 
-     console.log('🔍 BaseScheduleManager - companyId:', companyId);
-    console.log('🔍 BaseScheduleManager - companyName:', companyName);
-    console.log('🔍 BaseScheduleManager - esGranjaVilla?:', companyId === 1);
+   //  console.log('🔍 BaseScheduleManager - companyId:', companyId);
+   // console.log('🔍 BaseScheduleManager - companyName:', companyName);
+   // console.log('🔍 BaseScheduleManager - esGranjaVilla?:', companyId === 1);
 
     // Horarios base por modalidad
     const [baseSchedule, setBaseSchedule] = useState<BaseSchedule>({

@@ -58,7 +58,7 @@ export default function App({ empleados, empresas, url }) {
             fetch(`/horarios/empleados?empresa_id=${empresaParam}`)
                 .then(res => res.json())
                 .then(data => {
-                    console.log("🧠 Empleados cargados:", data); // 👈 revisa aquí
+                   // console.log("🧠 Empleados cargados:", data); // 👈 revisa aquí
                     setEmpleadosList(data);
                 })
                 .catch(err => console.error("Error cargando empleados:", err));
@@ -184,7 +184,7 @@ export default function App({ empleados, empresas, url }) {
     };
 
     useEffect(() => {
-        console.log("🔄 Reseteando validaciones - semana o empresa cambió");
+      //  console.log("🔄 Reseteando validaciones - semana o empresa cambió");
         setExpandedEmployees(new Set());
 
         setScheduleData({});
@@ -389,7 +389,7 @@ export default function App({ empleados, empresas, url }) {
             const data = await response.json();
             return data;
         } catch (error) {
-            console.error('Error cargando feriados:', error);
+          //  console.error('Error cargando feriados:', error);
             return { feriadoDisponible: [], feriadoFuturo: [] };
         }
     };
@@ -401,7 +401,7 @@ export default function App({ empleados, empresas, url }) {
             const data = await response.json();
             return data;
         } catch (error) {
-            console.error('Error cargando permisos TD:', error);
+            //console.error('Error cargando permisos TD:', error);
             return [];
         }
     };
@@ -431,7 +431,7 @@ export default function App({ empleados, empresas, url }) {
 
         const entries = [];
         let hasValidationErrors = false;
-        console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
+      //  console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
 
 
 
@@ -481,8 +481,8 @@ export default function App({ empleados, empresas, url }) {
             return Object.values(schedule).some(day => day.status === 'TD');
         });
 
-        console.log('👥 Empleados con C/CA:', empleadosConCompensacion.length);
-        console.log('👥 Empleados con TD:', empleadosConTD.length);
+       // console.log('👥 Empleados con C/CA:', empleadosConCompensacion.length);
+        //console.log('👥 Empleados con TD:', empleadosConTD.length);
 
         // 🔥 3. Cargar feriados en paralelo
         const feriadosMap = {};
@@ -493,7 +493,7 @@ export default function App({ empleados, empresas, url }) {
                         const feriados = await getFeriadosEmpleado(emp.id);
                         feriadosMap[emp.id] = feriados || { feriadoDisponible: [], feriadoFuturo: [] };
                     } catch (error) {
-                        console.error(`Error cargando feriados para empleado ${emp.id}:`, error);
+                     //   console.error(`Error cargando feriados para empleado ${emp.id}:`, error);
                         feriadosMap[emp.id] = { feriadoDisponible: [], feriadoFuturo: [] };
                     }
                 })
@@ -509,17 +509,17 @@ export default function App({ empleados, empresas, url }) {
                         const permisosTD = await getTDPermisosEmpleado(emp.id);
                         // ✅ Asegurar que siempre sea un array
                         permisosTDMap[emp.id] = Array.isArray(permisosTD) ? permisosTD : [];
-                        console.log(`📋 Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
+                       // console.log(`📋 Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
                     } catch (error) {
-                        console.error(`Error cargando permisos TD para empleado ${emp.id}:`, error);
+                      //  console.error(`Error cargando permisos TD para empleado ${emp.id}:`, error);
                         permisosTDMap[emp.id] = []; // ✅ Array vacío en caso de error
                     }
                 })
             );
         }
 
-        console.log('📦 Feriados cargados:', feriadosMap);
-        console.log('📦 Permisos TD cargados:', permisosTDMap);
+    //    console.log('📦 Feriados cargados:', feriadosMap);
+      //  console.log('📦 Permisos TD cargados:', permisosTDMap);
 
         // ==================== TRACKING DE FERIADOS Y TD USADOS ====================
         const feriadosUsadosPorEmpleado = {};
@@ -595,11 +595,14 @@ export default function App({ empleados, empresas, url }) {
                         feriadoId = feriadosOrdenados[0].id;
                         feriadosUsadosPorEmpleado[employee.id][status].push(feriadoId);
 
-                        console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, {
+                        /*
+console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, {
                             tipo: status,
                             nombre: feriadosOrdenados[0].nombre,
                             id: feriadoId
                         });
+                        */
+
                     } else {
                         const tipoTexto = status === 'C' ? 'compensaciones (pasadas)' : 'compensaciones adelantadas (futuras)';
                         const totalDisponibles = listaFeriados.length;
@@ -621,10 +624,13 @@ export default function App({ empleados, empresas, url }) {
                         ? permisosTDMap[employee.id]
                         : [];
 
-                    console.log(`🔍 Procesando TD para ${employee.nombres}:`, {
+                        /*
+console.log(`🔍 Procesando TD para ${employee.nombres}:`, {
                         permisosDisponibles: permisosTD.length,
                         permisosMap: permisosTDMap[employee.id]
                     });
+                        */
+
 
                     // Filtrar los ya usados
                     const permisosDisponibles = permisosTD.filter(
@@ -639,10 +645,13 @@ export default function App({ empleados, empresas, url }) {
                         permisoTDId = permisosOrdenados[0].id;
                         permisosTDUsados[employee.id].push(permisoTDId);
 
-                        console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
+                        /*
+console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                             permiso_id: permisoTDId,
                             fecha_permiso: permisosOrdenados[0].fecha
                         });
+                        */
+
                     } else {
                         const totalPermisos = permisosTD.length;
                         const yaUsados = permisosTDUsados[employee.id].length;
@@ -661,12 +670,15 @@ export default function App({ empleados, empresas, url }) {
 
 
                     if (status === 'TD') {
-                        console.log(`🎯 ENVIANDO TD AL BACKEND - ${employee.nombres}, ${date}:`, {
+                        /*
+ console.log(`🎯 ENVIANDO TD AL BACKEND - ${employee.nombres}, ${date}:`, {
                             empleado_id: employee.id,
                             fecha: date,
                             estado: status,
                             permiso_td_id: permisoTDId
                         });
+                        */
+
                     }
 
                     entries.push({
@@ -696,18 +708,18 @@ export default function App({ empleados, empresas, url }) {
         }
 
         // ==================== DEBUG Y ENVÍO ====================
-        console.log('🧾 Enviando al backend:', entries);
-        console.log('📊 Total registros:', entries.length);
+        //console.log('🧾 Enviando al backend:', entries);
+        //console.log('📊 Total registros:', entries.length);
 
         const conFeriado = entries.filter(e => e.feriado);
         const conPermisoTD = entries.filter(e => e.permiso_td_id);
 
         if (conFeriado.length > 0) {
-            console.log('🎯 Registros con feriado:', conFeriado);
+           // console.log('🎯 Registros con feriado:', conFeriado);
         }
 
         if (conPermisoTD.length > 0) {
-            console.log('🟡 Registros con permiso TD:', conPermisoTD);
+           // console.log('🟡 Registros con permiso TD:', conPermisoTD);
         }
 
         router.post(route('horarios.store-multiple'), { entries }, {
@@ -717,7 +729,7 @@ export default function App({ empleados, empresas, url }) {
                 toast.success('✅ Horarios guardados correctamente');
             },
             onError: (errors) => {
-                console.error('❌ Error backend:', errors);
+               // console.error('❌ Error backend:', errors);
                 toast.error('Error al guardar horarios');
             },
             onFinish: () => toast.dismiss(),
@@ -877,7 +889,7 @@ export default function App({ empleados, empresas, url }) {
                                 className="min-w-[250px]"
                             >
                                 <Save className="mr-2 h-5 w-5" />
-                                💾 Guardar horarios de la semana
+                                Guardar horarios de la semana
                             </Button>
                         </div>
                     </div>

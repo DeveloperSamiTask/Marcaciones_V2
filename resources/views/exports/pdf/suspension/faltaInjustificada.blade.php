@@ -65,18 +65,38 @@
                         FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
                 </p>
                 {{-- 1. BUCLE PARA MOSTRAR LAS 3 AMONESTACIONES PREVIAS --}}
-                @foreach ($amonestaciones as $amonestacion)
-                    <li style="margin-left: 150px; margin-right: 230px;">
-                        Amonestación previa por falta injustificada el día
-                        {{ \Carbon\Carbon::parse($amonestacion->fecha)->format('d/m/Y') }}.
-                    </li>
-                @endforeach
-
-                {{-- 2. LISTA PARA LA FALTA ACTUAL (CAUSA LA SUSPENSIÓN) --}}
-                <li style="margin-left: 150px; margin-right: 230px;">
-                    Y en adición, por faltar injustificadamente el día
-                    {{ $suspension->fecha->format('d/m/Y') }}.
-                </li>
+                <table style="text-align: center; width:100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th
+                                style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                MES</th>
+                            <th
+                                style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                FECHA</th>
+                            <th
+                                style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                DESCRIPCIÓN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($amonestaciones as $item)
+                            <tr>
+                                <td
+                                    style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                    {{ \Carbon\Carbon::parse($item->fecha)->isoFormat('MMMM') }}
+                                </td>
+                                <td style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px;">
+                                    {{ \Carbon\Carbon::parse($item->fecha)->format('d/m/Y') }}
+                                </td>
+                                <td
+                                    style="font-size:7px; text-align:left; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                    {{ $item->motivo }}
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
 
                 <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                     Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
@@ -163,10 +183,38 @@
                         FALTA INJUSTIFICADA</strong> en referencia a los hechos que describimos a continuación:
                 </p>
 
-                <li style="margin-left: 150px; margin-right: 230px;">
-                    Por faltar injustificadamente a su centro de labores el dia
-                    {{ $suspension->fecha->format('d/m/Y') }}
-                </li>
+                <table style="text-align: center; width:100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th
+                                style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                MES</th>
+                            <th
+                                style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                FECHA</th>
+                            <th
+                                style="border: 1px solid black; padding: 2px; font-weight: bold; background-color: #f0f0f0; font-size: 7px;">
+                                DESCRIPCIÓN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($amonestaciones as $item)
+                            <tr>
+                                <td
+                                    style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                    {{ \Carbon\Carbon::parse($item->fecha)->isoFormat('MMMM') }}
+                                </td>
+                                <td style="font-size:7px; text-align:center; border: 1px solid black; padding: 2px;">
+                                    {{ \Carbon\Carbon::parse($item->fecha)->format('d/m/Y') }}
+                                </td>
+                                <td
+                                    style="font-size:7px; text-align:left; border: 1px solid black; padding: 2px; text-transform: uppercase;">
+                                    {{ $item->motivo }}
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
 
 
                 <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">

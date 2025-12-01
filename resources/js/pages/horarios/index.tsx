@@ -122,6 +122,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                 <div className="@container/main flex flex-1 flex-col gap-6">
                     <div className="flex items-center justify-between">
 
+
                         {/* Contenedor de la izquierda: Título */}
                         <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">
                             Lista de horarios
@@ -147,7 +148,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                             </Button>
 
                         </div>
-                        {/* -------------------------------------------------------------------------- */}
+
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">

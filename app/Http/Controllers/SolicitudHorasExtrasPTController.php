@@ -22,24 +22,24 @@ class SolicitudHorasExtrasPTController extends Controller
      */
     public function enviarTodaLasSolicitudes()
     {
-        Log::info('⚡ INICIANDO FLUJO MANUAL DE VERIFICACIÓN HORAS EXTRAS PT');
+        // Log::info('⚡ INICIANDO FLUJO MANUAL DE VERIFICACIÓN HORAS EXTRAS PT');
 
         // 1. 🗓️ DEFINIR EL RANGO DE TIEMPO (EJ. LAS ÚLTIMAS 2 SEMANAS O EL MES COMPLETO)
         // Opción B: Todo el mes actual (Recomendado para verificar las 93h)
-
-        // $fechaInicio = Carbon::now()->startOfMonth()->startOfDay();
+        // oficial
+        $fechaInicio = Carbon::now()->startOfMonth()->startOfDay();
 
         // oficial
-        // $fechaFin = Carbon::now()->endOfDay();
+        $fechaFin = Carbon::now()->endOfDay();
 
         // pruebas - a futur.
         // $fechaFin = Carbon::now()->addMonth()->endOfDay();
 
         // ---------------- Pruebas para RRHH (eliminar validacion fechas pasadas)
-        $fechaInicio = Carbon::create(2025, 11, 01)->startOfDay();
-        $fechaFin = Carbon::create(2025, 12, 01)->endOfDay();
+        // $fechaInicio = Carbon::create(2025, 11, 01)->startOfDay();
+        // $fechaFin = Carbon::create(2025, 12, 01)->endOfDay();
 
-        Log::info("📅 RANGO DE VERIFICACIÓN: Desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}");
+        // Log::info("📅 RANGO DE VERIFICACIÓN: Desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}");
 
         // 2. 👥 BUSCAR TODOS LOS EMPLEADOS PART-TIME
         $empleadosPartTime = Empleado::where('jornada_id', 2)

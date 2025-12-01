@@ -54,7 +54,7 @@ export function EmployeeList({
             return; // Ya está cargando o ya tiene datos
         }
 
-        console.log('🚀 Cargando datos para empleado:', employeeId);
+       // console.log('🚀 Cargando datos para empleado:', employeeId);
 
         setLoadingData(prev => new Set(prev).add(employeeId));
 
@@ -90,7 +90,7 @@ export function EmployeeList({
             }));
 
         } catch (error) {
-            console.error('❌ Error cargando datos:', employeeId, error);
+           // console.error('❌ Error cargando datos:', employeeId, error);
 
             // Guardar estructuras vacías
             setFeriadosData(prev => ({
@@ -117,7 +117,7 @@ export function EmployeeList({
 
     // ✅ Handler de toggle con carga de datos
     const handleToggleConDatos = async (employeeId: string) => {
-        console.log('💥 Toggle empleado:', employeeId);
+        // console.log('💥 Toggle empleado:', employeeId);
 
         // Toggle UI (inmediato)
         onToggleEmployee(employeeId);
@@ -138,7 +138,7 @@ export function EmployeeList({
                 );
 
                 if (necesitaDatos && !feriadosData[employeeId] && !permisosTDData[employeeId]) {
-                    console.log('🎯 Pre-cargando datos para empleado expandido:', employeeId);
+                   // console.log('🎯 Pre-cargando datos para empleado expandido:', employeeId);
                     fetchDatosEmpleado(employeeId);
                 }
             }

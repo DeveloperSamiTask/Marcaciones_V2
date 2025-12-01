@@ -24,5 +24,8 @@ class RoleSeeder extends Seeder
         Role::create([
             'nombre' => 'RESPONSABLE',
         ]);
+        Role::create([
+            'nombre' => 'SUPERVISOR',
+        ]);
     }
 }

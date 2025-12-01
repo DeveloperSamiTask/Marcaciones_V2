@@ -35,7 +35,7 @@ export function EmployeeRow({
     permisosTDData,
     isLoadingData,
 }: EmployeeRowProps) {
-    const fullName = `${employee.nombres ?? ''} ${employee.apellidos ?? ''}`.trim();
+    const fullName = `${employee.apellidos ?? ''} ${employee.nombres ?? ''} `.trim();
 
     return (
         <div className="bg-white border-b last:border-b-0">

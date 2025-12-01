@@ -16,11 +16,11 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class AsistenciaController extends Controller
 {
-    // validacion
     public function index(Request $request)
     {
         $filters = $request->validate([
@@ -34,64 +34,78 @@ class AsistenciaController extends Controller
         $fechaFin = Carbon::parse($request->fechaFin)->endOfDay();
 
         $user = $request->user();
+        $isJefe = $user->rol_id == 4;
+        $isSupervisor = $user->rol_id == 5;
 
-        if ($user->name === 'ANGELES TERRONES MILUSKA') {
-            // BLOQUE MILUSKA - 3 EMPRESAS, SIN FILTRO DE ENCARGADO
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [4, 10, 11])
-                ->get(['id', 'razonsocial']);
+        $empresas = $isSupervisor
+            ? $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial'])
+            : Empresa::where('estado', 1)->get(['id', 'razonsocial']);
 
-            $empresaFiltro = $request->empresa && in_array($request->empresa, [4, 10, 11])
-                ? $request->empresa
-                : ($empresas->first()->id ?? null);
+        if ($isSupervisor) {
+            $empleadosAsignadosIds = $user->empleadosACargo()
+                ->when($request->empresa, function ($q) use ($request) {
+                    $q->where('supervisor_empleado.empresa_id', $request->empresa);
+                })
+                ->pluck('empleados.id');
 
-            $encargadoFiltro = null; // MILUSKA NO USA ENCARGADO
-
-        } elseif ($user->id === 73) {
-            // BLOQUE USUARIO 73 - EMPRESAS 1 Y 5, SIN FILTRO DE ENCARGADO
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [1, 5])
-                ->get(['id', 'razonsocial']);
-
-            $empresaFiltro = $request->empresa && in_array($request->empresa, [1, 5])
-                ? $request->empresa
-                : ($empresas->first()->id ?? null);
-
-            $encargadoFiltro = null; // USUARIO 73 NO USA ENCARGADO
-
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->whereHas('empleado', function ($q) use ($empleadosAsignadosIds) {
+                    $q->whereIn('id', $empleadosAsignadosIds);
+                })
+                ->get()
+                ->sortBy(fn($u) => $u->empleado->apellidos)
+                ->values();
+        } elseif ($isJefe) {
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->whereHas('empleado', function ($q) use ($user) {
+                    $q->where('jefe_id', $user->empleado_id);
+                })
+                ->get()
+                ->sortBy(fn($u) => $u->empleado->apellidos)
+                ->values();
         } else {
-            // BLOQUE NORMAL - EMPRESA SELECCIONADA, CON ENCARGADO
-            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-            $empresaFiltro = $request->empresa;
-            $encargadoFiltro = $request->encargado;
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->get()
+                ->sortBy(fn($u) => $u->empleado->apellidos)
+                ->values();
         }
 
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
-
-        $motivos = Asistencia::where('empresa_id', $empresaFiltro)
-            ->when($encargadoFiltro, function ($query) use ($encargadoFiltro) {
-                $query->where('empleado_id', $encargadoFiltro);
-            })
+        $asistenciasQuery = Asistencia::query()
+            ->with(['empleado.area', 'empleado.empresa'])
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->where('semana', "Del {$fechaInicio->format('d/m/Y')} al {$fechaFin->format('d/m/Y')}")
-            ->count();
+            ->when($request->empresa, function ($q) use ($request) {
+                $q->whereHas('empleado', function ($e) use ($request) {
+                    $e->where('empresa_id', $request->empresa);
+                });
+            });
 
-        $asistencias = Asistencia::where('empresa_id', $empresaFiltro)
-            ->when($encargadoFiltro, function ($query) use ($encargadoFiltro) {
-                $query->where('empleado_id', $encargadoFiltro);
-            })
-            ->with(['empleado.area'])
-            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+        if ($request->encargado && !$isSupervisor) {
+            $asistenciasQuery->where('empleado_id', $request->encargado);
+        }
+
+        if ($isSupervisor) {
+            $empleadosAsignadosIds = $user->empleadosACargo()->pluck('empleados.id');
+
+            $asistenciasQuery->whereHas('detalles', function ($q) use ($empleadosAsignadosIds) {
+                $q->whereIn('empleado_id', $empleadosAsignadosIds);
+            });
+        }
+
+        if ($isJefe) {
+            $asistenciasQuery->whereHas('empleado', fn($q) => $q->where('jefe_  id', $user->empleado_id))
+                ->whereDoesntHave('detalles', fn($q) => $q->where('empleado_id', $user->empleado_id));
+        }
+
+        $asistencias = $asistenciasQuery
             ->orderBy('fecha', 'desc')
             ->get()
-            ->groupBy(function ($item) {
-                $estados = [
-                    0 => 'pendientes',
-                    1 => 'aprobados',
-                    2 => 'rechazados',
-                ];
-
-                return $estados[$item->estado] ?? '';
+            ->groupBy(fn($a) => match ($a->estado) {
+                0 => 'pendientes',
+                1 => 'aprobados',
+                2 => 'rechazados',
             });
 
         session(['asistencias_url' => $request->fullUrl()]);
@@ -105,6 +119,7 @@ class AsistenciaController extends Controller
             'rechazados' => $asistencias->get('rechazados', collect()),
         ]);
     }
+
 
     public function store(Request $request)
     {
@@ -162,7 +177,6 @@ class AsistenciaController extends Controller
             });
 
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
-
         } catch (Exception $e) {
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
@@ -220,7 +234,6 @@ class AsistenciaController extends Controller
             'motivos' => $motivos,
             'url' => session('asistencias_url', route('asistencias.index')),
         ]);
-
     }
 
     /* ACEPTAR UNA VALIDACION */
@@ -247,7 +260,6 @@ class AsistenciaController extends Controller
             });
 
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
-
         } catch (Exception $e) {
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
@@ -277,7 +289,7 @@ class AsistenciaController extends Controller
                         'estado' => 0,
                     ]);
                 } else {
-                    throw new \Exception('El empleado ya tiene un permiso programado.');
+                    throw new \Exception("El empleado ya tiene un permiso programado.");
                 }
             });
 
@@ -305,7 +317,6 @@ class AsistenciaController extends Controller
             });
 
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
-
         } catch (Exception $e) {
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }

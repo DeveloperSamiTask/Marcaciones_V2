@@ -25,6 +25,7 @@ class HorarioController extends Controller
            Segundo cambio
     public function index(Request $request)
     {
+        // Validar los filtros que vienen de la petición
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
             'fechaInicio' => 'nullable|date',
@@ -161,6 +162,7 @@ class HorarioController extends Controller
 
     public function index(Request $request)
     {
+        // Validar los filtros que vienen de la petición
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
             'fechaInicio' => 'nullable|date',
@@ -169,69 +171,50 @@ class HorarioController extends Controller
 
         $user = $request->user();
 
-        // EMPRESAS según usuario
-        if ($user->name === 'ANGELES TERRONES MILUSKA') {
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [4, 10, 11])
-                ->get(['id', 'razonsocial']);
-        } elseif ($user->id === 73) {
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [1, 5])
-                ->get(['id', 'razonsocial']);
+        // Identificar el rol del usuario
+        $isJefe = $user->rol_id == 4; // Rol RESPONSABLE: ve solo sus empleados
+        $isSupervisor = $user->rol_id == 5; // Rol SUPERVISOR: ve solo empleados asignados
+
+        // Determinar qué empresas puede ver según su rol
+        if ($isSupervisor) {
+            // Si es supervisor: solo obtiene las empresas que tiene asignadas
+            $empresas = $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial']);
         } else {
+            // Si es admin, RRHH u otro rol: obtiene todas las empresas activas
             $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
         }
 
-        // OPTIMIZACIÓN: Si no hay fechas, retornar vacío inmediatamente
-        if (! $request->fechaInicio || ! $request->fechaFin) {
-            return Inertia::render('horarios/index', [
-                'horarios' => [],
-                'empresas' => $empresas,
-                'filters' => $filters,
-            ]);
-        }
+        // Consultar horarios con filtros según el rol del usuario
+        $horarios = Horario::whereHas('empleado', function ($query) use ($user, $isJefe, $isSupervisor) {
+            // Filtrar por empresa seleccionada
+            $query->where('empresa_id', request('empresa'))
+                ->whereNull('fecha_cese') // Solo empleados activos (no cesados)
 
-        $horarios = Horario::whereHas('empleado', function ($query) use ($request, $user) {
-            $query->whereNull('fecha_cese');
+                // Si es JEFE: solo ve horarios de empleados que están bajo su supervisión directa
+                ->when($isJefe, function ($q) use ($user) {
+                    $q->where('jefe_id', $user->empleado_id);
+                })
 
-            // FILTRO POR EMPRESA
-            if ($request->empresa) {
-                $query->where('empresa_id', $request->empresa);
-            }
-            // SI NO HAY EMPRESA SELECCIONADA, APLICAR RESTRICCIONES POR USUARIO
-            else {
-                if ($user->name === 'ANGELES TERRONES MILUSKA') {
-                    $query->whereIn('empresa_id', [4, 10, 11]);
-                } elseif ($user->id === 73) {
-                    $query->whereIn('empresa_id', [1, 5]);
-                }
-            }
-
-            // SOLO ROL 4 NORMAL USA FILTRO DE JEFE
-            if ($user->rol_id == 4 && $user->name !== 'ANGELES TERRONES MILUSKA' && $user->id !== 73) {
-                $query->where('jefe_id', $user->empleado_id);
-            }
+                // Si es SUPERVISOR: solo ve horarios de los empleados que tiene asignados
+                ->when($isSupervisor, function ($q) use ($user) {
+                    // Obtener IDs de los empleados a su cargo
+                    $empleadosIds = $user->empleadosACargo()->pluck('empleados.id');
+                    $q->whereIn('id', $empleadosIds);
+                });
         })
-            ->with(['empleado' => function ($query) {
-                // OPTIMIZACIÓN: Cargar solo lo necesario
-                $query->select('id', 'nombres', 'apellidos', 'empresa_id')
-                    ->with(['area' => function ($q) {
-                        $q->select('id', 'nombre');
-                    }]);
-            }])
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->select('id', 'empleado_id', 'fecha', 'ingreso', 'salida', 'estado', 'validado') // Solo columnas necesarias
-            ->orderBy('fecha', 'desc') // Más recientes primero
-            ->orderBy('empleado_id')
-            ->limit(500) // MÁXIMO 500 REGISTROS
+            ->with('empleado.area')
+            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]) // Filtrar por rango de fechas
+            ->orderBy('fecha') // Ordenar por fecha
             ->get();
 
+        // Guardar la URL actual en sesión para poder volver después de editar
         session(['horarios_url' => $request->fullUrl()]);
 
+        // Retornar la vista Inertia con los datos
         return Inertia::render('horarios/index', [
-            'horarios' => $horarios,
-            'empresas' => $empresas,
-            'filters' => $filters,
+            'horarios' => $horarios, // Lista de horarios filtrados
+            'empresas' => $empresas, // Empresas disponibles según el rol
+            'filters' => $filters // Filtros aplicados para mantener el estado
         ]);
     }
 
