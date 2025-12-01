@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -54,12 +55,21 @@ class User extends Authenticatable
 
     public function empleado(): BelongsTo
     {
-      return $this->belongsTo(Empleado::class);
+        return $this->belongsTo(Empleado::class);
     }
 
     public function rol(): BelongsTo
     {
-      return $this->belongsTo(Role::class);
+        return $this->belongsTo(Role::class);
     }
 
+    public function empleadosACargo(): BelongsToMany
+    {
+        return $this->belongsToMany(Empleado::class, 'supervisor_empleado', 'supervisor_id', 'empleado_id');
+    }
+
+    public function empresasAsignadas(): BelongsToMany
+    {
+        return $this->belongsToMany(Empresa::class, 'supervisor_empresa', 'supervisor_id', 'empresa_id');
+    }
 }

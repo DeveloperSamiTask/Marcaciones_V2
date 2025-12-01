@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,12 +31,25 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $request->authenticate();
-
         $request->session()->regenerate();
 
+        $user = $request->user();
+
+        if ($user->rol_id === 5) {
+            $hoy = Carbon::today()->format('Y-m-d');
+
+            $empresaId = $user->empresasAsignadas()->first()?->id;
+
+            return redirect()->route('asistencias.index', [
+                'empresa' => $empresaId,
+                'fechaInicio' => $hoy,
+                'fechaFin' => $hoy,
+            ]);
+        }
+
+        // Para los demás roles, ir al dashboard
         return redirect()->intended(route('dashboard', absolute: false));
     }
-
     /**
      * Destroy an authenticated session.
      */

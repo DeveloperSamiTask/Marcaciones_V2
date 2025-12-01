@@ -17,13 +17,14 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
 
 class AsistenciaController extends Controller
 {
-    public function index(Request $request)//: Response
+    public function index(Request $request)
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -32,45 +33,96 @@ class AsistenciaController extends Controller
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        $fechaInicio = Carbon::parse($request->fechaInicio)->startOfDay(); // 00:00:00
-		$fechaFin = Carbon::parse($request->fechaFin)->endOfDay(); // 23:59:59
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
-        $motivos = Asistencia::where('empleado_id', $request->encargado)
-            ->where('empresa_id', $request->empresa)
-            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->where('semana', "Del {$fechaInicio->format('d/m/Y')} al {$fechaFin->format('d/m/Y')}")
-            ->count();
+        $fechaInicio = Carbon::parse($request->fechaInicio)->startOfDay();
+        $fechaFin = Carbon::parse($request->fechaFin)->endOfDay();
 
-        $asistencias = Asistencia::where('empleado_id', $request->encargado)
-        ->where('empresa_id', $request->empresa)
-        ->with(['empleado.area'])
-        ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-        ->orderBy('fecha', 'desc')
-        ->get()
-        ->groupBy(function($item) {
-            $estados = [
+        $user = $request->user();
+        $isJefe = $user->rol_id == 4;
+        $isSupervisor = $user->rol_id == 5;
+
+        $empresas = $isSupervisor
+            ? $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial'])
+            : Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
+        if ($isSupervisor) {
+            $empleadosAsignadosIds = $user->empleadosACargo()
+                ->when($request->empresa, function ($q) use ($request) {
+                    $q->where('supervisor_empleado.empresa_id', $request->empresa);
+                })
+                ->pluck('empleados.id');
+
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->whereHas('empleado', function ($q) use ($empleadosAsignadosIds) {
+                    $q->whereIn('id', $empleadosAsignadosIds);
+                })
+                ->get()
+                ->sortBy(fn($u) => $u->empleado->apellidos)
+                ->values();
+        } elseif ($isJefe) {
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->whereHas('empleado', function ($q) use ($user) {
+                    $q->where('jefe_id', $user->empleado_id);
+                })
+                ->get()
+                ->sortBy(fn($u) => $u->empleado->apellidos)
+                ->values();
+        } else {
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->get()
+                ->sortBy(fn($u) => $u->empleado->apellidos)
+                ->values();
+        }
+
+        $asistenciasQuery = Asistencia::query()
+            ->with(['empleado.area', 'empleado.empresa'])
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->when($request->empresa, function ($q) use ($request) {
+                $q->whereHas('empleado', function ($e) use ($request) {
+                    $e->where('empresa_id', $request->empresa);
+                });
+            });
+
+        if ($request->encargado && !$isSupervisor) {
+            $asistenciasQuery->where('empleado_id', $request->encargado);
+        }
+
+        if ($isSupervisor) {
+            $empleadosAsignadosIds = $user->empleadosACargo()->pluck('empleados.id');
+
+            $asistenciasQuery->whereHas('detalles', function ($q) use ($empleadosAsignadosIds) {
+                $q->whereIn('empleado_id', $empleadosAsignadosIds);
+            });
+        }
+
+        if ($isJefe) {
+            $asistenciasQuery->whereHas('empleado', fn($q) => $q->where('jefe_  id', $user->empleado_id))
+                ->whereDoesntHave('detalles', fn($q) => $q->where('empleado_id', $user->empleado_id));
+        }
+
+        $asistencias = $asistenciasQuery
+            ->orderBy('fecha', 'desc')
+            ->get()
+            ->groupBy(fn($a) => match ($a->estado) {
                 0 => 'pendientes',
                 1 => 'aprobados',
-                2 => 'rechazados'
-            ];
-
-            return $estados[$item->estado] ?? '';
-        });
+                2 => 'rechazados',
+            });
 
         session(['asistencias_url' => $request->fullUrl()]);
 
-        return Inertia::render('asistencias/index',[
+        return Inertia::render('asistencias/index', [
             'filters' => $filters,
             'empresas' => $empresas,
             'encargados' => $encargados,
             'pendientes' => $asistencias->get('pendientes', collect()),
             'aprobados' => $asistencias->get('aprobados', collect()),
             'rechazados' => $asistencias->get('rechazados', collect()),
-            'rechazados' => $asistencias->get('rechazados', collect()),
         ]);
-
     }
+
 
     public function store(Request $request)
     {
@@ -127,9 +179,8 @@ class AsistenciaController extends Controller
             });
 
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
-
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
@@ -143,17 +194,17 @@ class AsistenciaController extends Controller
         $detalles = $asistencia->detalles()
             ->with(['empleado.area', 'empleado.jornada'])
             ->get()
-            ->map(function ($detalle){
+            ->map(function ($detalle) {
 
                 $tardanza = 0;
                 $extra = 0;
                 $anticipado = 0;
                 $nocturno = 0;
-                if($detalle->ingreso && $detalle->salida && $detalle->hora_ingreso && $detalle->hora_salida){
+                if ($detalle->ingreso && $detalle->salida && $detalle->hora_ingreso && $detalle->hora_salida) {
                     $tardanza = max(0, $detalle->ingreso->diffInMinutes($detalle->hora_ingreso, false)); // si es negativo devuelve 0
                     $extra = max(0, $detalle->salida->diffInMinutes($detalle->hora_salida, false)); // tiempo despues de su hora de salida
                     $anticipado = max(0, $detalle->hora_salida->diffInMinutes($detalle->salida, false)); // hora antes de su salida programado
-                    if($detalle->empleado->empresa_id == 1 || $detalle->empleado->empresa_id == 4){
+                    if ($detalle->empleado->empresa_id == 1 || $detalle->empleado->empresa_id == 4) {
                         $minutosNocturnos = max(0, $detalle->hora_salida->setTime(22, 0)->diffInMinutes($detalle->hora_salida, false));
                         $nocturno = $minutosNocturnos >= 30 ? $minutosNocturnos : 0;
                     }
@@ -179,13 +230,12 @@ class AsistenciaController extends Controller
                 ];
             });
 
-        return Inertia::render('asistencias/show',[
+        return Inertia::render('asistencias/show', [
             'asistencia' => $asistencia,
             'detalles' => $detalles,
             'motivos' => $motivos,
             'url' => session('asistencias_url', route('asistencias.index')),
         ]);
-
     }
 
     public function update(Asistencia $asistencia)
@@ -193,7 +243,7 @@ class AsistenciaController extends Controller
         try {
             DB::transaction(function () use ($asistencia) {
                 $asistencia->update(['estado' => 1, 'fecha_aprobacion' => now()]);
-                $asistencia->detalles()->each(function ($detalle){
+                $asistencia->detalles()->each(function ($detalle) {
                     $isMantoSeguridad = $detalle->empleado->area_id == 4 || $detalle->empleado->area_id == 5; // estas areas estan aprobadas sus horas extras manto y seguridad
                     $marcacion = Marcacion::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->first();
                     $horario = Horario::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->first();
@@ -211,9 +261,8 @@ class AsistenciaController extends Controller
             });
 
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
-
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
@@ -240,7 +289,7 @@ class AsistenciaController extends Controller
                         'motivo' => $tipoPermiso->nombre,
                         'estado' => 0,
                     ]);
-                }else{
+                } else {
                     throw new \Exception("El empleado ya tiene un permiso programado.");
                 }
             });
@@ -248,7 +297,7 @@ class AsistenciaController extends Controller
             // CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
 
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
@@ -260,17 +309,16 @@ class AsistenciaController extends Controller
         try {
             DB::transaction(function () use ($request, $asistencia) {
                 $asistencia->update(['estado' => 2, 'motivo' => $request->motivo, 'fecha_aprobacion' => now()]);
-                $asistencia->detalles()->each(function ($detalle){
+                $asistencia->detalles()->each(function ($detalle) {
                     $detalle->update(['estado_horas_extra' => 0]);
-                    Marcacion::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->update(['estado' => 0, 'estado_horas_extra'=> 0]); // vuelve a estado pendiente
+                    Marcacion::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->update(['estado' => 0, 'estado_horas_extra' => 0]); // vuelve a estado pendiente
                     Horario::where('empleado_id', $detalle->empleado_id)->whereDate('fecha', $detalle->fecha)->update(['validado' => 0]); // vuelve a estado pendiente
                 });
             });
 
             CrearNotificacionAsistencia::dispatch($asistencia, Auth::user());
-
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 }

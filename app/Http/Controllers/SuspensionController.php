@@ -27,21 +27,55 @@ class SuspensionController extends Controller
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
-        $lista = Suspension::whereHas('empleado', function ($query) use ($request) {
-            $query->when($request->encargado, fn ($q) => $q->where('jefe_id', $request->encargado)) // muestra segun el valor seleccionado en la vista (para administradores o rrhh)
-                ->where('empresa_id', $request->empresa)
-                ->whereNull('fecha_cese');
-        })
-        ->with('empleado')
-        ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-        ->whereNull('codigo_asociado')
-        ->orderBy('fecha', 'desc')
-        ->get()
-        ->groupBy(function($item) {
-            return str_starts_with($item->codigo, 'S') ? 'suspensiones' : 'amonestaciones';
-        });
+        $user = $request->user();
+        $isJefe = $user->rol_id == 4;
+        $isSupervisor = $user->rol_id == 5;
+
+        // Empresas visibles según rol
+        $empresas = $isSupervisor
+            ? $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial'])
+            : Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
+        // Encargados visibles según rol (solo admin/jefe)
+        $encargados = $isSupervisor
+            ? collect()
+            : User::with('empleado')
+            ->where('estado', true)
+            ->get()
+            ->sortBy(fn($u) => $u->empleado->apellidos)
+            ->values();
+
+        // Query de suspensiones
+        $suspensionesQuery = Suspension::with('empleado')
+            ->whereHas('empleado', function ($q) use ($request, $user, $isJefe, $isSupervisor) {
+                $q->whereNull('fecha_cese');
+
+                if ($request->empresa) {
+                    $q->where('empresa_id', $request->empresa);
+                }
+
+                if ($request->encargado && !$isSupervisor) {
+                    $q->where('jefe_id', $request->encargado);
+                }
+
+                if ($isJefe) {
+                    $q->where('jefe_id', $user->empleado_id);
+                }
+
+                if ($isSupervisor) {
+                    $empleadosIds = $user->empleadosACargo()->pluck('empleados.id');
+                    $q->whereIn('id', $empleadosIds);
+                }
+            })
+            ->whereBetween('fecha', [
+                Carbon::parse($request->fechaInicio)->startOfDay(),
+                Carbon::parse($request->fechaFin)->endOfDay()
+            ])
+            ->whereNull('codigo_asociado')
+            ->orderBy('fecha', 'desc');
+
+        $lista = $suspensionesQuery->get()
+            ->groupBy(fn($item) => str_starts_with($item->codigo, 'S') ? 'suspensiones' : 'amonestaciones');
 
         session(['suspensiones_url' => $request->fullUrl()]);
 
@@ -56,9 +90,13 @@ class SuspensionController extends Controller
 
     public function create(Request $request)
     {
-        $isJefe = $request->user()->rol_id == 4;
+        $user = $request->user();
+        $isJefe = $user->rol_id == 4;
+        $isSupervisor = $user->rol_id == 5;
+
         $empleados = Empleado::whereNull('fecha_cese')
-            ->when($isJefe, fn($query) => $query->where('jefe_id', $request->user()->empleado_id))
+            ->when($isJefe, fn($q) => $q->where('jefe_id', $user->empleado_id))
+            ->when($isSupervisor, fn($q) => $q->whereIn('id', $user->empleadosACargo()->pluck('empleados.id')))
             ->orderBy('apellidos')
             ->get(['id', 'jornada_id', 'apellidos', 'nombres']);
 
@@ -71,7 +109,7 @@ class SuspensionController extends Controller
     public function store(Request $request)
     {
 
-        if($request->has('motivo')){
+        if ($request->has('motivo')) {
             $data = $request->validate([
                 'empleado_id' => 'required|exists:empleados,id',
                 'fecha' => 'required|date',
@@ -79,17 +117,17 @@ class SuspensionController extends Controller
                 'tipo' => 'required|string|in:AM,S',
                 'razon' => 'required|string|in:tardanza,falta injustificada,incumplimiento,negligencia',
             ]);
-        }else{
+        } else {
             $data = $request->validate([
                 'marcacion_id' => 'required|exists:marcacions,id',
                 'tipo' => 'required|string|in:tardanza,incompleto,refrigerio,incumplimiento',
             ]);
         }
 
-        try{
-            DB::transaction( function () use ($data, $request){
+        try {
+            DB::transaction(function () use ($data, $request) {
 
-                if($request->has('motivo')){
+                if ($request->has('motivo')) {
                     $amonestacion = Suspension::create([
                         'user_id' => $request->user()->id,
                         'empleado_id' => $data['empleado_id'],
@@ -100,9 +138,9 @@ class SuspensionController extends Controller
 
                     $amonestacion->update(['codigo' => $data['tipo'] . now()->format('dmY') . $amonestacion->id]); // verificar que se guarde con estado 0
                     CrearNotificacionSuspension::dispatch($amonestacion);
-                }else{
+                } else {
                     $marcacion = Marcacion::with(['empleado.horarios'])->findOrFail($data['marcacion_id']);
-                    $minutos = match($data['tipo']) { // se obtiene la hora segun el tipo del memorandum
+                    $minutos = match ($data['tipo']) { // se obtiene la hora segun el tipo del memorandum
                         'tardanza' => $marcacion->tardanza,
                         'refrigerio' => $marcacion->refrigerio,
                         default => null
@@ -120,24 +158,22 @@ class SuspensionController extends Controller
 
                     $amonestacion->update(['codigo' => 'AM' . now()->format('dmY') . $amonestacion->id]); // verificar que se guarde con estado 0
                 }
-
             });
 
-            if($request->has('motivo')){
+            if ($request->has('motivo')) {
                 return to_route('suspensiones.index')->withSuccess(['message' => 'Suspension creado exitosamente!']);
             }
-
-        }catch(Exception $e){
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+        } catch (Exception $e) {
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 
     public function show(Suspension $suspensione): Response
     {
         $amonestaciones = Suspension::with('empleado')
-        ->where('codigo_asociado', $suspensione->codigo)
-        ->orderBy('fecha', 'desc')
-        ->get();
+            ->where('codigo_asociado', $suspensione->codigo)
+            ->orderBy('fecha', 'desc')
+            ->get();
 
         return Inertia::render('suspensiones/show', [
             'suspension' => $suspensione,
@@ -163,7 +199,7 @@ class SuspensionController extends Controller
             return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaMemo'));
         }
 
-        if($suspension->tipo == 'negligencia'){
+        if ($suspension->tipo == 'negligencia') {
             return view('exports.pdf.suspension.negligencia', compact('suspension', 'articulo', 'fecha', 'fechaMemo'));
         }
 
@@ -182,7 +218,7 @@ class SuspensionController extends Controller
                 if ($request->hasFile('sustento')) { // verificamos que haya un archivo comrpobante
                     $file = $request->file('sustento');
                     // $path = Storage::put('comprobantes', $file);
-                    $path = $file->store('suspensiones/'.$suspension->id, 'public'); // Almacenar el archivo en la carpeta public del storage
+                    $path = $file->store('suspensiones/' . $suspension->id, 'public'); // Almacenar el archivo en la carpeta public del storage
                     $suspension->update(['sustento' => "storage/$path", 'estado' => 1]);
 
                     // creamos suspensiones cuando llegue a 3 amonestaciones
@@ -203,13 +239,10 @@ class SuspensionController extends Controller
                         $suspensionAsociada->update(['codigo' => 'S' . now()->format('dmY') . $suspensionAsociada->id]);
                         $amonestaciones->update(['codigo_asociado' => $suspensionAsociada->codigo]);
                     }
-
                 }
             });
         } catch (Exception $e) {
-            return back()->withInput()->withErrors([ 'message' => $e->getMessage()]);
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
-
-
     }
 }

@@ -155,7 +155,7 @@ export default function IndexSuspension({
                             placeholder="SELECCIONAR RANGO DE FECHAS"
                         />
 
-                        {auth.user.rol_id != 4 && (
+                        {![4,5].includes(auth.user.rol_id) && (
                             <SelectFilter
                                 items={encargados}
                                 selected={selectedEncargado}

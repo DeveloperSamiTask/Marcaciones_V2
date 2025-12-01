@@ -28,6 +28,10 @@ class UpdateUserRequest extends FormRequest
             'password' => 'nullable|string', // Requerido, mínimo 8 caracteres, debe coincidir con "password_confirmation"
             'rol_id' => 'required|exists:roles,id',
             'empleado_id' => 'required|exists:empleados,id',
+            'empresas_asignadas' => 'nullable|array',
+            'empresas_asignadas.*' => 'exists:empresas,id',
+            'empleados_a_cargo' => 'nullable|array',
+            'empleados_a_cargo.*' => 'exists:empleados,id',
         ];
     }
 }

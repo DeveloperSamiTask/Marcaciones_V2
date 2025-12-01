@@ -1,10 +1,13 @@
 import { DataTable } from '@/components/data-table';
 import { DateRangeFilter } from '@/components/date-range';
+import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { SelectFilter } from '@/components/select-filter';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem, SharedData } from '@/types';
+import { Asistencia } from '@/types/asistencias';
 import { Empresa } from '@/types/empresas';
 import { Encargado } from '@/types/encargados';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -13,9 +16,6 @@ import { CalendarIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import { columns } from './columns';
-import { LoadingSkeleton } from '@/components/loading-skeleton';
-import { Asistencia } from '@/types/asistencias';
-import { Card, CardContent } from '@/components/ui/card';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -50,8 +50,8 @@ export default function IndexAsistencia({
 
     // valores iniciales
     const initialState = {
-        empresa: auth.user.rol_id !== 4 ? filters.empresa || null : auth.user.empleado.empresa_id,
-        encargado: auth.user.rol_id !== 4 ? filters.encargado || null : auth.user.empleado.id,
+        empresa: ![4, 5].includes(auth.user.rol_id) ? filters.empresa || null : auth.user.empleado.empresa_id,
+        encargado: ![4, 5].includes(auth.user.rol_id) ? filters.encargado || null : auth.user.empleado.id,
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
@@ -125,11 +125,11 @@ export default function IndexAsistencia({
             <Head title="Validaciones" />
             <div className="flex flex-1 flex-col p-8">
                 <div className="@container/main flex flex-1 flex-col gap-6">
-                    <div className="sticky top-0 z-10 grid py-2 gap-6 bg-background">
+                    <div className="bg-background sticky top-0 z-10 grid gap-6 py-2">
                         <div className="flex items-center justify-between">
                             <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Validaciones</h2>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
+                        <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-3">
                             {auth.user.rol_id != 4 && (
                                 <SelectFilter
                                     items={empresas}
@@ -141,13 +141,9 @@ export default function IndexAsistencia({
                                 />
                             )}
 
-                            <DateRangeFilter
-                                dateRange={dateRange}
-                                setDateRange={setDateRange}
-                                placeholder="SELECCIONAR RANGO DE FECHAS"
-                            />
+                            <DateRangeFilter dateRange={dateRange} setDateRange={setDateRange} placeholder="SELECCIONAR RANGO DE FECHAS" />
 
-                            {auth.user.rol_id != 4 && (
+                            {![4, 5].includes(auth.user.rol_id) && (
                                 <SelectFilter
                                     items={encargados}
                                     selected={selectedEncargado}
@@ -175,7 +171,7 @@ export default function IndexAsistencia({
                                 APROBADOS
                             </TabsTrigger>
                             <TabsTrigger
-                                className="data-[state=active]:bg-destructive dark:data-[state=active]:bg-destructive data-[state=active]:text-white dark:data-[state=active]:text-foreground"
+                                className="data-[state=active]:bg-destructive dark:data-[state=active]:bg-destructive dark:data-[state=active]:text-foreground data-[state=active]:text-white"
                                 value="rechazados"
                             >
                                 RECHAZADOS
