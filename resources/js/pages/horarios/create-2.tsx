@@ -579,7 +579,9 @@ export default function App({ empleados, empresas, url }) {
                     return;
                 }
             }
-            else if (employee.jornada_id === 2) { // PART TIME
+
+            /*
+             else if (employee.jornada_id === 2) { // PART TIME
                 // No menos de 23.5 horas
                 if (horasSemanales < 1410) {
                     toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 23.5 horas mínimas para Part Time)`);
@@ -588,6 +590,8 @@ export default function App({ empleados, empresas, url }) {
                 }
                 // Part Time no debería tener máximo? O agregas si necesitas
             }
+            */
+
         });
 
         if (hasValidationErrors) return;

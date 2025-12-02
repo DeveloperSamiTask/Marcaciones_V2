@@ -9,7 +9,6 @@ use App\Models\Empresa;
 use App\Models\Extra;
 use App\Models\Feriado;
 use App\Models\Horario;
-use App\Models\Marcacion;
 use App\Models\Permiso;
 use App\Models\PermisoTipo;
 use Carbon\Carbon;
@@ -951,31 +950,30 @@ class HorarioController extends Controller
                 ->whereIn('fecha', $fechasLaborables)
                 ->get();
 
-            // 🔥 NUEVO: Solo para PT (jornada_id = 2) - Obtener entrada/salida de marcaciones
             $horariosFeriados = [];
 
             if ($esPartTime && $feriadoDisponible->isNotEmpty()) {
                 // Obtener fechas de feriados
                 $fechas = $feriadoDisponible->map(fn ($f) => $f->fecha->format('Y-m-d'));
 
-                // Buscar marcaciones del PT para esas fechas
-                $marcaciones = Marcacion::where('empleado_id', $empleadoId)
+                // 🔥 CAMBIO: Buscar HORARIOS PROGRAMADOS del PT para esas fechas
+                $horariosProgramados = Horario::where('empleado_id', $empleadoId)
                     ->whereIn('fecha', $fechas)
                     ->get()
-                    ->keyBy(fn ($m) => $m->fecha->format('Y-m-d'));
+                    ->keyBy(fn ($h) => $h->fecha->format('Y-m-d'));
 
                 // Preparar datos de entrada/salida
                 foreach ($feriadoDisponible as $feriado) {
                     $fechaKey = $feriado->fecha->format('Y-m-d');
-                    $marcacion = $marcaciones->get($fechaKey);
+                    $horarioProgramado = $horariosProgramados->get($fechaKey);
 
                     $horariosFeriados[$fechaKey] = [
-                        // 🔥 EXTRAER SOLO LA HORA en formato HH:mm:ss
-                        'entrada' => $marcacion && $marcacion->ingreso
-                            ? \Carbon\Carbon::parse($marcacion->ingreso)->format('H:i:s')
+                        // 🔥 USAR ingreso y salida del HORARIO, no de la marcación
+                        'entrada' => $horarioProgramado && $horarioProgramado->ingreso
+                            ? \Carbon\Carbon::parse($horarioProgramado->ingreso)->format('H:i:s')
                             : null,
-                        'salida' => $marcacion && $marcacion->salida
-                            ? \Carbon\Carbon::parse($marcacion->salida)->format('H:i:s')
+                        'salida' => $horarioProgramado && $horarioProgramado->salida
+                            ? \Carbon\Carbon::parse($horarioProgramado->salida)->format('H:i:s')
                             : null,
                     ];
                 }

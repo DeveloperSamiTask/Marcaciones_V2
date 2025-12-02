@@ -39,7 +39,19 @@ export function BaseScheduleGranjaVilla({
         entrada: '09:00',
         salida: '18:00'
     });
+    const handleApplyAllPeriods = () => {
+        // 1. Aplica Lunes a Jueves
+        onApplyLunesAJueves?.(horarioLunesAJueves);
 
+        // 2. Aplica Viernes
+        onApplyViernes?.(horarioViernes);
+
+        // 3. Aplica Fin de Semana
+        onApplyFinDeSemana?.(horarioFinDeSemana);
+
+        // Aquí podrías agregar una notificación de éxito (e.g., toast.success)
+        //console.log("Horarios combinados aplicados a Lunes-Jueves, Viernes y Fin de Semana.");
+    };
     return (
         <div className="bg-green-50 p-4 rounded-lg border border-green-300">
             <h3 className="mb-3 flex items-center gap-2">
@@ -47,40 +59,32 @@ export function BaseScheduleGranjaVilla({
                 Horarios Granja Villa - {modality}
             </h3>
 
-            {/* 🎯 3 RANGOS EN LUGAR DE 1 */}
+            {/* 3 RANGOS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+
                 {/* LUNES A JUEVES */}
                 <div className="bg-white p-3 rounded border">
                     <Label className="text-xs font-medium">Lunes a Jueves</Label>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex flex-col space-y-2 mt-2">
                         <Input
                             type="time"
                             value={horarioLunesAJueves.entrada}
                             onChange={(e) => setHorarioLunesAJueves(prev => ({ ...prev, entrada: e.target.value }))}
-                            className="text-xs" />
+                            className="text-xs"
+                        />
                         <Input
                             type="time"
                             value={horarioLunesAJueves.salida}
                             onChange={(e) => setHorarioLunesAJueves(prev => ({ ...prev, salida: e.target.value }))}
-                            className="text-xs" />
+                            className="text-xs"
+                        />
                     </div>
-                    <Button
-                        onClick={() => {
-                            // 🆕 APLICAR EL HORARIO EDITADO
-                            setHorarioLunesAJueves(horarioLunesAJueves);
-                            onApplyLunesAJueves?.(horarioLunesAJueves);
-                        }} // 🆕 CAMBIAR POR LA NUEVA FUNCIÓN
-                        className="w-full mt-2 bg-green-600 hover:bg-green-700"
-                        size="sm"
-                    >
-                        Aplicar
-                    </Button>
                 </div>
 
-                {/* VIERNES - EDITABLE */}
+                {/* VIERNES */}
                 <div className="bg-white p-3 rounded border">
                     <Label className="text-xs font-medium">Viernes</Label>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex flex-col space-y-2 mt-2">
                         <Input
                             type="time"
                             value={horarioViernes.entrada}
@@ -94,22 +98,12 @@ export function BaseScheduleGranjaVilla({
                             className="text-xs"
                         />
                     </div>
-                    <Button
-                        onClick={() => {
-                            setHorarioViernes(horarioViernes);
-                            onApplyViernes?.(horarioViernes);
-                        }}
-                        className="w-full mt-2 bg-green-600 hover:bg-green-700"
-                        size="sm"
-                    >
-                        Aplicar
-                    </Button>
                 </div>
 
-                {/* SÁBADO Y DOMINGO - EDITABLE */}
+                {/* SÁBADO Y DOMINGO */}
                 <div className="bg-white p-3 rounded border">
                     <Label className="text-xs font-medium">Sábado y Domingo</Label>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex flex-col space-y-2 mt-2">
                         <Input
                             type="time"
                             value={horarioFinDeSemana.entrada}
@@ -123,23 +117,22 @@ export function BaseScheduleGranjaVilla({
                             className="text-xs"
                         />
                     </div>
-                    <Button
-                        onClick={() => {
-                            setHorarioFinDeSemana(horarioFinDeSemana);
-                            onApplyFinDeSemana?.(horarioFinDeSemana);
-                        }}
-                        className="w-full mt-2 bg-green-600 hover:bg-green-700"
-                        size="sm"
-                    >
-                        Aplicar
-                    </Button>
                 </div>
+
             </div>
 
-            <p className="text-xs text-green-700 mt-2">
-                Horarios editables para personal de Granja Villa
+            {/* BOTÓN ÚNICO */}
+            <Button
+                onClick={handleApplyAllPeriods}
+                className="w-full bg-green-600 hover:bg-green-700"
+                size="sm"
+            >
+                Aplicar TODOS los Horarios
+            </Button>
+
+            <p className="text-xs text-green-700 mt-2 text-center">
+                Aplica Lunes-Jueves, Viernes y Fin de Semana en un solo clic.
             </p>
         </div>
     );
 }
-
