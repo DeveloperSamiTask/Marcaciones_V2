@@ -54,7 +54,7 @@ export function EmployeeList({
             return; // Ya está cargando o ya tiene datos
         }
 
-       // console.log('🚀 Cargando datos para empleado:', employeeId);
+        // console.log('🚀 Cargando datos para empleado:', employeeId);
 
         setLoadingData(prev => new Set(prev).add(employeeId));
 
@@ -90,7 +90,7 @@ export function EmployeeList({
             }));
 
         } catch (error) {
-           // console.error('❌ Error cargando datos:', employeeId, error);
+            // console.error('❌ Error cargando datos:', employeeId, error);
 
             // Guardar estructuras vacías
             setFeriadosData(prev => ({
@@ -138,7 +138,7 @@ export function EmployeeList({
                 );
 
                 if (necesitaDatos && !feriadosData[employeeId] && !permisosTDData[employeeId]) {
-                   // console.log('🎯 Pre-cargando datos para empleado expandido:', employeeId);
+                    // console.log('🎯 Pre-cargando datos para empleado expandido:', employeeId);
                     fetchDatosEmpleado(employeeId);
                 }
             }
@@ -188,9 +188,11 @@ export function EmployeeList({
                                 const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
                                 const tieneDescanso = Object.values(employeeSchedule).some(day => day.status === 'D');
                                 const necesitaDescanso = !tieneVacaciones && !tieneDescanso;
-
+                                const scheduleKey = `${employee.id}-${Object.keys(employeeSchedule).length}`;
                                 return (
+
                                     <EmployeeRow
+                                        keySchedule={scheduleKey}
                                         key={employee.id}
                                         employee={employee}
                                         isExpanded={expandedEmployees.has(employee.id)}

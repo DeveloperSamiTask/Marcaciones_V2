@@ -4,6 +4,7 @@ import { WeekScheduleTable } from './WeekScheduleTable';
 import { Employee, DaySchedule } from '../../types/schedule';
 
 interface EmployeeRowProps {
+    keySchedule: string;
     employee: Employee;
     isExpanded: boolean;
     onToggle: (employeeId: string) => void;
@@ -17,11 +18,12 @@ interface EmployeeRowProps {
         feriadoDisponible: any[];
         feriadoFuturo: any[];
     } | null;
-     permisosTDData?: any[] | null;
-     isLoadingData?: boolean;
+    permisosTDData?: any[] | null;
+    isLoadingData?: boolean;
 }
 
 export function EmployeeRow({
+    keySchedule,
     employee,
     isExpanded,
     onToggle,
@@ -87,6 +89,7 @@ export function EmployeeRow({
                 <div className="bg-gray-50 border-t">
                     <div className="p-4">
                         <WeekScheduleTable
+                            key={keySchedule}
                             employeeId={employee.id}
                             weekDates={weekDates}
                             scheduleData={scheduleData}

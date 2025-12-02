@@ -307,9 +307,12 @@ class MarcacionController extends Controller
                 $horariosConExtras = Horario::where('empleado_id', $marcacione->empleado_id)
                     ->whereNotNull('extra')
                     ->get();
-                if ($horariosConExtras->isEmpty()) {
+                /*
+                  if ($horariosConExtras->isEmpty()) {
                     throw new Exception('No tiene horas extras disponibles para realizar el ajuste');
                 }
+                */
+
                 // Convertir tiempo_extra a minutos
                 [$horas, $minutos] = explode(':', $data['tiempo_extra']);
                 $tiempoExtraMinutos = ($horas * 60) + $minutos;

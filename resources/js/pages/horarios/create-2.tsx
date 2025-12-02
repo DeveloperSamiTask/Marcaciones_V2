@@ -58,7 +58,7 @@ export default function App({ empleados, empresas, url }) {
             fetch(`/horarios/empleados?empresa_id=${empresaParam}`)
                 .then(res => res.json())
                 .then(data => {
-                   // console.log("🧠 Empleados cargados:", data); // 👈 revisa aquí
+                    // console.log("🧠 Empleados cargados:", data); // 👈 revisa aquí
                     setEmpleadosList(data);
                 })
                 .catch(err => console.error("Error cargando empleados:", err));
@@ -146,45 +146,45 @@ export default function App({ empleados, empresas, url }) {
     const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
 
     const handleApplyBaseToAll = () => {
-        const newData: typeof scheduleData = { ...scheduleData };
         const newExpanded = new Set<string>();
 
-        filteredEmployees.forEach(employee => {
-            newExpanded.add(employee.id);
+        // 🔥 USAR FORMA FUNCIONAL
+        setScheduleData((prev) => {
+            const newData: typeof scheduleData = {};
 
-            if (!newData[employee.id]) {
+            filteredEmployees.forEach(employee => {
+                newExpanded.add(employee.id);
                 newData[employee.id] = {};
-            }
 
-            weekDates.forEach(date => {
-                const dateStr = formatDate(date);
-                const existingStatus = newData[employee.id][dateStr]?.status || 'L';
+                weekDates.forEach(date => {
+                    const dateStr = formatDate(date);
+                    const existingStatus = prev[employee.id]?.[dateStr]?.status || 'L';
 
-                // 🔥 SI ES DÍA NO LABORAL, MANTENER 00:00
-                if (existingStatus !== 'L') {
-                    newData[employee.id][dateStr] = {
-                        entryTime: '00:00',
-                        exitTime: '00:00',
-                        status: existingStatus,
-                    };
-                } else {
-                    // 🔥 SI ES LABORAL, APLICAR HORARIO BASE
-                    newData[employee.id][dateStr] = {
-                        entryTime: currentBaseSchedule.entryTime,
-                        exitTime: currentBaseSchedule.exitTime,
-                        status: 'L',
-                    };
-                }
+                    if (existingStatus !== 'L') {
+                        newData[employee.id][dateStr] = {
+                            entryTime: '00:00',
+                            exitTime: '00:00',
+                            status: existingStatus,
+                        };
+                    } else {
+                        newData[employee.id][dateStr] = {
+                            entryTime: currentBaseSchedule.entryTime,
+                            exitTime: currentBaseSchedule.exitTime,
+                            status: 'L',
+                        };
+                    }
+                });
             });
+
+            return newData; // 🔥 RETORNAR OBJETO NUEVO
         });
 
         setExpandedEmployees(newExpanded);
-        setScheduleData(newData);
         toast.success(`Horario base aplicado a ${filteredEmployees.length} empleados`);
     };
 
     useEffect(() => {
-      //  console.log("🔄 Reseteando validaciones - semana o empresa cambió");
+        //  console.log("🔄 Reseteando validaciones - semana o empresa cambió");
         setExpandedEmployees(new Set());
 
         setScheduleData({});
@@ -192,85 +192,100 @@ export default function App({ empleados, empresas, url }) {
 
     /*Despliegue de informacion al seleccionar el boton asignar horario PARA LA GRANJA VILLA*/
     const handleApplyLunesAJueves = (horario: { entrada: string; salida: string }) => {
-        const newData = { ...scheduleData };
         const newExpanded = new Set<string>();
 
-        filteredEmployees.forEach(employee => {
-            newExpanded.add(employee.id);
-            if (!newData[employee.id]) newData[employee.id] = {};
+        setScheduleData((prev) => {
+            const newData = { ...prev }; // 🔥 CLONAR EL ESTADO ANTERIOR
 
-            weekDates.forEach(date => {
-                const dateStr = formatDate(date);
-                const dayOfWeek = date.getDay(); // 0=domingo, 1=lunes, etc.
+            filteredEmployees.forEach(employee => {
+                newExpanded.add(employee.id);
 
-                if (dayOfWeek >= 1 && dayOfWeek <= 4) { // Solo Lunes a Jueves
-                    newData[employee.id][dateStr] = {
-                        entryTime: horario.entrada,
-                        exitTime: horario.salida,
-                        status: newData[employee.id][dateStr]?.status || 'L',
-                    };
-                }
+                // 🔥 CREAR NUEVO OBJETO PARA ESTE EMPLEADO
+                newData[employee.id] = { ...prev[employee.id] };
+
+                weekDates.forEach(date => {
+                    const dateStr = formatDate(date);
+                    const dayOfWeek = date.getDay();
+
+                    if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+                        // 🔥 CREAR NUEVO OBJETO PARA ESTE DÍA
+                        newData[employee.id][dateStr] = {
+                            entryTime: horario.entrada,
+                            exitTime: horario.salida,
+                            status: prev[employee.id]?.[dateStr]?.status || 'L',
+                        };
+                    }
+                });
             });
+
+            return newData;
         });
 
         setExpandedEmployees(newExpanded);
-        setScheduleData(newData);
         toast.success(`Horario Lunes-Jueves aplicado a ${filteredEmployees.length} empleados`);
     };
 
     // 🟢 PARA VIERNES
     const handleApplyViernes = (horario: { entrada: string; salida: string }) => {
-        const newData = { ...scheduleData };
         const newExpanded = new Set<string>();
 
-        filteredEmployees.forEach(employee => {
-            newExpanded.add(employee.id);
-            if (!newData[employee.id]) newData[employee.id] = {};
+        setScheduleData((prev) => {
+            const newData = { ...prev };
 
-            weekDates.forEach(date => {
-                const dateStr = formatDate(date);
-                const dayOfWeek = date.getDay();
+            filteredEmployees.forEach(employee => {
+                newExpanded.add(employee.id);
+                newData[employee.id] = { ...prev[employee.id] };
 
-                if (dayOfWeek === 5) { // Solo Viernes
-                    newData[employee.id][dateStr] = {
-                        entryTime: horario.entrada,
-                        exitTime: horario.salida,
-                        status: newData[employee.id][dateStr]?.status || 'L',
-                    };
-                }
+                weekDates.forEach(date => {
+                    const dateStr = formatDate(date);
+                    const dayOfWeek = date.getDay();
+
+                    if (dayOfWeek === 5) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: horario.entrada,
+                            exitTime: horario.salida,
+                            status: prev[employee.id]?.[dateStr]?.status || 'L',
+                        };
+                    }
+                });
             });
+
+            return newData;
         });
 
         setExpandedEmployees(newExpanded);
-        setScheduleData(newData);
         toast.success(`Horario Viernes aplicado a ${filteredEmployees.length} empleados`);
     };
 
     // 🟢 PARA SÁBADO Y DOMINGO
     const handleApplyFinDeSemana = (horario: { entrada: string; salida: string }) => {
-        const newData = { ...scheduleData };
         const newExpanded = new Set<string>();
 
-        filteredEmployees.forEach(employee => {
-            newExpanded.add(employee.id);
-            if (!newData[employee.id]) newData[employee.id] = {};
+        setScheduleData((prev) => {
+            const newData = { ...prev };
 
-            weekDates.forEach(date => {
-                const dateStr = formatDate(date);
-                const dayOfWeek = date.getDay();
+            filteredEmployees.forEach(employee => {
+                newExpanded.add(employee.id);
+                newData[employee.id] = { ...prev[employee.id] };
 
-                if (dayOfWeek === 0 || dayOfWeek === 6) { // Sábado (6) y Domingo (0)
-                    newData[employee.id][dateStr] = {
-                        entryTime: horario.entrada,
-                        exitTime: horario.salida,
-                        status: newData[employee.id][dateStr]?.status || 'L',
-                    };
-                }
+                weekDates.forEach(date => {
+                    const dateStr = formatDate(date);
+                    const dayOfWeek = date.getDay();
+
+                    if (dayOfWeek === 0 || dayOfWeek === 6) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: horario.entrada,
+                            exitTime: horario.salida,
+                            status: prev[employee.id]?.[dateStr]?.status || 'L',
+                        };
+                    }
+                });
             });
+
+            return newData;
         });
 
         setExpandedEmployees(newExpanded);
-        setScheduleData(newData);
         toast.success(`Horario Fin de Semana aplicado a ${filteredEmployees.length} empleados`);
     };
 
@@ -389,7 +404,7 @@ export default function App({ empleados, empresas, url }) {
             const data = await response.json();
             return data;
         } catch (error) {
-          //  console.error('Error cargando feriados:', error);
+            //  console.error('Error cargando feriados:', error);
             return { feriadoDisponible: [], feriadoFuturo: [] };
         }
     };
@@ -431,7 +446,7 @@ export default function App({ empleados, empresas, url }) {
 
         const entries = [];
         let hasValidationErrors = false;
-      //  console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
+        //  console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
 
 
 
@@ -481,7 +496,7 @@ export default function App({ empleados, empresas, url }) {
             return Object.values(schedule).some(day => day.status === 'TD');
         });
 
-       // console.log('👥 Empleados con C/CA:', empleadosConCompensacion.length);
+        // console.log('👥 Empleados con C/CA:', empleadosConCompensacion.length);
         //console.log('👥 Empleados con TD:', empleadosConTD.length);
 
         // 🔥 3. Cargar feriados en paralelo
@@ -493,7 +508,7 @@ export default function App({ empleados, empresas, url }) {
                         const feriados = await getFeriadosEmpleado(emp.id);
                         feriadosMap[emp.id] = feriados || { feriadoDisponible: [], feriadoFuturo: [] };
                     } catch (error) {
-                     //   console.error(`Error cargando feriados para empleado ${emp.id}:`, error);
+                        //   console.error(`Error cargando feriados para empleado ${emp.id}:`, error);
                         feriadosMap[emp.id] = { feriadoDisponible: [], feriadoFuturo: [] };
                     }
                 })
@@ -509,17 +524,17 @@ export default function App({ empleados, empresas, url }) {
                         const permisosTD = await getTDPermisosEmpleado(emp.id);
                         // ✅ Asegurar que siempre sea un array
                         permisosTDMap[emp.id] = Array.isArray(permisosTD) ? permisosTD : [];
-                       // console.log(`📋 Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
+                        // console.log(`📋 Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
                     } catch (error) {
-                      //  console.error(`Error cargando permisos TD para empleado ${emp.id}:`, error);
+                        //  console.error(`Error cargando permisos TD para empleado ${emp.id}:`, error);
                         permisosTDMap[emp.id] = []; // ✅ Array vacío en caso de error
                     }
                 })
             );
         }
 
-    //    console.log('📦 Feriados cargados:', feriadosMap);
-      //  console.log('📦 Permisos TD cargados:', permisosTDMap);
+        //    console.log('📦 Feriados cargados:', feriadosMap);
+        //  console.log('📦 Permisos TD cargados:', permisosTDMap);
 
         // ==================== TRACKING DE FERIADOS Y TD USADOS ====================
         const feriadosUsadosPorEmpleado = {};
@@ -624,12 +639,12 @@ console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, {
                         ? permisosTDMap[employee.id]
                         : [];
 
-                        /*
+                    /*
 console.log(`🔍 Procesando TD para ${employee.nombres}:`, {
-                        permisosDisponibles: permisosTD.length,
-                        permisosMap: permisosTDMap[employee.id]
-                    });
-                        */
+                    permisosDisponibles: permisosTD.length,
+                    permisosMap: permisosTDMap[employee.id]
+                });
+                    */
 
 
                     // Filtrar los ya usados
@@ -715,11 +730,11 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
         const conPermisoTD = entries.filter(e => e.permiso_td_id);
 
         if (conFeriado.length > 0) {
-           // console.log('🎯 Registros con feriado:', conFeriado);
+            // console.log('🎯 Registros con feriado:', conFeriado);
         }
 
         if (conPermisoTD.length > 0) {
-           // console.log('🟡 Registros con permiso TD:', conPermisoTD);
+            // console.log('🟡 Registros con permiso TD:', conPermisoTD);
         }
 
         router.post(route('horarios.store-multiple'), { entries }, {
@@ -729,7 +744,7 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                 toast.success('✅ Horarios guardados correctamente');
             },
             onError: (errors) => {
-               // console.error('❌ Error backend:', errors);
+                // console.error('❌ Error backend:', errors);
                 toast.error('Error al guardar horarios');
             },
             onFinish: () => toast.dismiss(),
