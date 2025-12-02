@@ -68,8 +68,8 @@ const estadoBadgeVariants = {
     LF: { label: "21.LICENCIA POR FALLECIMIENTO" },
     PE: { label: "22.PENDIENTE" },
 
-    HENA: { label: "23.H. EXTRA NO AUTORIZADO" },
-    HE: { label: "24.HORAS EXTRA" },
+    TD: { label: "23.H. EXTRA NO AUTORIZADO" },
+    TD: { label: "24.HORAS EXTRA" },
     TD: { label: "25.TRABAJO DIA DESCANSO" },
 } as const;
 
@@ -169,19 +169,14 @@ export function WeekScheduleTable({
         const cargarFeriados = async () => {
             setLoading(true);
             try {
-               // console.log('🚀 Cargando feriados para empleado:', employeeId);
                 const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
-               // console.log('✅ Feriados cargados:', data);
 
                 setFeriadosLocal(data);
+
             } catch (error) {
-               // console.error('❌ Error cargando feriados:', error);
+                console.error('❌ Error cargando feriados:', error);
                 setFeriadosLocal({
                     feriadoDisponible: [],
                     feriadoFuturo: []
@@ -192,7 +187,7 @@ export function WeekScheduleTable({
         };
 
         cargarFeriados();
-    }, [employeeId]);
+    }, [employeeId]); // 🔥 ELIMINAR horariosPTCargados y onFieldChange
 
     // 🔥 USAR feriadosLocal en lugar de feriadosData
     const feriadosActuales = feriadosLocal || feriadosData;

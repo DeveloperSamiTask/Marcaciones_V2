@@ -87,6 +87,7 @@ export default function App({ empleados, empresas, url }) {
         }
     }, [selectedEmpresa, user]);
 
+
     // Estados principales
     const [currentSupervisorId] = useState('sup1'); // Simular supervisor actual (Granja Villa)
     const supervisor = mockSupervisors.find(s => s.id === currentSupervisorId);
@@ -381,7 +382,7 @@ export default function App({ empleados, empresas, url }) {
     };
 
     /* ----------------------- Seteo de horas por dia  ----------------------- */
-    const handleFieldChange = (
+    const handleFieldChange = async (
         employeeId: string,
         date: string,
         field: 'entryTime' | 'exitTime' | 'status',
@@ -395,21 +396,17 @@ export default function App({ empleados, empresas, url }) {
                 status: 'L' as const,
             };
 
-            // 🔥 CASO 1: Cambiar a NO LABORAL , solo D genera 00:00
+            // 🔥 CASO 1: Cambiar a NO LABORAL
             if (field === 'status' && value !== 'L') {
-
-                // 🔥 Definimos qué estados deben forzar el 00:00
                 const shouldResetTimes = (value === 'D' || value === 'SP');
 
                 const newDayData = {
-                    // Si es 'D' o 'SP', forzamos '00:00'. Si es otro estado (V, F, M, etc.),
-                    // mantenemos la hora que estaba (aunque luego no se sume, para referencia visual).
                     entryTime: shouldResetTimes ? '00:00' : dayData.entryTime,
                     exitTime: shouldResetTimes ? '00:00' : dayData.exitTime,
                     status: value as DaySchedule['status'],
                 };
 
-                // 🔥 SI ES C O CA, ASIGNAR FERIADO AUTOMÁTICAMENTE
+                // 🔥 SI ES C O CA, CARGAR HORARIOS DE FERIADOS (PART TIME)
                 if (value === 'C' || value === 'CA') {
                     const feriadosDelEmpleado = feriadosData[employeeId];
 
@@ -423,15 +420,57 @@ export default function App({ empleados, empresas, url }) {
                             );
 
                             newDayData.feriado_id = feriadosOrdenados[0].id;
-
-                            console.log('✅ Feriado asignado:', {
-                                empleado: employeeId,
-                                fecha: date,
-                                feriado: feriadosOrdenados[0].nombre,
-                                feriado_id: feriadosOrdenados[0].id
-                            });
                         }
                     }
+
+                    // 🔥🔥 NUEVO: CARGAR HORARIOS DE MARCACIONES PARA PART TIME
+                    (async () => {
+                        try {
+                            const empleado = empleadosList.find(e => e.id === employeeId);
+
+                            if (empleado && empleado.jornada_id === 2) { // Solo Part Time
+                                console.log('🔍 Cargando horarios de feriado para PT:', empleado.nombres);
+
+                                const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
+                                if (!response.ok) throw new Error('Error al cargar feriados');
+
+                                const data = await response.json();
+                                console.log('📦 Datos de feriados recibidos:', data);
+
+                                if (data.es_part_time && data.horarios_feriados) {
+                                    const fechasFeriados = Object.keys(data.horarios_feriados).sort();
+
+                                    if (fechasFeriados.length > 0) {
+                                        const primeraFecha = fechasFeriados[0];
+                                        const horario = data.horarios_feriados[primeraFecha];
+
+                                        console.log(`✅ Aplicando horario del feriado ${primeraFecha}:`, horario);
+
+                                        if (horario.entrada && horario.salida) {
+                                            // 🔥 ACTUALIZAR ESTADO CON LAS HORAS DEL FERIADO
+                                            setScheduleData(prevSchedule => ({
+                                                ...prevSchedule,
+                                                [employeeId]: {
+                                                    ...prevSchedule[employeeId],
+                                                    [date]: {
+                                                        ...prevSchedule[employeeId][date],
+                                                        entryTime: horario.entrada.substring(0, 5),
+                                                        exitTime: horario.salida.substring(0, 5),
+                                                    }
+                                                }
+                                            }));
+
+                                            toast.success(
+                                                `Horario del feriado ${primeraFecha} aplicado: ${horario.entrada.substring(0, 5)} - ${horario.salida.substring(0, 5)}`
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error('❌ Error cargando horarios de feriado:', error);
+                        }
+                    })();
                 }
 
                 return {
@@ -453,14 +492,12 @@ export default function App({ empleados, empresas, url }) {
                             entryTime: currentBaseSchedule.entryTime,
                             exitTime: currentBaseSchedule.exitTime,
                             status: value as DaySchedule['status'],
-                            // 🔥 LIMPIAR feriado_id si existía
-                            // No incluimos feriado_id aquí = se borra automáticamente
                         }
                     }
                 };
             }
 
-            // 🔥 CASO 3: Comportamiento normal (cambiar hora en día laboral, etc.)
+            // 🔥 CASO 3: Comportamiento normal
             return {
                 ...prev,
                 [employeeId]: {
@@ -519,13 +556,9 @@ export default function App({ empleados, empresas, url }) {
         }
         */
 
-
-
         const entries = [];
         let hasValidationErrors = false;
         //  console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
-
-
 
         // ==================== VALIDACIONES DE HORAS SEMANALES ====================
         filteredEmployees.forEach(employee => {
@@ -866,6 +899,28 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
 
 
 
+    useEffect(() => {
+        // Cargar feriados para empleados expandidos
+        expandedEmployees.forEach(async (employeeId) => {
+            if (!feriadosData[employeeId]) {
+                try {
+                    const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setFeriadosData(prev => ({
+                            ...prev,
+                            [employeeId]: {
+                                feriadoDisponible: data.feriadoDisponible || [],
+                                feriadoFuturo: data.feriadoFuturo || []
+                            }
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Error cargando feriados:', error);
+                }
+            }
+        });
+    }, [expandedEmployees]);
 
 
     return (

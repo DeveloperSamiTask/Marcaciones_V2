@@ -9,6 +9,7 @@ use App\Models\Empresa;
 use App\Models\Extra;
 use App\Models\Feriado;
 use App\Models\Horario;
+use App\Models\Marcacion;
 use App\Models\Permiso;
 use App\Models\PermisoTipo;
 use Carbon\Carbon;
@@ -214,7 +215,7 @@ class HorarioController extends Controller
         return Inertia::render('horarios/index', [
             'horarios' => $horarios, // Lista de horarios filtrados
             'empresas' => $empresas, // Empresas disponibles según el rol
-            'filters' => $filters // Filtros aplicados para mantener el estado
+            'filters' => $filters, // Filtros aplicados para mantener el estado
         ]);
     }
 
@@ -924,8 +925,14 @@ class HorarioController extends Controller
                 return response()->json([
                     'feriadoDisponible' => [],
                     'feriadoFuturo' => [],
+                    'horarios_feriados' => [],
+                    'es_part_time' => false, // 🔥 Agregar aquí también
                 ]);
             }
+
+            // Obtener empleado y verificar si es PART TIME
+            $empleado = Empleado::select('jornada_id')->find($empleadoId);
+            $esPartTime = $empleado && $empleado->jornada_id == 2; // 🔥 Definir variable
 
             // 🎯 COPIAR EXACTAMENTE esta parte de tu método edit() - YA PROBADA:
             $fechasLaborables = Horario::where('empleado_id', $empleadoId)
@@ -944,16 +951,52 @@ class HorarioController extends Controller
                 ->whereIn('fecha', $fechasLaborables)
                 ->get();
 
+            // 🔥 NUEVO: Solo para PT (jornada_id = 2) - Obtener entrada/salida de marcaciones
+            $horariosFeriados = [];
+
+            if ($esPartTime && $feriadoDisponible->isNotEmpty()) {
+                // Obtener fechas de feriados
+                $fechas = $feriadoDisponible->map(fn ($f) => $f->fecha->format('Y-m-d'));
+
+                // Buscar marcaciones del PT para esas fechas
+                $marcaciones = Marcacion::where('empleado_id', $empleadoId)
+                    ->whereIn('fecha', $fechas)
+                    ->get()
+                    ->keyBy(fn ($m) => $m->fecha->format('Y-m-d'));
+
+                // Preparar datos de entrada/salida
+                foreach ($feriadoDisponible as $feriado) {
+                    $fechaKey = $feriado->fecha->format('Y-m-d');
+                    $marcacion = $marcaciones->get($fechaKey);
+
+                    $horariosFeriados[$fechaKey] = [
+                        // 🔥 EXTRAER SOLO LA HORA en formato HH:mm:ss
+                        'entrada' => $marcacion && $marcacion->ingreso
+                            ? \Carbon\Carbon::parse($marcacion->ingreso)->format('H:i:s')
+                            : null,
+                        'salida' => $marcacion && $marcacion->salida
+                            ? \Carbon\Carbon::parse($marcacion->salida)->format('H:i:s')
+                            : null,
+                    ];
+                }
+            }
+
             return response()->json([
                 'feriadoDisponible' => $feriadoDisponible,
                 'feriadoFuturo' => $feriadoFuturo,
+                'horarios_feriados' => $horariosFeriados,
+                'es_part_time' => $esPartTime, // 🔥 AGREGAR ESTO, PENDEJO
             ]);
 
         } catch (\Exception $e) {
-            // Si algo sale mal, devolver arrays vacíos
+            // Log del error para debugging
+            // \Log::error('Error en getFeriadosEmpleado: ' . $e->getMessage());
+
             return response()->json([
                 'feriadoDisponible' => [],
                 'feriadoFuturo' => [],
+                'horarios_feriados' => [],
+                'es_part_time' => false, // 🔊 VALOR POR DEFECTO EN ERROR
             ]);
         }
     }
@@ -978,7 +1021,6 @@ class HorarioController extends Controller
 
         return response()->json($query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']));
     }
-
 
     public function edit(Request $request, Horario $horario)
     {
