@@ -144,45 +144,6 @@ export default function App({ empleados, empresas, url }) {
     }>({});
 
     const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
-
-    const handleApplyBaseToAll = () => {
-        const newExpanded = new Set<string>();
-
-        // 🔥 USAR FORMA FUNCIONAL
-        setScheduleData((prev) => {
-            const newData: typeof scheduleData = {};
-
-            filteredEmployees.forEach(employee => {
-                newExpanded.add(employee.id);
-                newData[employee.id] = {};
-
-                weekDates.forEach(date => {
-                    const dateStr = formatDate(date);
-                    const existingStatus = prev[employee.id]?.[dateStr]?.status || 'L';
-
-                    if (existingStatus !== 'L') {
-                        newData[employee.id][dateStr] = {
-                            entryTime: '00:00',
-                            exitTime: '00:00',
-                            status: existingStatus,
-                        };
-                    } else {
-                        newData[employee.id][dateStr] = {
-                            entryTime: currentBaseSchedule.entryTime,
-                            exitTime: currentBaseSchedule.exitTime,
-                            status: 'L',
-                        };
-                    }
-                });
-            });
-
-            return newData; // 🔥 RETORNAR OBJETO NUEVO
-        });
-
-        setExpandedEmployees(newExpanded);
-        toast.success(`Horario base aplicado a ${filteredEmployees.length} empleados`);
-    };
-
     useEffect(() => {
         //  console.log("🔄 Reseteando validaciones - semana o empresa cambió");
         setExpandedEmployees(new Set());
@@ -190,42 +151,124 @@ export default function App({ empleados, empresas, url }) {
         setScheduleData({});
     }, [currentWeekStart, selectedEmpresa, selectedModality]);
 
-    /*Despliegue de informacion al seleccionar el boton asignar horario PARA LA GRANJA VILLA*/
+
+    const UNTOUCHABLE_STATUSES = new Set(['D', 'SP']);
+
+    // =========================================================================
+    // 1. Horario Base a Todos (handleApplyBaseToAll)
+    // =========================================================================
+    const handleApplyBaseToAll = () => {
+        const newExpanded = new Set<string>();
+
+        setScheduleData((prev) => {
+            const newData: typeof scheduleData = {};
+
+            filteredEmployees.forEach(employee => {
+                newExpanded.add(employee.id);
+                // Clonamos el objeto del empleado, asegurando que los días fuera de la semana se mantengan
+                newData[employee.id] = { ...prev[employee.id] };
+
+                weekDates.forEach(date => {
+                    const dateStr = formatDate(date);
+
+                    const existingDaySchedule = prev[employee.id]?.[dateStr] || {
+                        entryTime: '00:00',
+                        exitTime: '00:00',
+                        status: 'L'
+                    };
+                    const existingStatus = existingDaySchedule.status;
+
+                    let entryTime: string;
+                    let exitTime: string;
+                    let newStatus: string = existingStatus; // Mantenemos el status inicial por defecto
+
+                    if (UNTOUCHABLE_STATUSES.has(existingStatus)) {
+                        // Si es D o SP, mantenemos el horario y el status existente
+                        entryTime = existingDaySchedule.entryTime;
+                        exitTime = existingDaySchedule.exitTime;
+                    } else {
+                        // CUALQUIER OTRO STATUS (L, V, F, C, CA, TD, etc.):
+                        // Aplica el horario base.
+                        entryTime = currentBaseSchedule.entryTime;
+                        exitTime = currentBaseSchedule.exitTime;
+
+                        // 🔥 NUEVA REGLA: Si el horario base resulta en 00:00 - 00:00,
+                        // y el día no era D o SP, forzamos el estado a SP (Sin Programación).
+                        if (entryTime === '00:00' && exitTime === '00:00') {
+                            newStatus = 'SP';
+                        }
+                        // Si no es 00:00 - 00:00, newStatus permanece como existingStatus.
+                    }
+
+                    // Actualizamos la entrada del día
+                    newData[employee.id][dateStr] = {
+                        entryTime: entryTime,
+                        exitTime: exitTime,
+                        status: newStatus, // Usamos el status que puede haber sido modificado a 'SP'
+                    };
+                });
+            });
+
+            setExpandedEmployees(newExpanded);
+            return newData;
+        });
+
+        toast.success(`Horario base aplicado a ${filteredEmployees.length} empleados`);
+    };
+
+    // =========================================================================
+    // 2. Horario de Lunes a Jueves (handleApplyLunesAJueves)
+    // =========================================================================
     const handleApplyLunesAJueves = (horario: { entrada: string; salida: string }) => {
         const newExpanded = new Set<string>();
 
         setScheduleData((prev) => {
-            const newData = { ...prev }; // 🔥 CLONAR EL ESTADO ANTERIOR
+            const newData = { ...prev };
 
             filteredEmployees.forEach(employee => {
                 newExpanded.add(employee.id);
-
-                // 🔥 CREAR NUEVO OBJETO PARA ESTE EMPLEADO
                 newData[employee.id] = { ...prev[employee.id] };
 
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
 
-                    if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-                        // 🔥 CREAR NUEVO OBJETO PARA ESTE DÍA
-                        newData[employee.id][dateStr] = {
-                            entryTime: horario.entrada,
-                            exitTime: horario.salida,
-                            status: prev[employee.id]?.[dateStr]?.status || 'L',
-                        };
+                    if (dayOfWeek >= 1 && dayOfWeek <= 4) { // Lunes a Jueves
+                        const existingDaySchedule = prev[employee.id]?.[dateStr] || { status: 'L' };
+                        const existingStatus = existingDaySchedule.status;
+
+                        if (!UNTOUCHABLE_STATUSES.has(existingStatus)) {
+                            let newStatus = existingStatus;
+
+                            // Aplicar el nuevo horario solo si no es D o SP. Preservar el status.
+                            const entryTime = horario.entrada;
+                            const exitTime = horario.salida;
+
+                            // Aplicar la nueva regla de 'SP'
+                            if (entryTime === '00:00' && exitTime === '00:00') {
+                                newStatus = 'SP';
+                            }
+
+                            newData[employee.id][dateStr] = {
+                                entryTime: entryTime,
+                                exitTime: exitTime,
+                                status: newStatus, // Usamos el nuevo status
+                            };
+                        }
                     }
                 });
             });
 
+            setExpandedEmployees(newExpanded);
             return newData;
         });
 
-        setExpandedEmployees(newExpanded);
         toast.success(`Horario Lunes-Jueves aplicado a ${filteredEmployees.length} empleados`);
     };
 
-    // 🟢 PARA VIERNES
+    // =========================================================================
+    // 3. Horario Viernes (handleApplyViernes)
+    // =========================================================================
     const handleApplyViernes = (horario: { entrada: string; salida: string }) => {
         const newExpanded = new Set<string>();
 
@@ -240,24 +283,42 @@ export default function App({ empleados, empresas, url }) {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
 
-                    if (dayOfWeek === 5) {
-                        newData[employee.id][dateStr] = {
-                            entryTime: horario.entrada,
-                            exitTime: horario.salida,
-                            status: prev[employee.id]?.[dateStr]?.status || 'L',
-                        };
+                    if (dayOfWeek === 5) { // Viernes
+                        const existingDaySchedule = prev[employee.id]?.[dateStr] || { status: 'L' };
+                        const existingStatus = existingDaySchedule.status;
+
+                        if (!UNTOUCHABLE_STATUSES.has(existingStatus)) {
+                            let newStatus = existingStatus;
+
+                            // Aplicar el nuevo horario solo si no es D o SP. Preservar el status.
+                            const entryTime = horario.entrada;
+                            const exitTime = horario.salida;
+
+                            // Aplicar la nueva regla de 'SP'
+                            if (entryTime === '00:00' && exitTime === '00:00') {
+                                newStatus = 'SP';
+                            }
+
+                            newData[employee.id][dateStr] = {
+                                entryTime: entryTime,
+                                exitTime: exitTime,
+                                status: newStatus,
+                            };
+                        }
                     }
                 });
             });
 
+            setExpandedEmployees(newExpanded);
             return newData;
         });
 
-        setExpandedEmployees(newExpanded);
         toast.success(`Horario Viernes aplicado a ${filteredEmployees.length} empleados`);
     };
 
-    // 🟢 PARA SÁBADO Y DOMINGO
+    // =========================================================================
+    // 4. Horario Sábado y Domingo (handleApplyFinDeSemana)
+    // =========================================================================
     const handleApplyFinDeSemana = (horario: { entrada: string; salida: string }) => {
         const newExpanded = new Set<string>();
 
@@ -272,20 +333,36 @@ export default function App({ empleados, empresas, url }) {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
 
-                    if (dayOfWeek === 0 || dayOfWeek === 6) {
-                        newData[employee.id][dateStr] = {
-                            entryTime: horario.entrada,
-                            exitTime: horario.salida,
-                            status: prev[employee.id]?.[dateStr]?.status || 'L',
-                        };
+                    if (dayOfWeek === 0 || dayOfWeek === 6) { // Domingo o Sábado
+                        const existingDaySchedule = prev[employee.id]?.[dateStr] || { status: 'L' };
+                        const existingStatus = existingDaySchedule.status;
+
+                        if (!UNTOUCHABLE_STATUSES.has(existingStatus)) {
+                            let newStatus = existingStatus;
+
+                            // Aplicar el nuevo horario solo si no es D o SP. Preservar el status.
+                            const entryTime = horario.entrada;
+                            const exitTime = horario.salida;
+
+                            // Aplicar la nueva regla de 'SP'
+                            if (entryTime === '00:00' && exitTime === '00:00') {
+                                newStatus = 'SP';
+                            }
+
+                            newData[employee.id][dateStr] = {
+                                entryTime: entryTime,
+                                exitTime: exitTime,
+                                status: newStatus,
+                            };
+                        }
                     }
                 });
             });
 
+            setExpandedEmployees(newExpanded);
             return newData;
         });
 
-        setExpandedEmployees(newExpanded);
         toast.success(`Horario Fin de Semana aplicado a ${filteredEmployees.length} empleados`);
     };
 
