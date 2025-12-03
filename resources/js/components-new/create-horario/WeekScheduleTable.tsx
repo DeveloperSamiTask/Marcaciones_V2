@@ -68,8 +68,8 @@ const estadoBadgeVariants = {
     LF: { label: "21.LICENCIA POR FALLECIMIENTO" },
     PE: { label: "22.PENDIENTE" },
 
-    TD: { label: "23.H. EXTRA NO AUTORIZADO" },
-    TD: { label: "24.HORAS EXTRA" },
+    HENA: { label: "23.H. EXTRA NO AUTORIZADO" },
+    HE: { label: "24.HORAS EXTRA" },
     TD: { label: "25.TRABAJO DIA DESCANSO" },
 } as const;
 
@@ -323,19 +323,21 @@ export function WeekScheduleTable({
                         );
                     })}
                 </tbody>
-                <tfoot className="border-t-2 bg-gray-50 font-bold">
-                    <tr>
-                        {/* colSpan=3 para que el texto ocupe las primeras 3 columnas (Día, Entrada, Salida) */}
-                        <td colSpan={3} className="p-2 text-sm text-right">
-                            Total de horas de la semana
-                        </td>
-                        {/* La columna 4 (Estado) muestra el valor */}
-                        <td className="p-2 text-sm text-left text-lg text-green-700">
-                            {/* Asegúrate que 'totalHoursFormatted' viene del useMemo */}
-                            {totalHoursFormatted}
-                        </td>
-                    </tr>
-                </tfoot>
+                {/*
+<tfoot className="border-t-2 bg-gray-50 font-bold">
+    <tr>
+        <td colSpan={3} className="p-2 text-sm text-right">
+            Total de horas de la semana
+        </td>
+
+        <td className="p-2 text-sm text-left text-lg text-green-700">
+            {totalHoursFormatted}
+        </td>
+    </tr>
+</tfoot>
+*/}
+
+
             </table>
         </div>
     );

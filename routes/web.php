@@ -76,6 +76,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/horarios/getTDDisponibles', [HorarioController::class, 'getTDDisponibles'])
         ->name('horarios.getTDDisponibles');
 
+    Route::get('/horarios/getHorasMensualesPT', [HorarioController::class,
+        'getHorasMensualesPT'])
+        ->name('horarios.getHorasMensualesPT');
+
     // feriados
     // Route::get('/horarios/nuevo', HorarioController::class ()
 
@@ -165,7 +169,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/solicitudes-he-pt/rrhh', [SolicitudHorasExtrasPTController::class, 'indexRRHH'])->name('solicitudes-he-pt.rrhh');
 
     Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes'])->name('solicitudes-enviar-acumulada');
-
 
     // miluska
 

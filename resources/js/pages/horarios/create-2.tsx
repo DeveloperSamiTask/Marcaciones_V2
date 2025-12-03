@@ -535,12 +535,16 @@ export default function App({ empleados, empresas, url }) {
         }
     };
 
+    const [isSaving, setIsSaving] = useState(false);
 
-    //validaciones , descansos , TD , Compensas
+    //VALIDACIONES , descansos , TD , Compensas
     const handleSaveSchedules = async () => {
         // ==================== EVITAR CREAR HORARIOS ON FECHAS PASADAS ====================
 
+
+
         const hoy = new Date();
+
         hoy.setHours(0, 0, 0, 0);
 
         const inicioSemanaActual = new Date(hoy);
@@ -568,13 +572,14 @@ export default function App({ empleados, empresas, url }) {
             if (employee.jornada_id === 1) { // FULL TIME
                 // No más de 48 horas
                 if (horasSemanales > 2880) {
-                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MÁS de 48 horas máximas para Full Time)`);
+                    toast.error(`🚨 ${employee.apellidos}: TOTAL: ${formatearHoras(horasSemanales)}`);
                     hasValidationErrors = true;
                     return;
                 }
+
                 // No menos de 47 horas
                 if (horasSemanales <= 2820) {
-                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 47 horas mínimas para Full Time)`);
+                    toast.error(`🚨 ${employee.apellidos}: TOTAL: ${formatearHoras(horasSemanales)}`);
                     hasValidationErrors = true;
                     return;
                 }
@@ -674,11 +679,14 @@ export default function App({ empleados, empresas, url }) {
                 return;
             }
 
-            if (diasDescanso === 0 && !tieneVacaciones) {
-                toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
-                hasValidationErrors = true;
-                return;
+            if (employee.jornada_id === 1) {
+                if (diasDescanso === 0) {
+                    toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
+                    hasValidationErrors = true;
+                    return;
+                }
             }
+
 
             // 🔥 INICIALIZAR TRACKING PARA ESTE EMPLEADO
             feriadosUsadosPorEmpleado[employee.id] = {
@@ -851,19 +859,48 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
             // console.log('🟡 Registros con permiso TD:', conPermisoTD);
         }
 
+        // ==================== ENVÍO AL BACKEND ====================
+
+
+
         router.post(route('horarios.store-multiple'), { entries }, {
             preserveScroll: true,
+            preserveState: true, // ← IMPORTANTE
             onStart: () => toast.loading('Guardando horarios...'),
             onSuccess: () => {
                 toast.success('✅ Horarios guardados correctamente');
             },
             onError: (errors) => {
-                // console.error('❌ Error backend:', errors);
+                // DEBUG: Ver qué llega
+                console.log('🔴 ERRORES INERTIA:', errors);
+
+                // CAPTURA ERRORES DE back()->withErrors()
+                if (errors.bloqueo_semanal) {
+                    // Puede ser string o array
+                    const mensaje = Array.isArray(errors.bloqueo_semanal)
+                        ? errors.bloqueo_semanal[0]
+                        : errors.bloqueo_semanal;
+                    toast.error(mensaje);
+                    return;
+                }
+
+                // Si hay otros errores de validación
+                const primerosErrores = Object.values(errors);
+                if (primerosErrores.length > 0) {
+                    const primerError = Array.isArray(primerosErrores[0])
+                        ? primerosErrores[0][0]
+                        : primerosErrores[0];
+                    toast.error(primerError);
+                    return;
+                }
+
+                // Error genérico
                 toast.error('Error al guardar horarios');
             },
             onFinish: () => toast.dismiss(),
         });
-    };
+    };  // ← CIERRE FINAL DE LA FUNCIÓN
+
 
 
     const calcularHorasSemanalesFrontend = (employeeSchedule) => {
@@ -900,8 +937,6 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
         const mins = minutos % 60;
         return `${horas}h ${mins}m`;
     };
-
-
 
     useEffect(() => {
         // Cargar feriados para empleados expandidos
