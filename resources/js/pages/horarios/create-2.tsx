@@ -65,53 +65,75 @@ export default function App({ empleados, empresas, url, supervisores }) {
         const base = "/horarios/empleados";
         const params = new URLSearchParams();
 
-        // 🔥 1. SI HAY SUPERVISOR SELECCIONADO → PRIORIDAD
-        if (selectedSupervisor && selectedSupervisor !== "all") {
-            params.set("supervisor_id", selectedSupervisor);
+        const sup = selectedSupervisor && selectedSupervisor !== "all"
+            ? Number(selectedSupervisor)
+            : null;
+        const emp = selectedEmpresa ? Number(selectedEmpresa) : null;
+
+        // CASO 1: SUPERVISOR SELECCIONADO
+        if (sup) {
+            params.set("supervisor_id", String(sup));
+
+            if (emp) {
+                params.set("empresa_id", String(emp));
+            }
+
+            const url = `${base}?${params.toString()}`;
+            console.log("🔄 Fetching: SUPERVISOR", sup, "EMPRESA", emp);
+
+            fetch(url)
+                .then(r => r.json())
+                .then(d => {
+                    console.log("📦 Respuesta supervisor:", d);
+
+                    // 🔴 DEBUG CRÍTICO - DENTRO DEL THEN
+                    console.log("🔴 DEBUG SUPERVISOR:", {
+                        supervisorId: sup,
+                        empresaId: emp,
+                        url: url,
+                        cantidad: d.length
+                    });
+
+                    const supervisorEnLista = d.find(e => e.id === sup);
+                    if (supervisorEnLista) {
+                        console.warn("⚠️ EL SUPERVISOR ESTÁ EN LA LISTA!:", supervisorEnLista);
+                    }
+
+                    setEmpleadosList(Array.isArray(d) ? d : []);
+                })
+                .catch(() => setEmpleadosList([]));
+
+            return;
         }
-        else {
-            // 🔥 2. SI NO HAY SUPERVISOR → USAR EMPRESA
-            let empresaParam: number | null = null;
 
-            // Supervisor logueado → su empresa por defecto
-            if (user?.rol_id === 4 && user?.empleado?.empresa_id) {
-                empresaParam = Number(user.empleado.empresa_id);
+        // CASO 2: SOLO EMPRESA (SIN SUPERVISOR)
+        if (emp) {
+            params.set("empresa_id", String(emp));
+            const url = `${base}?${params.toString()}`;
+            console.log("🔄 Fetching: SOLO EMPRESA", emp);
 
-                // sincronizar visual
-                if (selectedEmpresa !== empresaParam) {
-                    setSelectedEmpresa(empresaParam);
-                }
-            }
+            fetch(url)
+                .then(r => r.json())
+                .then(d => {
+                    console.log("📦 Respuesta empresa:", d);
+                    setEmpleadosList(Array.isArray(d) ? d : []);
+                })
+                .catch(() => setEmpleadosList([]));
 
-            // Admin / RRHH → usa lo que eligió
-            if ((user?.rol_id === 1 || user?.rol_id === 2) && selectedEmpresa) {
-                empresaParam = Number(selectedEmpresa);
-            }
-
-            if (empresaParam) {
-                params.set("empresa_id", String(empresaParam));
-            }
+            return;
         }
 
-        const url = params.toString() ? `${base}?${params.toString()}` : base;
-
-        console.log("[horarios] fetching empleados ->", url);
-
-        fetch(url)
-            .then((res) => {
-                if (!res.ok) throw new Error("Network status " + res.status);
-                return res.json();
+        // CASO 3: NADA SELECCIONADO (TODOS)
+        console.log("🔄 Fetching: TODOS (sin filtros)");
+        fetch(base)
+            .then(r => r.json())
+            .then(d => {
+                console.log("📦 Respuesta todos:", d);
+                setEmpleadosList(Array.isArray(d) ? d : []);
             })
-            .then((data) => {
-                console.log("[horarios] empleados recibidos:", data);
-                setEmpleadosList(Array.isArray(data) ? data : []);
-            })
-            .catch((err) => {
-                console.error("Error cargando empleados:", err);
-                setEmpleadosList([]);
-            });
+            .catch(() => setEmpleadosList([]));
 
-    }, [selectedEmpresa, selectedSupervisor, user]);
+    }, [selectedSupervisor, selectedEmpresa, user]);
 
 
 

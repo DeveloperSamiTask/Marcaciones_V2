@@ -269,31 +269,100 @@ class HorarioController extends Controller
     {
         $user = $request->user();
 
-        $query = Empleado::with('area')
-            ->whereNull('fecha_cese');
+        $supervisorId = intval($request->get('supervisor_id'));
+        $empresaId = intval($request->get('empresa_id'));
 
-        // 🔥 PRIORIDAD 1: Filtro por supervisor enviado desde el frontend
-        if ($request->filled('supervisor_id')) {
-            $query->where('jefe_id', $request->get('supervisor_id'));
+        // 🔴 DEBUG INMEDIATO
+        \Log::info('🔍 EMPLEADOS LLAMADO', [
+            'supervisor_id' => $supervisorId,
+            'empresa_id' => $empresaId,
+            'usuario_id' => $user->id,
+            'rol' => $user->rol_id,
+            'REQUEST_ALL' => $request->all(), // Ver TODO lo que viene
+        ]);
 
+        // ===========================
+        // 1) MODO SUPERVISOR - FORZADO
+        // ===========================
+        if ($supervisorId > 0) {
+            \Log::info('✅ ENTRO EN MODO SUPERVISOR', ['id' => $supervisorId]);
+
+            $supervisor = Empleado::find($supervisorId);
+            if (! $supervisor) {
+                \Log::warning('❌ Supervisor no encontrado', ['id' => $supervisorId]);
+
+                return response()->json([]);
+            }
+
+            \Log::info('🔍 Supervisor encontrado', [
+                'nombre' => $supervisor->nombres,
+                'empresa' => $supervisor->empresa_id,
+                'jefe_id' => $supervisor->jefe_id,
+            ]);
+
+            // TRAER EMPLEADOS DEL SUPERVISOR
+            $empleadosDelSupervisor = Empleado::with('area')
+                ->whereNull('fecha_cese')
+                ->where('jefe_id', $supervisorId)  // ← SUS EMPLEADOS
+                ->where('empresa_id', $supervisor->empresa_id)
+                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']);
+
+            \Log::info('📊 Empleados del supervisor', [
+                'cantidad' => $empleadosDelSupervisor->count(),
+                'ids' => $empleadosDelSupervisor->pluck('id')->toArray(),
+            ]);
+
+            // Agregar el supervisor
+            $empleadosDelSupervisor->push($supervisor);
+
+            return response()->json($empleadosDelSupervisor);
+        }
+
+        \Log::info('❌ NO ENTRO EN MODO SUPERVISOR', ['reason' => 'supervisorId <= 0']);
+        // ===========================
+        // 2) MODO SIN SUPERVISOR
+        // ===========================
+        if ($user->rol_id === 4) {
+            // Supervisor logueado viendo sus empleados
+            if (! $user->empleado) {
+                return response()->json([]);
+            }
+
+            $empleados = Empleado::whereNull('fecha_cese')
+                ->where('jefe_id', $user->empleado->id)
+                ->where('empresa_id', $user->empleado->empresa_id)
+                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']);
+
+            // Incluir al supervisor también
+            $empleados->push($user->empleado);
+
+            return response()->json($empleados);
+        }
+
+        // ===========================
+        // 3) RRHH / Admin - SOLO EMPRESA
+        // ===========================
+        if ($empresaId > 0) {
             return response()->json(
-                $query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
+                Empleado::whereNull('fecha_cese')
+                    ->where('empresa_id', $empresaId)
+                    ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
             );
         }
+        \Log::info('🔍 empleados() llamado', [
+            'supervisor_id' => $supervisorId,
+            'empresa_id' => $empresaId,
+            'usuario_id' => $user->id,
+            'rol_usuario' => $user->rol_id,
+            'entró_modo' => $supervisorId > 0 ? 'SUPERVISOR' : ($empresaId > 0 ? 'EMPRESA' : 'TODOS'),
+        ]);
 
-        // 🔥 PRIORIDAD 2: Supervisor logueado (rol 4)
-        if ($user->rol_id === 4) {
-            $query->where('jefe_id', $user->empleado_id);
-        } else {
-            // 🔥 PRIORIDAD 3: Admin/RRHH filtrado por empresa
-            $empresaId = $request->get('empresa_id');
-            if ($empresaId) {
-                $query->where('empresa_id', $empresaId);
-            }
-        }
-
+        // ===========================
+        // 4) SIN FILTROS (TODOS)
+        // ===========================
         return response()->json(
-            $query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
+            Empleado::whereNull('fecha_cese')
+                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
         );
     }
 
