@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 interface BaseScheduleGranjaVillaProps {
     modality: Modality;
+    companyId: number;
     baseSchedule: BaseSchedule;
     onBaseScheduleChange: (schedule: BaseSchedule) => void;
     onApplyToAll: () => void;
@@ -17,6 +18,7 @@ interface BaseScheduleGranjaVillaProps {
 
 export function BaseScheduleGranjaVilla({
     modality,
+    companyId,
     baseSchedule,
     onBaseScheduleChange,
     onApplyToAll,
@@ -56,7 +58,10 @@ export function BaseScheduleGranjaVilla({
         <div className="bg-green-50 p-4 rounded-lg border border-green-300">
             <h3 className="mb-3 flex items-center gap-2">
                 <Tractor className="h-4 w-4 text-green-700" />
-                Horarios Granja Villa - {modality}
+                {companyId === 1 && `Horarios Granja Villa - ${modality}`}
+                {companyId === 4 && `Horarios Chaxra - ${modality}`}
+                {companyId === 10 && `Horarios Yaku Park - ${modality}`}
+                {companyId === 11 && `Horarios Dreams Company - ${modality}`}
             </h3>
 
             {/* 3 RANGOS */}

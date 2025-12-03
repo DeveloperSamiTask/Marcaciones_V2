@@ -187,7 +187,12 @@ export function EmployeeList({
                                 const employeeSchedule = scheduleData[employee.id] || {};
                                 const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
                                 const tieneDescanso = Object.values(employeeSchedule).some(day => day.status === 'D');
-                                const necesitaDescanso = !tieneVacaciones && !tieneDescanso;
+                                const tieneMedico = Object.values(employeeSchedule).some(day => day.status === 'M');
+                                const tieneFallecimiento = Object.values(employeeSchedule).some(day => day.status === 'LF');
+                                const tieneMaternidad = Object.values(employeeSchedule).some(day => day.status === 'LM');
+                                 const tienePaternidad = Object.values(employeeSchedule).some(day => day.status === 'LP');
+
+                                const necesitaDescanso = !tieneVacaciones && !tieneDescanso && !tieneMedico && !tieneFallecimiento && !tieneMaternidad && !tienePaternidad;
                                 const scheduleKey = `${employee.id}-${Object.keys(employeeSchedule).length}`;
                                 return (
 

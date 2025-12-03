@@ -38,9 +38,10 @@ export function BaseScheduleManager({
     //Determinar qué componente mostrar según el ID de empresa
     const renderScheduleComponent = () => {
         // Granja Villa (id = 1)
-        if (companyId === 1) {
+        if ([1, 4, 10, 11].includes(companyId)) {
             return (
                 <BaseScheduleGranjaVilla  // ← CAMBIAR A STANDARD
+                    companyId={companyId}
                     modality={modality}
                     baseSchedule={baseSchedule}
                     onBaseScheduleChange={onBaseScheduleChange}

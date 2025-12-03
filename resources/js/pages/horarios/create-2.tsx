@@ -540,9 +540,6 @@ export default function App({ empleados, empresas, url }) {
     //VALIDACIONES , descansos , TD , Compensas
     const handleSaveSchedules = async () => {
         // ==================== EVITAR CREAR HORARIOS ON FECHAS PASADAS ====================
-
-
-
         const hoy = new Date();
 
         hoy.setHours(0, 0, 0, 0);
@@ -553,12 +550,12 @@ export default function App({ empleados, empresas, url }) {
         inicioSemanaActual.setDate(hoy.getDate() - diffToMonday);
         inicioSemanaActual.setHours(0, 0, 0, 0);
 
-        /*
-              if (currentWeekStart < inicioSemanaActual) {
+
+        if (currentWeekStart < inicioSemanaActual) {
             toast.error('❌ No se pueden crear ni editar horarios de semanas anteriores');
             return;
         }
-        */
+
 
         const entries = [];
         let hasValidationErrors = false;
@@ -572,14 +569,14 @@ export default function App({ empleados, empresas, url }) {
             if (employee.jornada_id === 1) { // FULL TIME
                 // No más de 48 horas
                 if (horasSemanales > 2880) {
-                    toast.error(`🚨 ${employee.apellidos}: TOTAL: ${formatearHoras(horasSemanales)}`);
+                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)}`);
                     hasValidationErrors = true;
                     return;
                 }
 
                 // No menos de 47 horas
                 if (horasSemanales <= 2820) {
-                    toast.error(`🚨 ${employee.apellidos}: TOTAL: ${formatearHoras(horasSemanales)}`);
+                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)}`);
                     hasValidationErrors = true;
                     return;
                 }
@@ -663,7 +660,7 @@ export default function App({ empleados, empresas, url }) {
         filteredEmployees.forEach(employee => {
             const empSchedule = scheduleData[employee.id];
             if (!empSchedule) {
-                toast.error(`${employee.nombres} no tiene horarios configurados`);
+                toast.error(`${employee.apellidos} ${employee.nombres}  no tiene horarios configurados`);
                 hasValidationErrors = true;
                 return;
             }
@@ -674,18 +671,31 @@ export default function App({ empleados, empresas, url }) {
 
             // Validaciones de descanso
             if (diasDescanso > 1) {
-                toast.error(`${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
+                toast.error(`${employee.apellidos} ${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
                 hasValidationErrors = true;
                 return;
             }
 
+
             if (employee.jornada_id === 1) {
-                if (diasDescanso === 0) {
-                    toast.error(`${employee.nombres} debe tener al menos 1 día de descanso`);
+                // Excepciones que permiten no tener descanso
+                const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
+
+                // Si no hay descanso y tampoco hay ningún día con estado de excepción → error
+                const tieneExcepcion = Object.values(employeeSchedule).some(day =>
+                    excepciones.includes(day.status)
+                );
+
+                if (diasDescanso === 0 && !tieneExcepcion) {
+                    toast.error(`${employee.apellidos} ${employee.nombres}  debe tener al menos 1 día de descanso`);
                     hasValidationErrors = true;
                     return;
                 }
             }
+
+
+
+
 
 
             // 🔥 INICIALIZAR TRACKING PARA ESTE EMPLEADO
@@ -746,7 +756,7 @@ console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, {
                         const yaUsados = feriadosUsadosPorEmpleado[employee.id][status].length;
 
                         toast.error(
-                            `❌ ${employee.nombres}: No puede marcar más días como "${status}". ` +
+                            `❌ ${employee.apellidos} ${employee.nombres}: No puede marcar más días como "${status}". ` +
                             `Solo tiene ${totalDisponibles} ${tipoTexto} y ya usó ${yaUsados}.`,
                             { duration: 8000 }
                         );
@@ -794,7 +804,7 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                         const yaUsados = permisosTDUsados[employee.id].length;
 
                         toast.error(
-                            `❌ ${employee.nombres}: No puede usar más días como "TD". ` +
+                            `❌ ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
                             `Solo tiene ${totalPermisos} permisos TD disponibles y ya usó ${yaUsados}.`,
                             { duration: 8000 }
                         );
@@ -900,7 +910,6 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
             onFinish: () => toast.dismiss(),
         });
     };  // ← CIERRE FINAL DE LA FUNCIÓN
-
 
 
     const calcularHorasSemanalesFrontend = (employeeSchedule) => {
