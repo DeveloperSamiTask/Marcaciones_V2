@@ -11,6 +11,7 @@ use App\Models\Feriado;
 use App\Models\Horario;
 use App\Models\Permiso;
 use App\Models\PermisoTipo;
+use App\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Exception;
@@ -241,11 +242,59 @@ class HorarioController extends Controller
             ->orderBy('apellidos')
             ->get(['id', 'jornada_id', 'apellidos', 'nombres']);
 
+        $supervisores = User::with('empleado')
+            ->where('estado', true)
+            ->get()
+            ->filter(fn ($u) => $u->empleado) // evitar nulos
+            ->map(function ($u) {
+                return [
+                    'id' => $u->empleado->id,
+                    'apellidos' => $u->empleado->apellidos,
+                    'nombres' => $u->empleado->nombres,
+                    'nombre' => $u->empleado->apellidos.' '.$u->empleado->nombres,
+                ];
+            })
+            ->sortBy('nombre')
+            ->values();
+
         return Inertia::render('horarios/create-2', [
             'empleados' => $empleados,
             'empresas' => $empresas,
+            'supervisores' => $supervisores,
             'url' => session('horarios_url', route('horarios.index')),
         ]);
+    }
+
+    public function empleados(Request $request)
+    {
+        $user = $request->user();
+
+        $query = Empleado::with('area')
+            ->whereNull('fecha_cese');
+
+        // 🔥 PRIORIDAD 1: Filtro por supervisor enviado desde el frontend
+        if ($request->filled('supervisor_id')) {
+            $query->where('jefe_id', $request->get('supervisor_id'));
+
+            return response()->json(
+                $query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
+            );
+        }
+
+        // 🔥 PRIORIDAD 2: Supervisor logueado (rol 4)
+        if ($user->rol_id === 4) {
+            $query->where('jefe_id', $user->empleado_id);
+        } else {
+            // 🔥 PRIORIDAD 3: Admin/RRHH filtrado por empresa
+            $empresaId = $request->get('empresa_id');
+            if ($empresaId) {
+                $query->where('empresa_id', $empresaId);
+            }
+        }
+
+        return response()->json(
+            $query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
+        );
     }
 
     /* Crea horarios para un empleado en un rango de fechas. */
@@ -562,7 +611,7 @@ class HorarioController extends Controller
 
             // ERROR DIRECTO que Inertia SÍ puede manejar
             return back()->withErrors([
-                'bloqueo_semanal' => "Error: Ya se crearon horarios para esta semana.",
+                'bloqueo_semanal' => 'Error: Ya se crearon horarios para esta semana.',
             ]);
 
         }
@@ -1060,27 +1109,6 @@ class HorarioController extends Controller
                 'es_part_time' => false, // 🔊 VALOR POR DEFECTO EN ERROR
             ]);
         }
-    }
-
-    public function empleados(Request $request)
-    {
-        $user = $request->user();
-
-        $query = Empleado::with('area')
-            ->whereNull('fecha_cese');
-
-        if ($user->rol_id === 4) {
-            // Supervisor -> sus empleados
-            $query->where('jefe_id', $user->empleado_id);
-        } else {
-            // Admin o RRHH -> todos los empleados de la empresa seleccionada
-            $empresaId = $request->get('empresa_id');
-            if ($empresaId) {
-                $query->where('empresa_id', $empresaId);
-            }
-        }
-
-        return response()->json($query->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']));
     }
 
     public function edit(Request $request, Horario $horario)

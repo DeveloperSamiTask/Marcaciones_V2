@@ -16,6 +16,13 @@ import { usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { router } from '@inertiajs/react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -29,7 +36,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 
-export default function App({ empleados, empresas, url }) {
+export default function App({ empleados, empresas, url, supervisores }) {
 
 
     const [feriadosData, setFeriadosData] = useState<{
@@ -44,6 +51,8 @@ export default function App({ empleados, empresas, url }) {
     const user = auth.user;
     const [selectedEmpresa, setSelectedEmpresa] = useState<number | null>(null);
     const [empleadosList, setEmpleadosList] = useState<Empleado[]>([]);
+    const [selectedSupervisor, setSelectedSupervisor] = useState(null);
+
 
     useEffect(() => {
         if (user.rol_id === 4 && user.empleado?.empresa_id) {
@@ -51,41 +60,59 @@ export default function App({ empleados, empresas, url }) {
         }
     }, [user]);
 
-    useEffect(() => {
-        if (selectedEmpresa || user.rol_id === 4) {
-            const empresaParam = selectedEmpresa ?? user.empleado?.empresa_id;
-
-            fetch(`/horarios/empleados?empresa_id=${empresaParam}`)
-                .then(res => res.json())
-                .then(data => {
-                    // console.log("🧠 Empleados cargados:", data); // 👈 revisa aquí
-                    setEmpleadosList(data);
-                })
-                .catch(err => console.error("Error cargando empleados:", err));
-        }
-    }, [selectedEmpresa, user]);
-
 
     useEffect(() => {
-        let empresaParam: number | null = null;
+        const base = "/horarios/empleados";
+        const params = new URLSearchParams();
 
-        // Si es supervisor
-        if (user.rol_id === 4 && user.empleado?.empresa_id) {
-            empresaParam = user.empleado.empresa_id;
+        // 🔥 1. SI HAY SUPERVISOR SELECCIONADO → PRIORIDAD
+        if (selectedSupervisor && selectedSupervisor !== "all") {
+            params.set("supervisor_id", selectedSupervisor);
+        }
+        else {
+            // 🔥 2. SI NO HAY SUPERVISOR → USAR EMPRESA
+            let empresaParam: number | null = null;
+
+            // Supervisor logueado → su empresa por defecto
+            if (user?.rol_id === 4 && user?.empleado?.empresa_id) {
+                empresaParam = Number(user.empleado.empresa_id);
+
+                // sincronizar visual
+                if (selectedEmpresa !== empresaParam) {
+                    setSelectedEmpresa(empresaParam);
+                }
+            }
+
+            // Admin / RRHH → usa lo que eligió
+            if ((user?.rol_id === 1 || user?.rol_id === 2) && selectedEmpresa) {
+                empresaParam = Number(selectedEmpresa);
+            }
+
+            if (empresaParam) {
+                params.set("empresa_id", String(empresaParam));
+            }
         }
 
-        // Si es admin o RRHH
-        else if ((user.rol_id === 1 || user.rol_id === 2) && selectedEmpresa) {
-            empresaParam = selectedEmpresa;
-        }
+        const url = params.toString() ? `${base}?${params.toString()}` : base;
 
-        if (empresaParam) {
-            fetch(`/horarios/empleados?empresa_id=${empresaParam}`)
-                .then((res) => res.json())
-                .then((data) => setEmpleadosList(data))
-                .catch((err) => console.error("Error cargando empleados:", err));
-        }
-    }, [selectedEmpresa, user]);
+        console.log("[horarios] fetching empleados ->", url);
+
+        fetch(url)
+            .then((res) => {
+                if (!res.ok) throw new Error("Network status " + res.status);
+                return res.json();
+            })
+            .then((data) => {
+                console.log("[horarios] empleados recibidos:", data);
+                setEmpleadosList(Array.isArray(data) ? data : []);
+            })
+            .catch((err) => {
+                console.error("Error cargando empleados:", err);
+                setEmpleadosList([]);
+            });
+
+    }, [selectedEmpresa, selectedSupervisor, user]);
+
 
 
     // Estados principales
@@ -1008,6 +1035,30 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                                 onCompanyChange={setSelectedEmpresa}
                             />
                         )}
+
+                        {supervisores.length > 0 && (
+                            <Select
+                                value={selectedSupervisor ?? undefined}
+                                onValueChange={(v) => setSelectedSupervisor(v)}
+                            >
+                                <SelectTrigger className="w-[250px]">
+                                    <SelectValue placeholder="Todos los supervisores" />
+                                </SelectTrigger>
+
+                                <SelectContent>
+                                    <SelectItem value="all">Todos</SelectItem>
+
+                                    {supervisores.map((s) => (
+                                        <SelectItem key={s.id} value={s.id.toString()}>
+                                            {s.apellidos} {s.nombres}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+
+
+
 
                         {/* Fila: Selector de Semana + Gestión de Horarios Base */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
