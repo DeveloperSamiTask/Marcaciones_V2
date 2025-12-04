@@ -84,14 +84,6 @@ export function WeekScheduleTable({
     permisosTDData // 🔥 RECIBIR NUEVA PROP
 }: WeekScheduleTableProps) {
 
-
-    /* ----------------- Cargar Estados en base a la jornada ----------------- */
-
-
-
-
-
-    // ----------------------------------------------------------------------
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
     // 1. Convertir 'HH:mm' a minutos totales (Helper)
@@ -106,10 +98,10 @@ export function WeekScheduleTable({
         let totalMinutes = 0;
 
         // Lista de estados que SÍ deben contar para la suma final (TODO menos 'D' y 'SP')
+        //Se quita M ,V , LF , LP , LM
         const workingStatuses = [
-            'L', 'AHE', 'TD', 'FL', 'C', 'CA', 'CHE', 'F', 'V', 'M',
-            'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM',
-            'LF', 'PE'
+            'L', 'AHE', 'TD', 'FL', 'C', 'CA', 'CHE', 'F',
+            'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG','PE'
         ];
         // NOTA: 'D' (DESCANSO SEMANAL) y 'SP' (SIN PROGRAMACION) NO están aquí.
 

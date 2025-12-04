@@ -126,7 +126,7 @@ class HorarioController extends Controller
         ]);
     }
 
-    public function empleado($id)  
+    public function empleado($id)
     {
         // 1. Validar que el ID sea numérico
         if (! is_numeric($id)) {
@@ -795,9 +795,6 @@ class HorarioController extends Controller
         $permiso_td_id = null
     ) {
 
-        if ($estado === 'TD') {
-            Log::info("🎯 ESTADO TD DETECTADO - empleado $empleadoId, fecha $fecha, permiso_td_id: ".($permiso_td_id ?? 'NULL'));
-        }
 
         $empleado = Empleado::findOrFail($empleadoId);
         $fechaCarbon = Carbon::parse($fecha);

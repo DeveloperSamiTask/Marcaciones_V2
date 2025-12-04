@@ -445,7 +445,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
             // 🔥 CASO 1: Cambiar a NO LABORAL
             if (field === 'status' && value !== 'L') {
-                const shouldResetTimes = (value === 'D' || value === 'SP');
+                const shouldResetTimes = (value === 'D' || value === 'SP' || value === 'V' || value === 'M' || value === 'LM' || value === 'LP' || value === 'LF' );
 
                 const newDayData = {
                     entryTime: shouldResetTimes ? '00:00' : dayData.entryTime,
@@ -583,6 +583,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
     };
 
     const [isSaving, setIsSaving] = useState(false);
+
 
     //VALIDACIONES , descansos , TD , Compensas
     const handleSaveSchedules = async () => {
