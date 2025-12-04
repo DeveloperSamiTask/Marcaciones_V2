@@ -84,6 +84,14 @@ export function WeekScheduleTable({
     permisosTDData // 🔥 RECIBIR NUEVA PROP
 }: WeekScheduleTableProps) {
 
+
+    /* ----------------- Cargar Estados en base a la jornada ----------------- */
+
+
+
+
+
+    // ----------------------------------------------------------------------
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
     // 1. Convertir 'HH:mm' a minutos totales (Helper)
@@ -156,7 +164,7 @@ export function WeekScheduleTable({
     const totalHoursFormatted = formatMinutesToHours(totalMinutesWorked);
 
 
-    // 🔥 ESTADO PROPIO PARA FERIADOS
+    // ----------------- ESTADO PROPIO PARA FERIADOS -----------------
     const [feriadosLocal, setFeriadosLocal] = useState<{
         feriadoDisponible: any[];
         feriadoFuturo: any[];
@@ -164,7 +172,7 @@ export function WeekScheduleTable({
 
     const [loading, setLoading] = useState(false);
 
-    // 🔥 CARGAR FERIADOS AL MONTAR O CUANDO CAMBIE EL EMPLEADO
+    // ----------------- CARGAR FERIADOS AL MONTAR O CUANDO CAMBIE EL EMPLEADO -----------------
     useEffect(() => {
         const cargarFeriados = async () => {
             setLoading(true);
@@ -187,10 +195,13 @@ export function WeekScheduleTable({
         };
 
         cargarFeriados();
-    }, [employeeId]); // 🔥 ELIMINAR horariosPTCargados y onFieldChange
+    }, [employeeId]);
 
-    // 🔥 USAR feriadosLocal en lugar de feriadosData
+
     const feriadosActuales = feriadosLocal || feriadosData;
+
+
+
 
     return (
         <div className="overflow-x-auto">

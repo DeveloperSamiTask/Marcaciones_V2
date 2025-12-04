@@ -22,145 +22,6 @@ use Inertia\Inertia;
 
 class HorarioController extends Controller
 {
-    /*
-           Segundo cambio
-    public function index(Request $request)
-    {
-        // Validar los filtros que vienen de la petición
-        $filters = $request->validate([
-            'empresa' => 'nullable|integer|exists:empresas,id',
-            'fechaInicio' => 'nullable|date',
-            'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
-        ]);
-
-        $user = $request->user();
-
-        // FILTRO DE EMPRESAS SEGÚN USUARIO
-        if ($user->name === 'ANGELES TERRONES MILUSKA') {
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('razonsocial', ['YAKU PARK S.A.C.', 'DREAMS COMPANY PERU S.A.C', 'CHAXRA S.A.C.'])
-                ->get(['id', 'razonsocial']);
-        } elseif ($user->id === 73) {
-            // USUARIO ID 73 SOLO VE EMPRESAS 1 Y 5
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [1, 5])
-                ->get(['id', 'razonsocial']);
-        } else {
-            // Para otros usuarios, todas las empresas
-            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        }
-
-        $horarios = Horario::with('empleado.area')
-            ->whereHas('empleado', function ($query) use ($request, $user, $empresas) {
-                $query->whereNull('fecha_cese');
-
-                // FILTRO POR EMPRESA SELECCIONADA - ESTO ES LO QUE FALTA
-                if ($request->empresa) {
-                    $query->where('empresa_id', $request->empresa);
-                }
-                // SI NO HAY EMPRESA SELECCIONADA, APLICAR FILTRO POR USUARIO
-                else {
-                    if ($user->name === 'ANGELES TERRONES MILUSKA') {
-                        $query->whereIn('empresa_id', $empresas->pluck('id'));
-                    } elseif ($user->id === 73) {
-                        $query->whereIn('empresa_id', [1, 5]);
-                    }
-                }
-
-                // FILTRO POR JEFE (SOLO PARA ROL 4 QUE NO SON MILUSKA NI USUARIO 73)
-                if ($user->rol_id == 4 && $user->name !== 'ANGELES TERRONES MILUSKA' && $user->id !== 73) {
-                    $query->where('jefe_id', $user->empleado_id);
-                }
-            })
-            ->when($request->fechaInicio && $request->fechaFin, function ($query) use ($request) {
-                $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-            })
-            ->orderBy('fecha')
-            ->orderBy('empleado_id') // Orden adicional para mejor organización
-            ->get();
-
-        session(['horarios_url' => $request->fullUrl()]);
-
-        return Inertia::render('horarios/index', [
-            'horarios' => $horarios,
-            'empresas' => $empresas,
-            'filters' => $filters,
-        ]);
-    }
-    */
-
-    /*
-        primer cambio
- public function index(Request $request)
-    {
-        try {
-            $filters = $request->validate([
-                'empresa' => 'nullable|integer',
-                'fechaInicio' => 'nullable|date',
-                'fechaFin' => 'nullable|date',
-            ]);
-
-            $user = $request->user();
-
-            // EMPRESAS según usuario
-            if ($user->name === 'ANGELES TERRONES MILUSKA') {
-                $empresas = Empresa::where('estado', 1)
-                    ->whereIn('id', [4, 10, 11])
-                    ->get(['id', 'razonsocial']);
-            } elseif ($user->id === 73) {
-                $empresas = Empresa::where('estado', 1)
-                    ->whereIn('id', [1, 5])
-                    ->get(['id', 'razonsocial']);
-            } else {
-                $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-            }
-
-            // OBTENER SOLO EMPLEADOS ACTIVOS DE LA EMPRESA SELECCIONADA
-            $empleadoIds = [];
-            if ($request->empresa) {
-                $empleadoIds = Empleado::where('empresa_id', $request->empresa)
-                    ->whereNull('fecha_cese')
-                    ->when($user->rol_id == 4 && $user->name !== 'ANGELES TERRONES MILUSKA' && $user->id !== 73,
-                        fn ($q) => $q->where('jefe_id', $user->empleado_id))
-                    ->pluck('id')
-                    ->toArray();
-            }
-
-            // CONSULTA OPTIMIZADA - SOLO HORARIOS DE EMPLEADOS ACTIVOS
-            $horarios = [];
-            if (! empty($empleadoIds) && $request->fechaInicio && $request->fechaFin) {
-                $horarios = Horario::whereIn('empleado_id', $empleadoIds)
-                    ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-                    ->with(['empleado' => function ($q) {
-                        $q->select('id', 'nombres', 'apellidos', 'empresa_id')
-                            ->with(['area' => function ($q) {
-                                $q->select('id', 'nombre');
-                            }]);
-                    }])
-                    ->select('id', 'empleado_id', 'fecha', 'ingreso', 'salida', 'estado')
-                    ->orderBy('fecha', 'desc')
-                    ->orderBy('empleado_id')
-                    ->limit(500) // MÁXIMO 500 REGISTROS
-                    ->get();
-            }
-
-            return Inertia::render('horarios/index', [
-                'horarios' => $horarios,
-                'empresas' => $empresas,
-                'filters' => $filters,
-            ]);
-
-        } catch (\Exception $e) {
-
-            return Inertia::render('horarios/index', [
-                'horarios' => [],
-                'empresas' => Empresa::where('estado', 1)->get(['id', 'razonsocial']),
-                'filters' => $request->all(),
-            ]);
-        }
-    }
-    */
-
     public function index(Request $request)
     {
         // Validar los filtros que vienen de la petición
@@ -265,105 +126,126 @@ class HorarioController extends Controller
         ]);
     }
 
+    public function empleado($id) // 🔥 Recibir el ID como parámetro de ruta
+    {
+        // 1. Validar que el ID sea numérico
+        if (! is_numeric($id)) {
+            return response()->json([
+                'error' => 'ID debe ser numérico',
+            ], 400);
+        }
+
+        // 2. Buscar el empleado
+        $empleado = Empleado::where('id', $id)
+            ->select('id', 'nombres', 'apellidos', 'jornada_id', 'dni')
+            ->get(); // 🔥 CAMBIAR get() por first()
+
+        // 3. Si no existe, devolver error
+        if (! $empleado) {
+            return response()->json([
+                'error' => 'Empleado no encontrado',
+            ], 404);
+        }
+
+        // 4. Devolver el empleado
+        return response()->json($empleado);
+    }
+
     public function empleados(Request $request)
     {
         $user = $request->user();
+        $supervisorId = $request->get('supervisor_id');
+        $empresaId = $request->get('empresa_id');
 
-        $supervisorId = intval($request->get('supervisor_id'));
-        $empresaId = intval($request->get('empresa_id'));
+        //  \Log::info('🔥 empleados() LLAMADO - MODO SUPERVISOR', $request->all());
 
-        // 🔴 DEBUG INMEDIATO
-        \Log::info('🔍 EMPLEADOS LLAMADO', [
-            'supervisor_id' => $supervisorId,
-            'empresa_id' => $empresaId,
-            'usuario_id' => $user->id,
-            'rol' => $user->rol_id,
-            'REQUEST_ALL' => $request->all(), // Ver TODO lo que viene
-        ]);
+        $query = Empleado::with('area')->whereNull('fecha_cese');
 
-        // ===========================
-        // 1) MODO SUPERVISOR - FORZADO
-        // ===========================
-        if ($supervisorId > 0) {
-            \Log::info('✅ ENTRO EN MODO SUPERVISOR', ['id' => $supervisorId]);
-
+        // 🔥 SI HAY SUPERVISOR_ID → ES EL MODO "SUPERVISOR SELECCIONADO"
+        if ($supervisorId) {
             $supervisor = Empleado::find($supervisorId);
+
             if (! $supervisor) {
-                \Log::warning('❌ Supervisor no encontrado', ['id' => $supervisorId]);
-
+                // \Log::warning("❌ Supervisor no encontrado", ['id' => $supervisorId]);
                 return response()->json([]);
             }
 
-            \Log::info('🔍 Supervisor encontrado', [
-                'nombre' => $supervisor->nombres,
-                'empresa' => $supervisor->empresa_id,
-                'jefe_id' => $supervisor->jefe_id,
-            ]);
-
-            // TRAER EMPLEADOS DEL SUPERVISOR
-            $empleadosDelSupervisor = Empleado::with('area')
-                ->whereNull('fecha_cese')
-                ->where('jefe_id', $supervisorId)  // ← SUS EMPLEADOS
-                ->where('empresa_id', $supervisor->empresa_id)
-                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']);
-
-            \Log::info('📊 Empleados del supervisor', [
-                'cantidad' => $empleadosDelSupervisor->count(),
-                'ids' => $empleadosDelSupervisor->pluck('id')->toArray(),
-            ]);
-
-            // Agregar el supervisor
-            $empleadosDelSupervisor->push($supervisor);
-
-            return response()->json($empleadosDelSupervisor);
-        }
-
-        \Log::info('❌ NO ENTRO EN MODO SUPERVISOR', ['reason' => 'supervisorId <= 0']);
-        // ===========================
-        // 2) MODO SIN SUPERVISOR
-        // ===========================
-        if ($user->rol_id === 4) {
-            // Supervisor logueado viendo sus empleados
-            if (! $user->empleado) {
+            // Si viene empresa, validar coincidencia
+            if ($empresaId && $supervisor->empresa_id != $empresaId) {
+                /*
+                 \Log::warning("❌ Supervisor no pertenece a empresa", [
+                    'supervisor_empresa' => $supervisor->empresa_id,
+                    'request_empresa' => $empresaId
+                ]);
+                */
                 return response()->json([]);
             }
 
-            $empleados = Empleado::whereNull('fecha_cese')
-                ->where('jefe_id', $user->empleado->id)
-                ->where('empresa_id', $user->empleado->empresa_id)
-                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id']);
+            // 🔴 TRAER: empleados del supervisor + el supervisor mismo
+            $query->where(function ($q) use ($supervisorId) {
+                $q->where('jefe_id', $supervisorId)  // Sus empleados
+                    ->orWhere('id', $supervisorId);    // Y él mismo
+            })->where('empresa_id', $supervisor->empresa_id);
 
-            // Incluir al supervisor también
-            $empleados->push($user->empleado);
-
-            return response()->json($empleados);
+        }
+        // 🔥 SI NO HAY SUPERVISOR_ID PERO USUARIO ES SUPERVISOR → SU PROPIO EQUIPO
+        elseif ($user->rol_id === 4 && $user->empleado) {
+            $query->where(function ($q) use ($user) {
+                $q->where('jefe_id', $user->empleado->id)
+                    ->orWhere('id', $user->empleado->id);
+            })->where('empresa_id', $user->empleado->empresa_id);
+        }
+        // 🔥 SI ES ADMIN/RRHH CON EMPRESA
+        elseif (in_array($user->rol_id, [1, 2]) && $empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        // 🔥 SI NO HAY NADA → VACÍO (no traer TODOS)
+        else {
+            return response()->json([]);
         }
 
-        // ===========================
-        // 3) RRHH / Admin - SOLO EMPRESA
-        // ===========================
-        if ($empresaId > 0) {
-            return response()->json(
-                Empleado::whereNull('fecha_cese')
-                    ->where('empresa_id', $empresaId)
-                    ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
-            );
-        }
-        \Log::info('🔍 empleados() llamado', [
-            'supervisor_id' => $supervisorId,
-            'empresa_id' => $empresaId,
-            'usuario_id' => $user->id,
-            'rol_usuario' => $user->rol_id,
-            'entró_modo' => $supervisorId > 0 ? 'SUPERVISOR' : ($empresaId > 0 ? 'EMPRESA' : 'TODOS'),
+        $empleados = $query->get([
+            'id',
+            'nombres',
+            'apellidos',
+            'cargo',
+            'area_id',
+            'empresa_id',
+            'jefe_id',      // 🔥 FALTABA
+            'jornada_id',    // 🔥 FALTABA
         ]);
 
-        // ===========================
-        // 4) SIN FILTROS (TODOS)
-        // ===========================
-        return response()->json(
-            Empleado::whereNull('fecha_cese')
-                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id'])
-        );
+        /*
+              \Log::info("✅ RESULTADO MODO SUPERVISOR", [
+                    'cantidad' => $empleados->count(),
+                    'supervisor_incluido' => $supervisorId ? 'SÍ' : 'N/A',
+                    'primeros_3' => $empleados->take(3)->values()
+                ]);
+        */
+
+        return response()->json($empleados);
+    }
+
+    public function empleadosPorEmpresa(Request $request)
+    {
+        $user = $request->user();
+        $empresaId = $request->get('empresa_id');
+
+        $query = Empleado::whereNull('fecha_cese');
+
+        if ($user->rol_id == 4) {
+            $query->where('jefe_id', $user->empleado_id);
+        } elseif (in_array($user->rol_id, [1, 2])) {
+            if ($empresaId) {
+                $query->where('empresa_id', $empresaId);
+            }
+        }
+
+        $empleados = $query
+            ->orderBy('apellidos')
+            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id', 'jornada_id', 'cargo']);
+
+        return response()->json($empleados);
     }
 
     /* Crea horarios para un empleado en un rango de fechas. */
@@ -680,7 +562,7 @@ class HorarioController extends Controller
 
             // ERROR DIRECTO que Inertia SÍ puede manejar
             return back()->withErrors([
-                'bloqueo_semanal' => 'Error: Ya se crearon horarios para esta semana.',
+                'bloqueo_semanal' => 'Advertencia: el horario ya fue registrado previamente.',
             ]);
 
         }
@@ -815,10 +697,12 @@ class HorarioController extends Controller
             );
 
             // Control de permisos
-            if ($data['estado'] == 'L' && (
-                ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
-                ($empleado->jornada_id == 1 && $horasSemanal > 2880)
-            )) {
+            if (
+                $data['estado'] == 'L' && (
+                    ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
+                    ($empleado->jornada_id == 1 && $horasSemanal > 2880)
+                )
+            ) {
                 $permisoExistente = Permiso::where('empleado_id', $empleado->id)
                     ->where('tipo_id', 2)
                     ->whereDate('fecha', $fecha)
@@ -859,19 +743,28 @@ class HorarioController extends Controller
             }
         }
 
-        if ($data['estado'] == 'L' && (
-            ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
-            ($empleado->jornada_id == 1 && $horasSemanal > 2880)
-        )) {
+        if (
+            $data['estado'] == 'L' && (
+                ($empleado->jornada_id == 2 && $horasSemanal > 1410) ||
+                ($empleado->jornada_id == 1 && $horasSemanal > 2880)
+            )
+        ) {
             return "⚠️ Algunos horarios de {$empleado->nombre_completo} se enviaron a aprobación por exceder horas semanales.";
         }
 
         return true;
     }
 
-    private function procesarUnDia($empleadoId, $fecha, $ingreso, $salida, $estado, $descripcion = '',
-        $feriado = null, $permiso_td_id = null)
-    {
+    private function procesarUnDia(
+        $empleadoId,
+        $fecha,
+        $ingreso,
+        $salida,
+        $estado,
+        $descripcion = '',
+        $feriado = null,
+        $permiso_td_id = null
+    ) {
 
         if ($estado === 'TD') {
             Log::info("🎯 ESTADO TD DETECTADO - empleado $empleadoId, fecha $fecha, permiso_td_id: ".($permiso_td_id ?? 'NULL'));
@@ -1045,28 +938,6 @@ class HorarioController extends Controller
         return $horario;
     }
 
-    public function empleadosPorEmpresa(Request $request)
-    {
-        $user = $request->user();
-        $empresaId = $request->get('empresa_id');
-
-        $query = Empleado::whereNull('fecha_cese');
-
-        if ($user->rol_id == 4) {
-            $query->where('jefe_id', $user->empleado_id);
-        } elseif (in_array($user->rol_id, [1, 2])) {
-            if ($empresaId) {
-                $query->where('empresa_id', $empresaId);
-            }
-        }
-
-        $empleados = $query
-            ->orderBy('apellidos')
-            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id', 'jornada_id', 'cargo']);
-
-        return response()->json($empleados);
-    }
-
     public function getTDDisponibles(Request $request)
     {
         try {
@@ -1200,11 +1071,14 @@ class HorarioController extends Controller
 
         // 1. Cargar Horarios y Marcaciones del mes (Rango 1-31) para el cálculo mensual
         $empleado = Empleado::find($horario->empleado_id)
-            ->load(['horarios' => function ($q) use ($fechaInicio, $fechaFin) {
-                $q->whereBetween('fecha', [$fechaInicio, $fechaFin]);
-            }, 'marcaciones' => function ($q) use ($fechaInicio, $fechaFin) {
-                $q->whereBetween('fecha', [$fechaInicio, $fechaFin]);
-            }]);
+            ->load([
+                'horarios' => function ($q) use ($fechaInicio, $fechaFin) {
+                    $q->whereBetween('fecha', [$fechaInicio, $fechaFin]);
+                },
+                'marcaciones' => function ($q) use ($fechaInicio, $fechaFin) {
+                    $q->whereBetween('fecha', [$fechaInicio, $fechaFin]);
+                },
+            ]);
 
         // 2. Cargar Horarios de la semana específica (Rango inicioSemana-finSemana) para el cálculo semanal
         // 🔥 ESTO SOLUCIONA EL PROBLEMA DE 00:00 AL EDITAR HORARIOS VIEJOS
@@ -1426,9 +1300,27 @@ class HorarioController extends Controller
                 ->whereYear('fecha', $anio)
                 ->whereMonth('fecha', $mes)
                 ->whereIn('estado', [
-                    'L', 'AHE', 'TD', 'FL', 'C', 'CA', 'CHE', 'F', 'V', 'M',
-                    'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM',
-                    'LF', 'PE',
+                    'L',
+                    'AHE',
+                    'TD',
+                    'FL',
+                    'C',
+                    'CA',
+                    'CHE',
+                    'F',
+                    'V',
+                    'M',
+                    'SN',
+                    'ST',
+                    'SFI',
+                    'FI',
+                    'FJ',
+                    'LCG',
+                    'LSG',
+                    'LP',
+                    'LM',
+                    'LF',
+                    'PE',
                 ])
                 ->get(); // Menso D y SP
 

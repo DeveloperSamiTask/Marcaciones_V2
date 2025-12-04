@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Calendar } from 'lucide-react';
+import { Save, Calendar, User } from 'lucide-react';
 import { Button } from '../../components-new/ui-new/button';
 import { CompanySelector } from '../../components-new/create-horario/CompanySelector';
 import { WeekNavigator } from '../../components-new/create-horario/WeekNavigator';
@@ -61,78 +61,70 @@ export default function App({ empleados, empresas, url, supervisores }) {
     }, [user]);
 
 
+    /* ---------------------------- TRAER EMPLEADOS POR SUPERVISORES ---------------------------- */
     useEffect(() => {
-        const base = "/horarios/empleados";
-        const params = new URLSearchParams();
-
+        const controller = new AbortController();
         const sup = selectedSupervisor && selectedSupervisor !== "all"
             ? Number(selectedSupervisor)
             : null;
         const emp = selectedEmpresa ? Number(selectedEmpresa) : null;
 
-        // CASO 1: SUPERVISOR SELECCIONADO
-        if (sup) {
-            params.set("supervisor_id", String(sup));
+        async function fetchEmpleados() {
+            try {
+                // Decide endpoint y parametros
+                let url = "";
+                if (sup) {
+                    const params = new URLSearchParams();
+                    params.set("supervisor_id", String(sup));
+                    if (emp) params.set("empresa_id", String(emp));
+                    url = `/horarios/empleados?${params.toString()}`;
+                    console.log("🔄 Fetching (SUPERVISOR endpoint):", url);
+                } else if (emp) {
+                    url = `/horarios/empleados-por-empresa?empresa_id=${emp}`;
+                    console.log("🔄 Fetching (EMPRESA endpoint):", url);
+                } else {
+                    console.log("🔄 No filtro -> limpiando lista");
+                    setEmpleadosList([]);
+                    return;
+                }
 
-            if (emp) {
-                params.set("empresa_id", String(emp));
+                const res = await fetch(url, { signal: controller.signal });
+                if (!res.ok) {
+                    console.error("Fetch error status", res.status);
+                    if (!controller.signal.aborted) setEmpleadosList([]);
+                    return;
+                }
+                const data = await res.json();
+
+                // Debug: contar y mostrar primer elemento
+                console.log("📦 Respuesta fetch:", {
+                    url,
+                    length: Array.isArray(data) ? data.length : null,
+                    // Verificar si el supervisor está en los resultados
+                    supervisorInList: sup ? data.find(e => e.id === sup) : 'N/A',
+                    // Verificar filtro jefe_id
+                    employeesWithSelectedBoss: sup ? data.filter(e => e.jefe_id === sup).length : 'N/A'
+                });
+
+                // Solo actualizar si no se abortó
+                if (!controller.signal.aborted) {
+                    setEmpleadosList(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                if (err.name === "AbortError") {
+                    console.log("Fetch aborted:", err);
+                } else {
+                    console.error("Fetch failed:", err);
+                    setEmpleadosList([]);
+                }
             }
-
-            const url = `${base}?${params.toString()}`;
-            console.log("🔄 Fetching: SUPERVISOR", sup, "EMPRESA", emp);
-
-            fetch(url)
-                .then(r => r.json())
-                .then(d => {
-                    console.log("📦 Respuesta supervisor:", d);
-
-                    // 🔴 DEBUG CRÍTICO - DENTRO DEL THEN
-                    console.log("🔴 DEBUG SUPERVISOR:", {
-                        supervisorId: sup,
-                        empresaId: emp,
-                        url: url,
-                        cantidad: d.length
-                    });
-
-                    const supervisorEnLista = d.find(e => e.id === sup);
-                    if (supervisorEnLista) {
-                        console.warn("⚠️ EL SUPERVISOR ESTÁ EN LA LISTA!:", supervisorEnLista);
-                    }
-
-                    setEmpleadosList(Array.isArray(d) ? d : []);
-                })
-                .catch(() => setEmpleadosList([]));
-
-            return;
         }
 
-        // CASO 2: SOLO EMPRESA (SIN SUPERVISOR)
-        if (emp) {
-            params.set("empresa_id", String(emp));
-            const url = `${base}?${params.toString()}`;
-            console.log("🔄 Fetching: SOLO EMPRESA", emp);
+        fetchEmpleados();
 
-            fetch(url)
-                .then(r => r.json())
-                .then(d => {
-                    console.log("📦 Respuesta empresa:", d);
-                    setEmpleadosList(Array.isArray(d) ? d : []);
-                })
-                .catch(() => setEmpleadosList([]));
-
-            return;
-        }
-
-        // CASO 3: NADA SELECCIONADO (TODOS)
-        console.log("🔄 Fetching: TODOS (sin filtros)");
-        fetch(base)
-            .then(r => r.json())
-            .then(d => {
-                console.log("📦 Respuesta todos:", d);
-                setEmpleadosList(Array.isArray(d) ? d : []);
-            })
-            .catch(() => setEmpleadosList([]));
-
+        return () => {
+            controller.abort(); // cancela cualquier petición pendiente al desmontar o re-ejecutar
+        };
     }, [selectedSupervisor, selectedEmpresa, user]);
 
 
@@ -207,6 +199,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
     // =========================================================================
     // 1. Horario Base a Todos (handleApplyBaseToAll)
     // =========================================================================
+
+    /* -------------- LOGICA DEL SP ------------------- */
     const handleApplyBaseToAll = () => {
         const newExpanded = new Set<string>();
 
@@ -214,6 +208,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             const newData: typeof scheduleData = {};
 
             filteredEmployees.forEach(employee => {
+
                 newExpanded.add(employee.id);
                 // Clonamos el objeto del empleado, asegurando que los días fuera de la semana se mantengan
                 newData[employee.id] = { ...prev[employee.id] };
@@ -244,7 +239,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
                         // 🔥 NUEVA REGLA: Si el horario base resulta en 00:00 - 00:00,
                         // y el día no era D o SP, forzamos el estado a SP (Sin Programación).
-                        if (entryTime === '00:00' && exitTime === '00:00') {
+                        if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
                             newStatus = 'SP';
                         }
                         // Si no es 00:00 - 00:00, newStatus permanece como existingStatus.
@@ -276,6 +271,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             const newData = { ...prev };
 
             filteredEmployees.forEach(employee => {
+
                 newExpanded.add(employee.id);
                 newData[employee.id] = { ...prev[employee.id] };
 
@@ -295,7 +291,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             const exitTime = horario.salida;
 
                             // Aplicar la nueva regla de 'SP'
-                            if (entryTime === '00:00' && exitTime === '00:00') {
+                            if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
                                 newStatus = 'SP';
                             }
 
@@ -326,6 +322,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             const newData = { ...prev };
 
             filteredEmployees.forEach(employee => {
+
                 newExpanded.add(employee.id);
                 newData[employee.id] = { ...prev[employee.id] };
 
@@ -345,7 +342,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             const exitTime = horario.salida;
 
                             // Aplicar la nueva regla de 'SP'
-                            if (entryTime === '00:00' && exitTime === '00:00') {
+                            if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
                                 newStatus = 'SP';
                             }
 
@@ -376,6 +373,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             const newData = { ...prev };
 
             filteredEmployees.forEach(employee => {
+
                 newExpanded.add(employee.id);
                 newData[employee.id] = { ...prev[employee.id] };
 
@@ -395,7 +393,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             const exitTime = horario.salida;
 
                             // Aplicar la nueva regla de 'SP'
-                            if (entryTime === '00:00' && exitTime === '00:00') {
+                            if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
                                 newStatus = 'SP';
                             }
 
@@ -615,17 +613,21 @@ export default function App({ empleados, empresas, url, supervisores }) {
             const employeeSchedule = scheduleData[employee.id] || {};
             const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
 
+            /* -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------  */
             if (employee.jornada_id === 1) { // FULL TIME
-                // No más de 48 horas
-                if (horasSemanales > 2880) {
-                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)}`);
+                const MAX_HORAS = 2880;  // 48 horas en minutos
+                const MIN_HORAS = 2820;  // 47 horas en minutos
+
+                if (horasSemanales > MAX_HORAS) {
+                    const excedente = horasSemanales - MAX_HORAS;
+                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
                     hasValidationErrors = true;
                     return;
                 }
 
-                // No menos de 47 horas
-                if (horasSemanales <= 2820) {
-                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)}`);
+                if (horasSemanales < MIN_HORAS) {
+                    const deficit = MIN_HORAS - horasSemanales;
+                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | DIFERENCIA: -${formatearHoras(deficit)}`);
                     hasValidationErrors = true;
                     return;
                 }
@@ -741,10 +743,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     return;
                 }
             }
-
-
-
-
 
 
             // 🔥 INICIALIZAR TRACKING PARA ESTE EMPLEADO
@@ -1058,25 +1056,39 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                             />
                         )}
 
+
+                        {/*
+                            ------------------------------ SELECT DE SUPERVISOR ------------------------------
+                        />
+                        */}
                         {supervisores.length > 0 && (
-                            <Select
-                                value={selectedSupervisor ?? undefined}
-                                onValueChange={(v) => setSelectedSupervisor(v)}
-                            >
-                                <SelectTrigger className="w-[250px]">
-                                    <SelectValue placeholder="Todos los supervisores" />
-                                </SelectTrigger>
+                            <div className="bg-white p-4 rounded-lg border">
+                                <div className="flex items-center gap-4">
+                                    <User className="h-5 w-5 text-gray-600" />
+                                    <label className="text-sm">Supervisor:</label>
 
-                                <SelectContent>
-                                    <SelectItem value="all">Todos</SelectItem>
+                                    <Select
+                                        value={selectedSupervisor ? selectedSupervisor.toString() : ''}
+                                        onValueChange={(value) => setSelectedSupervisor(value === "all" ? null : value)}
+                                    >
+                                        <SelectTrigger className="w-[250px]">
+                                            <SelectValue placeholder="" />
+                                        </SelectTrigger>
 
-                                    {supervisores.map((s) => (
-                                        <SelectItem key={s.id} value={s.id.toString()}>
-                                            {s.apellidos} {s.nombres}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                        <SelectContent>
+
+                                            <SelectItem value="all">Todos</SelectItem>
+
+                                            {supervisores.map((s) => (
+                                                <SelectItem key={s.id} value={String(s.id)}>
+                                                    {s.apellidos} {s.nombres}
+                                                </SelectItem>
+                                            ))}
+
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
                         )}
 
 

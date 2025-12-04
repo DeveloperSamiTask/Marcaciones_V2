@@ -66,7 +66,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/horarios/nuevo', [HorarioController::class, 'create'])->name('horarios.create');
 
-    Route::get('/horarios/empleados', [HorarioController::class, 'empleadosPorEmpresa'])
+    Route::get('/horarios/empleados-por-empresa', [HorarioController::class, 'empleadosPorEmpresa'])
+        ->name('horarios.empleadosPorEmpresa');
+
+    Route::get('/horarios/empleados', [HorarioController::class, 'empleados'])
         ->name('horarios.empleados');
 
     Route::post('/horarios/store-multiple', [HorarioController::class, 'storeMultiple'])->name('horarios.store-multiple');
@@ -76,8 +79,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/horarios/getTDDisponibles', [HorarioController::class, 'getTDDisponibles'])
         ->name('horarios.getTDDisponibles');
 
-    Route::get('/horarios/getHorasMensualesPT', [HorarioController::class,
-        'getHorasMensualesPT'])
+    Route::get('empleados/empleado/{id}', [HorarioController::class, 'empleado'])
+        ->name('empleados.empleado');
+
+    Route::get('/horarios/getHorasMensualesPT', [
+        HorarioController::class,
+        'getHorasMensualesPT',
+    ])
         ->name('horarios.getHorasMensualesPT');
 
     // feriados
