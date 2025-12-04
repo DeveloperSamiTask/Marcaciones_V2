@@ -111,8 +111,16 @@ export function EmployeeRow({
                 const UMBRAL_REFRIGERIO_MINUTES = 360; // 6 horas
                 const REFRIGERIO_MINUTES = 60;         // 1 hora
 
-                if (dailyDuration > UMBRAL_REFRIGERIO_MINUTES) {
-                    dailyDuration -= REFRIGERIO_MINUTES;
+                if (employee.jornada_id === 1) { // FULL TIME
+                    // Siempre descuenta 1h si tiene horario (>0)
+                    if (dailyDuration > 0) {
+                        dailyDuration -= REFRIGERIO_MINUTES;
+                    }
+                } else {
+                    // Para PART TIME y otros: solo si >6h
+                    if (dailyDuration > UMBRAL_REFRIGERIO_MINUTES) {
+                        dailyDuration -= REFRIGERIO_MINUTES;
+                    }
                 }
 
                 totalMinutes += dailyDuration;
@@ -173,7 +181,7 @@ export function EmployeeRow({
                 setHorasMensuales(data);
 
             } catch (error) {
-               // console.error('❌ Error cargando horas mensuales:', error);
+                // console.error('❌ Error cargando horas mensuales:', error);
                 setHorasMensuales(null);
 
             } finally {
@@ -221,7 +229,7 @@ export function EmployeeRow({
                         </Badge>
                     )}
 
-                    {hasRestDayValidationError && employee.jornada_id === 1 &&(
+                    {hasRestDayValidationError && employee.jornada_id === 1 && (
                         <Badge variant="destructive" className="text-xs flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
                             Falta día de descanso
