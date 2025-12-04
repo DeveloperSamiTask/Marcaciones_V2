@@ -445,7 +445,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
             // 🔥 CASO 1: Cambiar a NO LABORAL
             if (field === 'status' && value !== 'L') {
-                const shouldResetTimes = (value === 'D' || value === 'SP' || value === 'V' || value === 'M' || value === 'LM' || value === 'LP' || value === 'LF' );
+                const shouldResetTimes = (value === 'D' || value === 'SP' || value === 'V' || value === 'M' || value === 'LM' || value === 'LP' || value === 'LF');
 
                 const newDayData = {
                     entryTime: shouldResetTimes ? '00:00' : dayData.entryTime,
@@ -619,6 +619,25 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 const MAX_HORAS = 2880;  // 48 horas en minutos
                 const MIN_HORAS = 2820;  // 47 horas en minutos
 
+                // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES
+                const todosSonVacaciones = Object.values(employeeSchedule).every(day =>
+                    day?.status === 'V' || day?.estado === 'V'
+                );
+
+                // 🔥 EXCEPCIÓN: Si todos son V, no validar mínimo de horas
+                if (todosSonVacaciones) {
+                    // Solo validar máximo (por si acaso)
+                    if (horasSemanales > MAX_HORAS) {
+                        const excedente = horasSemanales - MAX_HORAS;
+                        toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
+                        hasValidationErrors = true;
+                        return;
+                    }
+                    // Si pasa, CONTINUAR sin validar mínimo
+                    return;
+                }
+
+                // 🔥 VALIDACIÓN NORMAL (para NO vacaciones completas)
                 if (horasSemanales > MAX_HORAS) {
                     const excedente = horasSemanales - MAX_HORAS;
                     toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
@@ -633,409 +652,410 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     return;
                 }
             }
-
-            /*
-             else if (employee.jornada_id === 2) { // PART TIME
-                // No menos de 23.5 horas
-                if (horasSemanales < 1410) {
-                    toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 23.5 horas mínimas para Part Time)`);
-                    hasValidationErrors = true;
-                    return;
-                }
-                // Part Time no debería tener máximo? O agregas si necesitas
-            }
-            */
-
         });
 
-        if (hasValidationErrors) return;
-
-        // ==================== CARGAR DATOS DE FERIADOS Y TD ====================
-
-        // 🔥 1. Detectar empleados con C/CA
-        const empleadosConCompensacion = filteredEmployees.filter(emp => {
-            const schedule = scheduleData[emp.id] || {};
-            return Object.values(schedule).some(day => day.status === 'C' || day.status === 'CA');
-        });
-
-        // 🔥 2. Detectar empleados con TD
-        const empleadosConTD = filteredEmployees.filter(emp => {
-            const schedule = scheduleData[emp.id] || {};
-            return Object.values(schedule).some(day => day.status === 'TD');
-        });
-
-        // console.log('👥 Empleados con C/CA:', empleadosConCompensacion.length);
-        //console.log('👥 Empleados con TD:', empleadosConTD.length);
-
-        // 🔥 3. Cargar feriados en paralelo
-        const feriadosMap = {};
-        if (empleadosConCompensacion.length > 0) {
-            await Promise.all(
-                empleadosConCompensacion.map(async (emp) => {
-                    try {
-                        const feriados = await getFeriadosEmpleado(emp.id);
-                        feriadosMap[emp.id] = feriados || { feriadoDisponible: [], feriadoFuturo: [] };
-                    } catch (error) {
-                        //   console.error(`Error cargando feriados para empleado ${emp.id}:`, error);
-                        feriadosMap[emp.id] = { feriadoDisponible: [], feriadoFuturo: [] };
-                    }
-                })
-            );
-        }
-
-        // 🔥 4. Cargar permisos TD en paralelo - CORREGIDO
-        const permisosTDMap = {};
-        if (empleadosConTD.length > 0) {
-            await Promise.all(
-                empleadosConTD.map(async (emp) => {
-                    try {
-                        const permisosTD = await getTDPermisosEmpleado(emp.id);
-                        // ✅ Asegurar que siempre sea un array
-                        permisosTDMap[emp.id] = Array.isArray(permisosTD) ? permisosTD : [];
-                        // console.log(`📋 Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
-                    } catch (error) {
-                        //  console.error(`Error cargando permisos TD para empleado ${emp.id}:`, error);
-                        permisosTDMap[emp.id] = []; // ✅ Array vacío en caso de error
-                    }
-                })
-            );
-        }
-
-        //    console.log('📦 Feriados cargados:', feriadosMap);
-        //  console.log('📦 Permisos TD cargados:', permisosTDMap);
-
-        // ==================== TRACKING DE FERIADOS Y TD USADOS ====================
-        const feriadosUsadosPorEmpleado = {};
-        const permisosTDUsados = {};
-
-        // ==================== PROCESAR CADA EMPLEADO ====================
-        filteredEmployees.forEach(employee => {
-            const empSchedule = scheduleData[employee.id];
-            if (!empSchedule) {
-                toast.error(`${employee.apellidos} ${employee.nombres}  no tiene horarios configurados`);
+        /*
+         else if (employee.jornada_id === 2) { // PART TIME
+            // No menos de 23.5 horas
+            if (horasSemanales < 1410) {
+                toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 23.5 horas mínimas para Part Time)`);
                 hasValidationErrors = true;
                 return;
             }
-
-            const employeeSchedule = scheduleData[employee.id] || {};
-            const diasDescanso = Object.values(employeeSchedule).filter(day => day.status === 'D').length;
-            const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
-
-            // Validaciones de descanso
-            if (diasDescanso > 1) {
-                toast.error(`${employee.apellidos} ${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
-                hasValidationErrors = true;
-                return;
-            }
+            // Part Time no debería tener máximo? O agregas si necesitas
+        }
+        */
 
 
-            if (employee.jornada_id === 1) {
-                // Excepciones que permiten no tener descanso
-                const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
 
-                // Si no hay descanso y tampoco hay ningún día con estado de excepción → error
-                const tieneExcepcion = Object.values(employeeSchedule).some(day =>
-                    excepciones.includes(day.status)
-                );
+    if (hasValidationErrors) return;
 
-                if (diasDescanso === 0 && !tieneExcepcion) {
-                    toast.error(`${employee.apellidos} ${employee.nombres}  debe tener al menos 1 día de descanso`);
-                    hasValidationErrors = true;
-                    return;
+    // ==================== CARGAR DATOS DE FERIADOS Y TD ====================
+
+    // 🔥 1. Detectar empleados con C/CA
+    const empleadosConCompensacion = filteredEmployees.filter(emp => {
+        const schedule = scheduleData[emp.id] || {};
+        return Object.values(schedule).some(day => day.status === 'C' || day.status === 'CA');
+    });
+
+    // 🔥 2. Detectar empleados con TD
+    const empleadosConTD = filteredEmployees.filter(emp => {
+        const schedule = scheduleData[emp.id] || {};
+        return Object.values(schedule).some(day => day.status === 'TD');
+    });
+
+    // console.log('👥 Empleados con C/CA:', empleadosConCompensacion.length);
+    //console.log('👥 Empleados con TD:', empleadosConTD.length);
+
+    // 🔥 3. Cargar feriados en paralelo
+    const feriadosMap = {};
+    if (empleadosConCompensacion.length > 0) {
+        await Promise.all(
+            empleadosConCompensacion.map(async (emp) => {
+                try {
+                    const feriados = await getFeriadosEmpleado(emp.id);
+                    feriadosMap[emp.id] = feriados || { feriadoDisponible: [], feriadoFuturo: [] };
+                } catch (error) {
+                    //   console.error(`Error cargando feriados para empleado ${emp.id}:`, error);
+                    feriadosMap[emp.id] = { feriadoDisponible: [], feriadoFuturo: [] };
                 }
-            }
+            })
+        );
+    }
 
-
-            // 🔥 INICIALIZAR TRACKING PARA ESTE EMPLEADO
-            feriadosUsadosPorEmpleado[employee.id] = {
-                C: [],   // IDs de feriados usados en Compensación
-                CA: []   // IDs de feriados usados en Compensación Adelantada
-            };
-            permisosTDUsados[employee.id] = []; // IDs de permisos TD usados
-
-            let tieneHorariosInvalidos = false;
-
-            // ==================== PROCESAR CADA DÍA ====================
-            Object.keys(empSchedule).forEach(date => {
-                const { entryTime, exitTime, status } = empSchedule[date];
-
-                // Validar horarios laborales
-                if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
-                    toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
-                    tieneHorariosInvalidos = true;
-                }
-
-                let feriadoId = null;
-                let permisoTDId = null;
-
-                // ==================== ASIGNAR FERIADO PARA C/CA ====================
-                if (status === 'C' || status === 'CA') {
-                    const feriadosDelEmpleado = feriadosMap[employee.id] || { feriadoDisponible: [], feriadoFuturo: [] };
-
-                    const tipoFeriado = status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
-                    const listaFeriados = Array.isArray(feriadosDelEmpleado[tipoFeriado])
-                        ? feriadosDelEmpleado[tipoFeriado]
-                        : [];
-
-                    // Filtrar los ya usados
-                    const feriadosDisponibles = listaFeriados.filter(
-                        f => !feriadosUsadosPorEmpleado[employee.id][status].includes(f.id)
-                    );
-
-                    if (feriadosDisponibles.length > 0) {
-                        const feriadosOrdenados = [...feriadosDisponibles].sort(
-                            (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-                        );
-
-                        feriadoId = feriadosOrdenados[0].id;
-                        feriadosUsadosPorEmpleado[employee.id][status].push(feriadoId);
-
-                        /*
-console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, {
-                            tipo: status,
-                            nombre: feriadosOrdenados[0].nombre,
-                            id: feriadoId
-                        });
-                        */
-
-                    } else {
-                        const tipoTexto = status === 'C' ? 'compensaciones (pasadas)' : 'compensaciones adelantadas (futuras)';
-                        const totalDisponibles = listaFeriados.length;
-                        const yaUsados = feriadosUsadosPorEmpleado[employee.id][status].length;
-
-                        toast.error(
-                            `❌ ${employee.apellidos} ${employee.nombres}: No puede marcar más días como "${status}". ` +
-                            `Solo tiene ${totalDisponibles} ${tipoTexto} y ya usó ${yaUsados}.`,
-                            { duration: 8000 }
-                        );
-                        tieneHorariosInvalidos = true;
-                    }
-                }
-
-                // ==================== ASIGNAR PERMISO TD - CORREGIDO ====================
-                if (status === 'TD') {
+    // 🔥 4. Cargar permisos TD en paralelo - CORREGIDO
+    const permisosTDMap = {};
+    if (empleadosConTD.length > 0) {
+        await Promise.all(
+            empleadosConTD.map(async (emp) => {
+                try {
+                    const permisosTD = await getTDPermisosEmpleado(emp.id);
                     // ✅ Asegurar que siempre sea un array
-                    const permisosTD = Array.isArray(permisosTDMap[employee.id])
-                        ? permisosTDMap[employee.id]
-                        : [];
-
-                    /*
-console.log(`🔍 Procesando TD para ${employee.nombres}:`, {
-                    permisosDisponibles: permisosTD.length,
-                    permisosMap: permisosTDMap[employee.id]
-                });
-                    */
-
-
-                    // Filtrar los ya usados
-                    const permisosDisponibles = permisosTD.filter(
-                        permiso => permiso && permiso.id && !permisosTDUsados[employee.id].includes(permiso.id)
-                    );
-
-                    if (permisosDisponibles.length > 0) {
-                        const permisosOrdenados = [...permisosDisponibles].sort(
-                            (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-                        );
-
-                        permisoTDId = permisosOrdenados[0].id;
-                        permisosTDUsados[employee.id].push(permisoTDId);
-
-                        /*
-console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
-                            permiso_id: permisoTDId,
-                            fecha_permiso: permisosOrdenados[0].fecha
-                        });
-                        */
-
-                    } else {
-                        const totalPermisos = permisosTD.length;
-                        const yaUsados = permisosTDUsados[employee.id].length;
-
-                        toast.error(
-                            `❌ ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
-                            `Solo tiene ${totalPermisos} permisos TD disponibles y ya usó ${yaUsados}.`,
-                            { duration: 8000 }
-                        );
-                        tieneHorariosInvalidos = true;
-                    }
+                    permisosTDMap[emp.id] = Array.isArray(permisosTD) ? permisosTD : [];
+                    // console.log(`📋 Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
+                } catch (error) {
+                    //  console.error(`Error cargando permisos TD para empleado ${emp.id}:`, error);
+                    permisosTDMap[emp.id] = []; // ✅ Array vacío en caso de error
                 }
+            })
+        );
+    }
 
-                // ==================== AGREGAR A ENTRIES ====================
-                if (!tieneHorariosInvalidos) {
+    //    console.log('📦 Feriados cargados:', feriadosMap);
+    //  console.log('📦 Permisos TD cargados:', permisosTDMap);
 
+    // ==================== TRACKING DE FERIADOS Y TD USADOS ====================
+    const feriadosUsadosPorEmpleado = {};
+    const permisosTDUsados = {};
 
-                    if (status === 'TD') {
-                        /*
- console.log(`🎯 ENVIANDO TD AL BACKEND - ${employee.nombres}, ${date}:`, {
-                            empleado_id: employee.id,
-                            fecha: date,
-                            estado: status,
-                            permiso_td_id: permisoTDId
-                        });
-                        */
-
-                    }
-
-                    entries.push({
-                        empleado_id: employee.id,
-                        fecha: date,
-                        ingreso: entryTime,
-                        salida: exitTime,
-                        estado: status,
-                        feriado: feriadoId,
-                        permiso_td_id: permisoTDId,
-                    });
-                } else {
-                    hasValidationErrors = true;
-                }
-            });
-
-            if (tieneHorariosInvalidos) {
-                hasValidationErrors = true;
-            }
-        });
-
-        if (hasValidationErrors) return;
-
-        if (entries.length === 0) {
-            toast.error('No hay horarios para guardar. Presiona "Aplicar horario base a todos" primero.');
+    // ==================== PROCESAR CADA EMPLEADO ====================
+    filteredEmployees.forEach(employee => {
+        const empSchedule = scheduleData[employee.id];
+        if (!empSchedule) {
+            toast.error(`${employee.apellidos} ${employee.nombres}  no tiene horarios configurados`);
+            hasValidationErrors = true;
             return;
         }
 
-        // ==================== DEBUG Y ENVÍO ====================
-        //console.log('🧾 Enviando al backend:', entries);
-        //console.log('📊 Total registros:', entries.length);
+        const employeeSchedule = scheduleData[employee.id] || {};
+        const diasDescanso = Object.values(employeeSchedule).filter(day => day.status === 'D').length;
+        const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
 
-        const conFeriado = entries.filter(e => e.feriado);
-        const conPermisoTD = entries.filter(e => e.permiso_td_id);
-
-        if (conFeriado.length > 0) {
-            // console.log('🎯 Registros con feriado:', conFeriado);
+        // Validaciones de descanso
+        if (diasDescanso > 1) {
+            toast.error(`${employee.apellidos} ${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
+            hasValidationErrors = true;
+            return;
         }
 
-        if (conPermisoTD.length > 0) {
-            // console.log('🟡 Registros con permiso TD:', conPermisoTD);
+
+        if (employee.jornada_id === 1) {
+            // Excepciones que permiten no tener descanso
+            const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
+
+            // Si no hay descanso y tampoco hay ningún día con estado de excepción → error
+            const tieneExcepcion = Object.values(employeeSchedule).some(day =>
+                excepciones.includes(day.status)
+            );
+
+            if (diasDescanso === 0 && !tieneExcepcion) {
+                toast.error(`${employee.apellidos} ${employee.nombres}  debe tener al menos 1 día de descanso`);
+                hasValidationErrors = true;
+                return;
+            }
         }
 
-        // ==================== ENVÍO AL BACKEND ====================
 
+        // 🔥 INICIALIZAR TRACKING PARA ESTE EMPLEADO
+        feriadosUsadosPorEmpleado[employee.id] = {
+            C: [],   // IDs de feriados usados en Compensación
+            CA: []   // IDs de feriados usados en Compensación Adelantada
+        };
+        permisosTDUsados[employee.id] = []; // IDs de permisos TD usados
 
+        let tieneHorariosInvalidos = false;
 
-        router.post(route('horarios.store-multiple'), { entries }, {
-            preserveScroll: true,
-            preserveState: true, // ← IMPORTANTE
-            onStart: () => toast.loading('Guardando horarios...'),
-            onSuccess: () => {
-                toast.success('✅ Horarios guardados correctamente');
-            },
-            onError: (errors) => {
-                // DEBUG: Ver qué llega
-                console.log('🔴 ERRORES INERTIA:', errors);
+        // ==================== PROCESAR CADA DÍA ====================
+        Object.keys(empSchedule).forEach(date => {
+            const { entryTime, exitTime, status } = empSchedule[date];
 
-                // CAPTURA ERRORES DE back()->withErrors()
-                if (errors.bloqueo_semanal) {
-                    // Puede ser string o array
-                    const mensaje = Array.isArray(errors.bloqueo_semanal)
-                        ? errors.bloqueo_semanal[0]
-                        : errors.bloqueo_semanal;
-                    toast.error(mensaje);
-                    return;
-                }
+            // Validar horarios laborales
+            if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
+                toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
+                tieneHorariosInvalidos = true;
+            }
 
-                // Si hay otros errores de validación
-                const primerosErrores = Object.values(errors);
-                if (primerosErrores.length > 0) {
-                    const primerError = Array.isArray(primerosErrores[0])
-                        ? primerosErrores[0][0]
-                        : primerosErrores[0];
-                    toast.error(primerError);
-                    return;
-                }
+            let feriadoId = null;
+            let permisoTDId = null;
 
-                // Error genérico
-                toast.error('Error al guardar horarios');
-            },
-            onFinish: () => toast.dismiss(),
-        });
-    };  // ← CIERRE FINAL DE LA FUNCIÓN
+            // ==================== ASIGNAR FERIADO PARA C/CA ====================
+            if (status === 'C' || status === 'CA') {
+                const feriadosDelEmpleado = feriadosMap[employee.id] || { feriadoDisponible: [], feriadoFuturo: [] };
 
+                const tipoFeriado = status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
+                const listaFeriados = Array.isArray(feriadosDelEmpleado[tipoFeriado])
+                    ? feriadosDelEmpleado[tipoFeriado]
+                    : [];
 
-    const calcularHorasSemanalesFrontend = (employeeSchedule) => {
-        let totalMinutos = 0;
+                // Filtrar los ya usados
+                const feriadosDisponibles = listaFeriados.filter(
+                    f => !feriadosUsadosPorEmpleado[employee.id][status].includes(f.id)
+                );
 
-        Object.values(employeeSchedule).forEach(dia => {
-            const estadosQueCuentan = ['L', 'PE', 'V', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'FL', 'SP', 'M', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'TD'];
+                if (feriadosDisponibles.length > 0) {
+                    const feriadosOrdenados = [...feriadosDisponibles].sort(
+                        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+                    );
 
-            if (estadosQueCuentan.includes(dia.status) && dia.entryTime && dia.exitTime && dia.entryTime !== '00:00') {
+                    feriadoId = feriadosOrdenados[0].id;
+                    feriadosUsadosPorEmpleado[employee.id][status].push(feriadoId);
 
-                const entradaMin = tiempoAMinutos(dia.entryTime);
-                const salidaMin = tiempoAMinutos(dia.exitTime);
+                    /*
+console.log(`✅ Feriado asignado a ${employee.nombres} (${date}):`, {
+                        tipo: status,
+                        nombre: feriadosOrdenados[0].nombre,
+                        id: feriadoId
+                    });
+                    */
 
-                let minutosDia = 0;
-
-                // ⬇⬇⬇ NUEVA LÓGICA: manejar turnos que pasan medianoche ⬇⬇⬇
-                if (salidaMin < entradaMin) {
-                    minutosDia = (1440 - entradaMin) + salidaMin; // cruza medianoche
                 } else {
-                    minutosDia = salidaMin - entradaMin; // turno normal
-                }
-                // ⬆⬆⬆ FIN DE LA CORRECCIÓN ⬆⬆⬆
+                    const tipoTexto = status === 'C' ? 'compensaciones (pasadas)' : 'compensaciones adelantadas (futuras)';
+                    const totalDisponibles = listaFeriados.length;
+                    const yaUsados = feriadosUsadosPorEmpleado[employee.id][status].length;
 
-                // Restar 1h (60min) si trabaja más de 6h por día
-                if (minutosDia > 360) {
-                    minutosDia -= 60;
+                    toast.error(
+                        `❌ ${employee.apellidos} ${employee.nombres}: No puede marcar más días como "${status}". ` +
+                        `Solo tiene ${totalDisponibles} ${tipoTexto} y ya usó ${yaUsados}.`,
+                        { duration: 8000 }
+                    );
+                    tieneHorariosInvalidos = true;
+                }
+            }
+
+            // ==================== ASIGNAR PERMISO TD - CORREGIDO ====================
+            if (status === 'TD') {
+                // ✅ Asegurar que siempre sea un array
+                const permisosTD = Array.isArray(permisosTDMap[employee.id])
+                    ? permisosTDMap[employee.id]
+                    : [];
+
+                /*
+console.log(`🔍 Procesando TD para ${employee.nombres}:`, {
+                permisosDisponibles: permisosTD.length,
+                permisosMap: permisosTDMap[employee.id]
+            });
+                */
+
+
+                // Filtrar los ya usados
+                const permisosDisponibles = permisosTD.filter(
+                    permiso => permiso && permiso.id && !permisosTDUsados[employee.id].includes(permiso.id)
+                );
+
+                if (permisosDisponibles.length > 0) {
+                    const permisosOrdenados = [...permisosDisponibles].sort(
+                        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+                    );
+
+                    permisoTDId = permisosOrdenados[0].id;
+                    permisosTDUsados[employee.id].push(permisoTDId);
+
+                    /*
+console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
+                        permiso_id: permisoTDId,
+                        fecha_permiso: permisosOrdenados[0].fecha
+                    });
+                    */
+
+                } else {
+                    const totalPermisos = permisosTD.length;
+                    const yaUsados = permisosTDUsados[employee.id].length;
+
+                    toast.error(
+                        `❌ ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
+                        `Solo tiene ${totalPermisos} permisos TD disponibles y ya usó ${yaUsados}.`,
+                        { duration: 8000 }
+                    );
+                    tieneHorariosInvalidos = true;
+                }
+            }
+
+            // ==================== AGREGAR A ENTRIES ====================
+            if (!tieneHorariosInvalidos) {
+
+
+                if (status === 'TD') {
+                    /*
+console.log(`🎯 ENVIANDO TD AL BACKEND - ${employee.nombres}, ${date}:`, {
+                        empleado_id: employee.id,
+                        fecha: date,
+                        estado: status,
+                        permiso_td_id: permisoTDId
+                    });
+                    */
+
                 }
 
-                totalMinutos += minutosDia;
+                entries.push({
+                    empleado_id: employee.id,
+                    fecha: date,
+                    ingreso: entryTime,
+                    salida: exitTime,
+                    estado: status,
+                    feriado: feriadoId,
+                    permiso_td_id: permisoTDId,
+                });
+            } else {
+                hasValidationErrors = true;
             }
         });
 
-        return totalMinutos;
-    };
+        if (tieneHorariosInvalidos) {
+            hasValidationErrors = true;
+        }
+    });
+
+    if (hasValidationErrors) return;
+
+    if (entries.length === 0) {
+        toast.error('No hay horarios para guardar. Presiona "Aplicar horario base a todos" primero.');
+        return;
+    }
+
+    // ==================== DEBUG Y ENVÍO ====================
+    //console.log('🧾 Enviando al backend:', entries);
+    //console.log('📊 Total registros:', entries.length);
+
+    const conFeriado = entries.filter(e => e.feriado);
+    const conPermisoTD = entries.filter(e => e.permiso_td_id);
+
+    if (conFeriado.length > 0) {
+        // console.log('🎯 Registros con feriado:', conFeriado);
+    }
+
+    if (conPermisoTD.length > 0) {
+        // console.log('🟡 Registros con permiso TD:', conPermisoTD);
+    }
+
+    // ==================== ENVÍO AL BACKEND ====================
 
 
-    const tiempoAMinutos = (tiempo) => {
-        const [horas, minutos] = tiempo.split(':').map(Number);
-        return horas * 60 + minutos;
-    };
 
-    const formatearHoras = (minutos) => {
-        const horas = Math.floor(minutos / 60);
-        const mins = minutos % 60;
-        return `${horas}h ${mins}m`;
-    };
+    router.post(route('horarios.store-multiple'), { entries }, {
+        preserveScroll: true,
+        preserveState: true, // ← IMPORTANTE
+        onStart: () => toast.loading('Guardando horarios...'),
+        onSuccess: () => {
+            toast.success('✅ Horarios guardados correctamente');
+        },
+        onError: (errors) => {
+            // DEBUG: Ver qué llega
+            console.log('🔴 ERRORES INERTIA:', errors);
 
-    useEffect(() => {
-        // Cargar feriados para empleados expandidos
-        expandedEmployees.forEach(async (employeeId) => {
-            if (!feriadosData[employeeId]) {
-                try {
-                    const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        setFeriadosData(prev => ({
-                            ...prev,
-                            [employeeId]: {
-                                feriadoDisponible: data.feriadoDisponible || [],
-                                feriadoFuturo: data.feriadoFuturo || []
-                            }
-                        }));
-                    }
-                } catch (error) {
-                    console.error('Error cargando feriados:', error);
-                }
+            // CAPTURA ERRORES DE back()->withErrors()
+            if (errors.bloqueo_semanal) {
+                // Puede ser string o array
+                const mensaje = Array.isArray(errors.bloqueo_semanal)
+                    ? errors.bloqueo_semanal[0]
+                    : errors.bloqueo_semanal;
+                toast.error(mensaje);
+                return;
             }
-        });
-    }, [expandedEmployees]);
+
+            // Si hay otros errores de validación
+            const primerosErrores = Object.values(errors);
+            if (primerosErrores.length > 0) {
+                const primerError = Array.isArray(primerosErrores[0])
+                    ? primerosErrores[0][0]
+                    : primerosErrores[0];
+                toast.error(primerError);
+                return;
+            }
+
+            // Error genérico
+            toast.error('Error al guardar horarios');
+        },
+        onFinish: () => toast.dismiss(),
+    });
+};  // ← CIERRE FINAL DE LA FUNCIÓN
 
 
-    return (
+const calcularHorasSemanalesFrontend = (employeeSchedule) => {
+    let totalMinutos = 0;
 
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="min-h-screen bg-gray-50">
-                <Toaster />
+    Object.values(employeeSchedule).forEach(dia => {
+        const estadosQueCuentan = ['L', 'PE', 'V', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'FL', 'SP', 'M', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'TD'];
 
-                {/* Header
+        if (estadosQueCuentan.includes(dia.status) && dia.entryTime && dia.exitTime && dia.entryTime !== '00:00') {
+
+            const entradaMin = tiempoAMinutos(dia.entryTime);
+            const salidaMin = tiempoAMinutos(dia.exitTime);
+
+            let minutosDia = 0;
+
+            // ⬇⬇⬇ NUEVA LÓGICA: manejar turnos que pasan medianoche ⬇⬇⬇
+            if (salidaMin < entradaMin) {
+                minutosDia = (1440 - entradaMin) + salidaMin; // cruza medianoche
+            } else {
+                minutosDia = salidaMin - entradaMin; // turno normal
+            }
+            // ⬆⬆⬆ FIN DE LA CORRECCIÓN ⬆⬆⬆
+
+            // Restar 1h (60min) si trabaja más de 6h por día
+            if (minutosDia > 360) {
+                minutosDia -= 60;
+            }
+
+            totalMinutos += minutosDia;
+        }
+    });
+
+    return totalMinutos;
+};
+
+
+const tiempoAMinutos = (tiempo) => {
+    const [horas, minutos] = tiempo.split(':').map(Number);
+    return horas * 60 + minutos;
+};
+
+const formatearHoras = (minutos) => {
+    const horas = Math.floor(minutos / 60);
+    const mins = minutos % 60;
+    return `${horas}h ${mins}m`;
+};
+
+useEffect(() => {
+    // Cargar feriados para empleados expandidos
+    expandedEmployees.forEach(async (employeeId) => {
+        if (!feriadosData[employeeId]) {
+            try {
+                const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setFeriadosData(prev => ({
+                        ...prev,
+                        [employeeId]: {
+                            feriadoDisponible: data.feriadoDisponible || [],
+                            feriadoFuturo: data.feriadoFuturo || []
+                        }
+                    }));
+                }
+            } catch (error) {
+                console.error('Error cargando feriados:', error);
+            }
+        }
+    });
+}, [expandedEmployees]);
+
+
+return (
+
+    <AppLayout breadcrumbs={breadcrumbs}>
+        <div className="min-h-screen bg-gray-50">
+            <Toaster />
+
+            {/* Header
                                     <div className="bg-white border-b shadow-sm">
                     <div className="container mx-auto px-4 py-4">
                         <div className="flex items-center gap-2">
@@ -1053,66 +1073,66 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                 */}
 
 
-                {/* Main Content */}
-                <div className="container mx-auto px-4 py-6">
+            {/* Main Content */}
+            <div className="container mx-auto px-4 py-6">
 
-                    <div className="space-y-4">
+                <div className="space-y-4">
 
-                        {/* Selector de Empresa */}
-                        {(user.rol_id === 1 || user.rol_id === 2) && (
-                            <CompanySelector
-                                companies={empresas}
-                                selectedCompanyId={selectedEmpresa ?? 0}
-                                onCompanyChange={setSelectedEmpresa}
-                            />
-                        )}
+                    {/* Selector de Empresa */}
+                    {(user.rol_id === 1 || user.rol_id === 2) && (
+                        <CompanySelector
+                            companies={empresas}
+                            selectedCompanyId={selectedEmpresa ?? 0}
+                            onCompanyChange={setSelectedEmpresa}
+                        />
+                    )}
 
 
-                        {/*
+                    {/*
                             ------------------------------ SELECT DE SUPERVISOR ------------------------------
                         />
                         */}
-                        {supervisores.length > 0 && (user.rol_id === 1 || user.rol_id === 2) && (
-                            <div className="bg-white p-4 rounded-lg border">
-                                <div className="flex items-center gap-4">
-                                    <User className="h-5 w-5 text-gray-600" />
-                                    <label className="text-sm">Supervisor:</label>
+                    {supervisores.length > 0 && (user.rol_id === 1 || user.rol_id === 2) && (
+                        <div className="bg-white p-4 rounded-lg border">
+                            <div className="flex items-center gap-4">
+                                <User className="h-5 w-5 text-gray-600" />
+                                <label className="text-sm">Supervisor:</label>
 
-                                    <Select
-                                        value={selectedSupervisor ? selectedSupervisor.toString() : ''}
-                                        onValueChange={(value) => setSelectedSupervisor(value === "all" ? null : value)}
-                                    >
-                                        <SelectTrigger className="w-[250px]">
-                                            <SelectValue placeholder="" />
-                                        </SelectTrigger>
+                                <Select
+                                    value={selectedSupervisor ? selectedSupervisor.toString() : ''}
+                                    onValueChange={(value) => setSelectedSupervisor(value === "all" ? null : value)}
+                                >
+                                    <SelectTrigger className="w-[250px]">
+                                        <SelectValue placeholder="" />
+                                    </SelectTrigger>
 
-                                        <SelectContent>
+                                    <SelectContent>
 
-                                            <SelectItem value="all">Todos</SelectItem>
+                                        <SelectItem value="all">Todos</SelectItem>
 
-                                            {supervisores.map((s) => (
-                                                <SelectItem key={s.id} value={String(s.id)}>
-                                                    {s.apellidos} {s.nombres}
-                                                </SelectItem>
-                                            ))}
+                                        {supervisores.map((s) => (
+                                            <SelectItem key={s.id} value={String(s.id)}>
+                                                {s.apellidos} {s.nombres}
+                                            </SelectItem>
+                                        ))}
 
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        )}
+                        </div>
+                    )}
 
 
 
 
-                        {/* Fila: Selector de Semana + Gestión de Horarios Base */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <WeekNavigator
-                                currentWeekStart={currentWeekStart}
-                                onWeekChange={setCurrentWeekStart}
-                            />
+                    {/* Fila: Selector de Semana + Gestión de Horarios Base */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <WeekNavigator
+                            currentWeekStart={currentWeekStart}
+                            onWeekChange={setCurrentWeekStart}
+                        />
 
-                            {/*
+                        {/*
                             <BaseScheduleManager
                             companyId={selectedCompanyId}
                             companyName={selectedCompany?.name || ''}
@@ -1124,43 +1144,43 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                         />
                         */}
 
-                            {selectedEmpresa && (
-                                <BaseScheduleManager
-                                    companyId={selectedEmpresa}
-                                    companyName={empresas.find((e) => e.id === selectedEmpresa)?.razonsocial || ''}
-                                    modality={selectedModality}
-                                    weekStart={currentWeekStart}
-                                    baseSchedule={currentBaseSchedule}
-                                    onBaseScheduleChange={handleBaseScheduleChange}
-                                    onApplyToAll={handleApplyBaseToAll}
-                                    onApplyLunesAJueves={handleApplyLunesAJueves}
-                                    onApplyViernes={handleApplyViernes}
-                                    onApplyFinDeSemana={handleApplyFinDeSemana}
-                                />
-                            )}
-                        </div>
+                        {selectedEmpresa && (
+                            <BaseScheduleManager
+                                companyId={selectedEmpresa}
+                                companyName={empresas.find((e) => e.id === selectedEmpresa)?.razonsocial || ''}
+                                modality={selectedModality}
+                                weekStart={currentWeekStart}
+                                baseSchedule={currentBaseSchedule}
+                                onBaseScheduleChange={handleBaseScheduleChange}
+                                onApplyToAll={handleApplyBaseToAll}
+                                onApplyLunesAJueves={handleApplyLunesAJueves}
+                                onApplyViernes={handleApplyViernes}
+                                onApplyFinDeSemana={handleApplyFinDeSemana}
+                            />
+                        )}
+                    </div>
 
-                        {/* Selector de Modalidad */}
-                        <ModalitySelector
-                            selectedModality={selectedModality}
-                            onModalityChange={setSelectedModality}
-                            fullTimeCount={fullTimeCount}
-                            partTimeCount={partTimeCount}
-                        />
+                    {/* Selector de Modalidad */}
+                    <ModalitySelector
+                        selectedModality={selectedModality}
+                        onModalityChange={setSelectedModality}
+                        fullTimeCount={fullTimeCount}
+                        partTimeCount={partTimeCount}
+                    />
 
-                        {/* Lista de Empleados */}
-                        <EmployeeList
-                            employees={filteredEmployees}
-                            modality={selectedModality}
-                            expandedEmployees={expandedEmployees}
-                            onToggleEmployee={handleToggleEmployee}
-                            weekDates={weekDates}
-                            scheduleData={scheduleData}
-                            onFieldChange={handleFieldChange}
-                            defaultEntryTime={currentBaseSchedule.entryTime}
-                            defaultExitTime={currentBaseSchedule.exitTime}
-                        />
-                        {/* Botones de Acción
+                    {/* Lista de Empleados */}
+                    <EmployeeList
+                        employees={filteredEmployees}
+                        modality={selectedModality}
+                        expandedEmployees={expandedEmployees}
+                        onToggleEmployee={handleToggleEmployee}
+                        weekDates={weekDates}
+                        scheduleData={scheduleData}
+                        onFieldChange={handleFieldChange}
+                        defaultEntryTime={currentBaseSchedule.entryTime}
+                        defaultExitTime={currentBaseSchedule.exitTime}
+                    />
+                    {/* Botones de Acción
 
                             <Button
                                 variant="outline"
@@ -1171,23 +1191,23 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                             </Button>
 
                         */}
-                        <div className="flex justify-center gap-4 py-4">
+                    <div className="flex justify-center gap-4 py-4">
 
 
-                            <Button
-                                size="lg"
-                                onClick={handleSaveSchedules}
-                                className="min-w-[250px]"
-                            >
-                                <Save className="mr-2 h-5 w-5" />
-                                Guardar horarios de la semana
-                            </Button>
-                        </div>
+                        <Button
+                            size="lg"
+                            onClick={handleSaveSchedules}
+                            className="min-w-[250px]"
+                        >
+                            <Save className="mr-2 h-5 w-5" />
+                            Guardar horarios de la semana
+                        </Button>
                     </div>
                 </div>
             </div>
-        </AppLayout>
+        </div>
+    </AppLayout>
 
 
-    );
+);
 }
