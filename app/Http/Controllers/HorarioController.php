@@ -126,7 +126,7 @@ class HorarioController extends Controller
         ]);
     }
 
-    public function empleado($id) // 🔥 Recibir el ID como parámetro de ruta
+    public function empleado($id)  
     {
         // 1. Validar que el ID sea numérico
         if (! is_numeric($id)) {
@@ -157,73 +157,102 @@ class HorarioController extends Controller
         $supervisorId = $request->get('supervisor_id');
         $empresaId = $request->get('empresa_id');
 
-        //  \Log::info('🔥 empleados() LLAMADO - MODO SUPERVISOR', $request->all());
+        // Empresas donde aplicará la regla especial de EXCLUIR al supervisor
+        $EXCLUDE_SUPERVISOR_COMPANIES = [1, 5];
 
+        \Log::info('🔥 empleados() LLAMADO', $request->all());
+
+        // Query base
         $query = Empleado::with('area')->whereNull('fecha_cese');
 
-        // 🔥 SI HAY SUPERVISOR_ID → ES EL MODO "SUPERVISOR SELECCIONADO"
+        // MODO: supervisor seleccionado explícitamente desde frontend
         if ($supervisorId) {
             $supervisor = Empleado::find($supervisorId);
 
             if (! $supervisor) {
-                // \Log::warning("❌ Supervisor no encontrado", ['id' => $supervisorId]);
+                \Log::warning('Supervisor no encontrado', ['id' => $supervisorId]);
+
                 return response()->json([]);
             }
 
-            // Si viene empresa, validar coincidencia
+            // Validar empresa (si vino empresa_id)
             if ($empresaId && $supervisor->empresa_id != $empresaId) {
-                /*
-                 \Log::warning("❌ Supervisor no pertenece a empresa", [
+                \Log::warning('Supervisor no pertenece a la empresa solicitada', [
                     'supervisor_empresa' => $supervisor->empresa_id,
-                    'request_empresa' => $empresaId
+                    'request_empresa' => $empresaId,
                 ]);
-                */
+
                 return response()->json([]);
             }
 
-            // 🔴 TRAER: empleados del supervisor + el supervisor mismo
-            $query->where(function ($q) use ($supervisorId) {
-                $q->where('jefe_id', $supervisorId)  // Sus empleados
-                    ->orWhere('id', $supervisorId);    // Y él mismo
-            })->where('empresa_id', $supervisor->empresa_id);
+            // Siempre filtrar por empleados cuyo jefe sea el supervisor
+            $query->where('jefe_id', $supervisorId)
+                ->where('empresa_id', $supervisor->empresa_id);
 
-        }
-        // 🔥 SI NO HAY SUPERVISOR_ID PERO USUARIO ES SUPERVISOR → SU PROPIO EQUIPO
-        elseif ($user->rol_id === 4 && $user->empleado) {
-            $query->where(function ($q) use ($user) {
-                $q->where('jefe_id', $user->empleado->id)
-                    ->orWhere('id', $user->empleado->id);
-            })->where('empresa_id', $user->empleado->empresa_id);
-        }
-        // 🔥 SI ES ADMIN/RRHH CON EMPRESA
-        elseif (in_array($user->rol_id, [1, 2]) && $empresaId) {
-            $query->where('empresa_id', $empresaId);
-        }
-        // 🔥 SI NO HAY NADA → VACÍO (no traer TODOS)
-        else {
-            return response()->json([]);
+            // Si la empresa del supervisor está en la lista EXCLUDE_SUPERVISOR_COMPANIES,
+            // **no** agregamos al supervisor mismo.
+            if (! in_array($supervisor->empresa_id, $EXCLUDE_SUPERVISOR_COMPANIES)) {
+                // En empresas NO listadas, incluimos supervisor también
+                $query = Empleado::with('area')
+                    ->whereNull('fecha_cese')
+                    ->where(function ($q) use ($supervisorId) {
+                        $q->where('jefe_id', $supervisorId)
+                            ->orWhere('id', $supervisorId);
+                    })
+                    ->where('empresa_id', $supervisor->empresa_id);
+            }
+
+            $empleados = $query->orderBy('apellidos')->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id', 'jefe_id', 'jornada_id']);
+
+            \Log::info('✅ RESULTADO MODO SUPERVISOR', [
+                'supervisor_id' => $supervisorId,
+                'empresa_id' => $supervisor->empresa_id,
+                'count' => $empleados->count(),
+            ]);
+
+            return response()->json($empleados);
         }
 
-        $empleados = $query->get([
-            'id',
-            'nombres',
-            'apellidos',
-            'cargo',
-            'area_id',
-            'empresa_id',
-            'jefe_id',      // 🔥 FALTABA
-            'jornada_id',    // 🔥 FALTABA
-        ]);
+        // MODO: usuario logueado es supervisor y no se envió supervisor_id por frontend
+        if ($user->rol_id === 4 && $user->empleado) {
+            $userEmpresa = $user->empleado->empresa_id;
+            $userEmpleadoId = $user->empleado->id;
 
-        /*
-              \Log::info("✅ RESULTADO MODO SUPERVISOR", [
-                    'cantidad' => $empleados->count(),
-                    'supervisor_incluido' => $supervisorId ? 'SÍ' : 'N/A',
-                    'primeros_3' => $empleados->take(3)->values()
-                ]);
-        */
+            // para la misma regla de exclusión
+            if (in_array($userEmpresa, $EXCLUDE_SUPERVISOR_COMPANIES)) {
+                // Solo traer subordinados, excluir al supervisor
+                $query->where('jefe_id', $userEmpleadoId)
+                    ->where('empresa_id', $userEmpresa);
+            } else {
+                // incluir supervisor también
+                $query->where(function ($q) use ($userEmpleadoId) {
+                    $q->where('jefe_id', $userEmpleadoId)
+                        ->orWhere('id', $userEmpleadoId);
+                })->where('empresa_id', $userEmpresa);
+            }
 
-        return response()->json($empleados);
+            $empleados = $query->orderBy('apellidos')->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id', 'jefe_id', 'jornada_id']);
+
+            \Log::info('✅ RESULTADO MODO USUARIO-SUPERVISOR', [
+                'usuario_empleado_id' => $userEmpleadoId,
+                'empresa_id' => $userEmpresa,
+                'count' => $empleados->count(),
+            ]);
+
+            return response()->json($empleados);
+        }
+
+        // MODO: admin/RRHH por empresa (o sin supervisor especificado)
+        if (in_array($user->rol_id, [1, 2]) && $empresaId) {
+            $empleados = $query->where('empresa_id', $empresaId)
+                ->orderBy('apellidos')
+                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id', 'jefe_id', 'jornada_id']);
+
+            return response()->json($empleados);
+        }
+
+        // Si no se cumple nada: por seguridad devolvemos vacío (nunca listar TODO)
+        return response()->json([]);
     }
 
     public function empleadosPorEmpresa(Request $request)

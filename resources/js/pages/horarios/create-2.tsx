@@ -963,13 +963,22 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
         let totalMinutos = 0;
 
         Object.values(employeeSchedule).forEach(dia => {
-            // 🆕 CONTAR MÚLTIPLES ESTADOS, NO SOLO 'L'
             const estadosQueCuentan = ['L', 'PE', 'V', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'FL', 'SP', 'M', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'TD'];
 
             if (estadosQueCuentan.includes(dia.status) && dia.entryTime && dia.exitTime && dia.entryTime !== '00:00') {
+
                 const entradaMin = tiempoAMinutos(dia.entryTime);
                 const salidaMin = tiempoAMinutos(dia.exitTime);
-                let minutosDia = salidaMin - entradaMin;
+
+                let minutosDia = 0;
+
+                // ⬇⬇⬇ NUEVA LÓGICA: manejar turnos que pasan medianoche ⬇⬇⬇
+                if (salidaMin < entradaMin) {
+                    minutosDia = (1440 - entradaMin) + salidaMin; // cruza medianoche
+                } else {
+                    minutosDia = salidaMin - entradaMin; // turno normal
+                }
+                // ⬆⬆⬆ FIN DE LA CORRECCIÓN ⬆⬆⬆
 
                 // Restar 1h (60min) si trabaja más de 6h por día
                 if (minutosDia > 360) {
@@ -982,6 +991,7 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
 
         return totalMinutos;
     };
+
 
     const tiempoAMinutos = (tiempo) => {
         const [horas, minutos] = tiempo.split(':').map(Number);
@@ -1061,7 +1071,7 @@ console.log(`✅ Permiso TD asignado a ${employee.nombres} (${date}):`, {
                             ------------------------------ SELECT DE SUPERVISOR ------------------------------
                         />
                         */}
-                        {supervisores.length > 0 && (
+                        {supervisores.length > 0 && (user.rol_id === 1 || user.rol_id === 2) && (
                             <div className="bg-white p-4 rounded-lg border">
                                 <div className="flex items-center gap-4">
                                     <User className="h-5 w-5 text-gray-600" />
