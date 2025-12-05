@@ -634,6 +634,73 @@ class HorarioController extends Controller
 
         Log::info('📊 Reporte por empleado (pre-save):', $reportePorEmpleado);
 
+        // ----------------- BLOQUE NUEVO: COMPLETAR SEMANA SIN TOCAR EXISTENTES -----------------
+        // Este bloque añade a $entriesFiltradas SOLO los días faltantes que vienen en el request.
+        // No toca BD y no inventa días: si el usuario no envió un día, no se crea.
+        Log::info('🧩 Iniciando completado de semana (solo agregar faltantes que vinieron en request).');
+
+        foreach ($empleadoIds as $empleadoId) {
+
+            Log::info("➡️ Procesando empleado para completado: $empleadoId");
+
+            // días que ya existen en BD para este empleado
+            $diasBD = $horariosExistentesPorEmpleado[$empleadoId] ?? [];
+
+            // entradas recibidas en el request para este empleado, keyBy fecha para búsqueda rápida
+            $diasRequest = $entriesCollection
+                ->where('empleado_id', $empleadoId)
+                ->keyBy('fecha');
+
+            Log::info('   📌 Días BD:', $diasBD);
+            Log::info('   📨 Días request:', $diasRequest->keys()->toArray());
+
+            // recorrer la semana completa y añadir SOLO lo que falta y viene en request
+            $period = CarbonPeriod::create($startOfWeek, $endOfWeek);
+
+            foreach ($period as $dia) {
+                $fecha = $dia->format('Y-m-d');
+
+                // 1) si ya existe en BD -> no tocar
+                if (in_array($fecha, $diasBD)) {
+                    Log::info("      ✔ Mantener (BD) $fecha");
+                    continue;
+                }
+
+                // 2) si viene en request -> agregar a entriesFiltradas
+                if ($diasRequest->has($fecha)) {
+                    $info = $diasRequest[$fecha];
+
+                    Log::info("➕ Agregando día faltante desde request: $fecha para empleado $empleadoId");
+
+                    // Añadir la entrada EXACTA del request (no modificamos)
+                    $entriesFiltradas->push([
+                        'empleado_id' => $empleadoId,
+                        'fecha' => $fecha,
+                        'ingreso' => $info['ingreso'],
+                        'salida' => $info['salida'],
+                        'estado' => $info['estado'],
+                        'feriado' => $info['feriado'] ?? null,
+                        'permiso_td_id' => $info['permiso_td_id'] ?? null,
+                    ]);
+
+                    // actualizar reportePorEmpleado incrementando dias_nuevos
+                    foreach ($reportePorEmpleado as &$rep) {
+                        if ($rep['id'] === $empleadoId) {
+                            $rep['dias_nuevos'] = ($rep['dias_nuevos'] ?? 0) + 1;
+                        }
+                    }
+                    unset($rep); // good practice para evitar referencias colgantes
+                } else {
+                    Log::info("      ❌ No enviado en request: $fecha (no se crea)");
+                }
+            }
+        }
+
+        Log::info('🟦 Completado de semana finalizado. Totales entriesFiltradas ahora:', [
+            'total_filtrado' => $entriesFiltradas->count(),
+        ]);
+        // ------------------------------------------------------------------------------------
+
         // 6) SI NO HAY NADA NUEVO -> BLOQUEAR Y SALIR (determinista, único return de error para este caso)
         if ($entriesFiltradas->isEmpty()) {
             $mensajeEmpleados = collect($reportePorEmpleado)
