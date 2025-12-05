@@ -157,42 +157,74 @@ class HorarioController extends Controller
         $supervisorId = $request->get('supervisor_id');
         $empresaId = $request->get('empresa_id');
 
-        // Empresas donde aplicará la regla especial de EXCLUIR al supervisor
+        // Supervisores especiales (multiempresa)
+        $MULTI_EMPRESA = [383];
+
+        // Empresas donde NO se incluye al supervisor en la lista
         $EXCLUDE_SUPERVISOR_COMPANIES = [1, 5];
 
         \Log::info('🔥 empleados() LLAMADO', $request->all());
 
-        // Query base
-        $query = Empleado::with('area')->whereNull('fecha_cese');
-
-        // MODO: supervisor seleccionado explícitamente desde frontend
+        // ============================
+        // 1. MODO: supervisor_id enviado desde frontend
+        // ============================
         if ($supervisorId) {
+
             $supervisor = Empleado::find($supervisorId);
 
             if (! $supervisor) {
-                \Log::warning('Supervisor no encontrado', ['id' => $supervisorId]);
-
                 return response()->json([]);
             }
 
-            // Validar empresa (si vino empresa_id)
+            // Query base
+            $query = Empleado::with('area')
+                ->whereNull('fecha_cese')
+                ->where('jefe_id', $supervisorId);
+
+            // ============================
+            // A) Supervisor MULTIEMPRESA
+            // ============================
+            if (in_array($supervisorId, $MULTI_EMPRESA)) {
+
+                if ($empresaId) {
+                    // SOLO filtramos empresa seleccionada del frontend
+                    $query->where('empresa_id', $empresaId);
+                }
+
+                // Para empresa 1 y 5 NO incluir al supervisor
+                if (! in_array($empresaId, $EXCLUDE_SUPERVISOR_COMPANIES)) {
+                    // incluir supervisor también
+                    $query = Empleado::with('area')
+                        ->whereNull('fecha_cese')
+                        ->where(function ($q) use ($supervisorId) {
+                            $q->where('jefe_id', $supervisorId)
+                                ->orWhere('id', $supervisorId);
+                        })
+                        ->where('empresa_id', $empresaId);
+                }
+
+                $out = $query->orderBy('apellidos')->get();
+
+                return response()->json($out);
+            }
+
+            // ============================
+            // B) Supervisor NORMAL
+            // ============================
+
+            // Validar empresa si vino desde el frontend
             if ($empresaId && $supervisor->empresa_id != $empresaId) {
-                \Log::warning('Supervisor no pertenece a la empresa solicitada', [
-                    'supervisor_empresa' => $supervisor->empresa_id,
-                    'request_empresa' => $empresaId,
-                ]);
-
                 return response()->json([]);
             }
 
-            // Siempre filtrar por empleados cuyo jefe sea el supervisor
-            $query->where('jefe_id', $supervisorId)
-                ->where('empresa_id', $supervisor->empresa_id);
+            // Filtrar por la empresa real del supervisor
+            $query->where('empresa_id', $supervisor->empresa_id);
 
-            // Si la empresa del supervisor está en la lista EXCLUDE_SUPERVISOR_COMPANIES,
-            // **no** agregamos al supervisor mismo.
-            if (! in_array($supervisor->empresa_id, $EXCLUDE_SUPERVISOR_COMPANIES)) {
-                // En empresas NO listadas, incluimos supervisor también
+            // Si ES una empresa de exclusión → NO incluir al supervisor
+            if (in_array($supervisor->empresa_id, $EXCLUDE_SUPERVISOR_COMPANIES)) {
+                // ya está filtrado solo subordinados
+            } else {
+                // incluir supervisor
                 $query = Empleado::with('area')
                     ->whereNull('fecha_cese')
                     ->where(function ($q) use ($supervisorId) {
@@ -202,56 +234,50 @@ class HorarioController extends Controller
                     ->where('empresa_id', $supervisor->empresa_id);
             }
 
-            $empleados = $query->orderBy('apellidos')->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id', 'jefe_id', 'jornada_id']);
-
-            \Log::info('✅ RESULTADO MODO SUPERVISOR', [
-                'supervisor_id' => $supervisorId,
-                'empresa_id' => $supervisor->empresa_id,
-                'count' => $empleados->count(),
-            ]);
-
-            return response()->json($empleados);
+            return response()->json(
+                $query->orderBy('apellidos')->get()
+            );
         }
 
-        // MODO: usuario logueado es supervisor y no se envió supervisor_id por frontend
+        // ============================
+        // 2. MODO: usuario logueado es supervisor (rol 4)
+        // ============================
         if ($user->rol_id === 4 && $user->empleado) {
-            $userEmpresa = $user->empleado->empresa_id;
-            $userEmpleadoId = $user->empleado->id;
 
-            // para la misma regla de exclusión
-            if (in_array($userEmpresa, $EXCLUDE_SUPERVISOR_COMPANIES)) {
-                // Solo traer subordinados, excluir al supervisor
-                $query->where('jefe_id', $userEmpleadoId)
-                    ->where('empresa_id', $userEmpresa);
+            $userEmp = $user->empleado;
+
+            $query = Empleado::with('area')
+                ->whereNull('fecha_cese');
+
+            if (in_array($userEmp->empresa_id, $EXCLUDE_SUPERVISOR_COMPANIES)) {
+                $query->where('jefe_id', $userEmp->id)
+                    ->where('empresa_id', $userEmp->empresa_id);
             } else {
-                // incluir supervisor también
-                $query->where(function ($q) use ($userEmpleadoId) {
-                    $q->where('jefe_id', $userEmpleadoId)
-                        ->orWhere('id', $userEmpleadoId);
-                })->where('empresa_id', $userEmpresa);
+                $query->where(function ($q) use ($userEmp) {
+                    $q->where('jefe_id', $userEmp->id)
+                        ->orWhere('id', $userEmp->id);
+                })
+                    ->where('empresa_id', $userEmp->empresa_id);
             }
 
-            $empleados = $query->orderBy('apellidos')->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id', 'jefe_id', 'jornada_id']);
-
-            \Log::info('✅ RESULTADO MODO USUARIO-SUPERVISOR', [
-                'usuario_empleado_id' => $userEmpleadoId,
-                'empresa_id' => $userEmpresa,
-                'count' => $empleados->count(),
-            ]);
-
-            return response()->json($empleados);
+            return response()->json(
+                $query->orderBy('apellidos')->get()
+            );
         }
 
-        // MODO: admin/RRHH por empresa (o sin supervisor especificado)
+        // ============================
+        // 3. Admin / RRHH por empresa
+        // ============================
         if (in_array($user->rol_id, [1, 2]) && $empresaId) {
-            $empleados = $query->where('empresa_id', $empresaId)
-                ->orderBy('apellidos')
-                ->get(['id', 'nombres', 'apellidos', 'cargo', 'area_id', 'empresa_id', 'jefe_id', 'jornada_id']);
-
-            return response()->json($empleados);
+            return response()->json(
+                Empleado::with('area')
+                    ->whereNull('fecha_cese')
+                    ->where('empresa_id', $empresaId)
+                    ->orderBy('apellidos')
+                    ->get()
+            );
         }
 
-        // Si no se cumple nada: por seguridad devolvemos vacío (nunca listar TODO)
         return response()->json([]);
     }
 
@@ -758,7 +784,7 @@ class HorarioController extends Controller
 
         foreach ($horariosSemanales as $horario) {
             if ($horario->ingreso && $horario->salida) {
-                $minutos = $horario->ingreso->diffInMinutes($horario->salida);
+                $minutosDelDia = $horario->ingreso->diffInMinutes($horario->salida);
 
                 // 🔥 RESTAR REFRIGERIO POR DÍA
                 if ($empleado->jornada_id === 1 && $minutosDelDia > 0) {
@@ -766,10 +792,10 @@ class HorarioController extends Controller
 
                     $minutosDelDia -= 60;
                 } elseif ($minutos >= 360) {
-                    $minutos -= 60;
+                    $minutosDelDia -= 60;
                 }
 
-                $horasSemanales += $minutos;
+                $horasSemanales += $minutosDelDia;
             }
         }
 
