@@ -126,7 +126,7 @@ class HorarioController extends Controller
         ]);
     }
 
-    public function empleado($id)
+    public function empleado($id) // 🔥 Recibir el ID como parámetro de ruta
     {
         // 1. Validar que el ID sea numérico
         if (! is_numeric($id)) {
@@ -149,6 +149,133 @@ class HorarioController extends Controller
 
         // 4. Devolver el empleado
         return response()->json($empleado);
+    }
+
+    public function getWeekSchedules(Request $request)
+    {
+        $request->validate([
+            'empresa_id' => 'required|integer|exists:empresas,id',
+            'fecha' => 'required|date',
+        ]);
+
+        $empresaId = $request->empresa_id;
+        $fecha = Carbon::parse($request->fecha);
+        $lunes = $fecha->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
+        $domingo = $fecha->copy()->endOfWeek(Carbon::SUNDAY)->format('Y-m-d');
+
+        Log::info("📅 GET WEEK SCHEDULES - Semana: $lunes → $domingo (empresa $empresaId)");
+
+        // 1) Traer empleados
+        $empleados = Empleado::where('empresa_id', $empresaId)
+            ->select('id', 'nombres', 'apellidos')
+            ->orderBy('apellidos')
+            ->get();
+
+        Log::info("👥 Empleados encontrados: {$empleados->count()}", [
+            'ids' => $empleados->pluck('id')->toArray(),
+        ]);
+
+        if ($empleados->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'semana' => [],
+                'empleados' => [],
+            ]);
+        }
+
+        $empleadoIds = $empleados->pluck('id')->toArray();
+
+        // Semana en array
+        $weekDates = [];
+        $tmp = Carbon::parse($lunes);
+        for ($i = 0; $i < 7; $i++) {
+            $weekDates[] = $tmp->copy()->addDays($i)->format('Y-m-d');
+        }
+
+        Log::info('📆 Fechas de la semana:', $weekDates);
+
+        // 2) Traer horarios
+        $horariosBD = Horario::whereBetween('fecha', [$lunes, $domingo])
+            ->whereIn('empleado_id', $empleadoIds)
+            ->get();
+
+        Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
+            'horarios' => $horariosBD->map(fn ($h) => [
+                'empleado_id' => $h->empleado_id,
+                'fecha' => $h->fecha->format('Y-m-d'),
+                'ingreso' => $h->ingreso,
+                'salida' => $h->salida,
+                'estado' => $h->estado,
+            ])->toArray(),
+        ]);
+
+        $horariosAgrupados = $horariosBD->groupBy('empleado_id');
+
+        // 3) Armar respuesta
+        $resultado = [];
+
+        foreach ($empleados as $empleado) {
+            $diasEmpleado = [];
+            $diasConHorario = 0;
+
+            foreach ($weekDates as $fechaDia) {
+                $registro = null;
+
+                if (isset($horariosAgrupados[$empleado->id])) {
+                    $registro = $horariosAgrupados[$empleado->id]->first(function ($h) use ($fechaDia) {
+                        return $h->fecha->format('Y-m-d') === $fechaDia;
+                    });
+                }
+
+                if ($registro) {
+                    $diasConHorario++;
+
+                    // 🔥 CONVERTIR ingreso/salida a formato HH:mm
+                    $ingresoStr = $registro->ingreso ?
+                        Carbon::parse($registro->ingreso)->format('H:i') : null;
+                    $salidaStr = $registro->salida ?
+                        Carbon::parse($registro->salida)->format('H:i') : null;
+
+                    $diasEmpleado[] = [
+                        'fecha' => $fechaDia,
+                        'ingreso' => $ingresoStr,
+                        'salida' => $salidaStr,
+                        'estado' => $registro->estado,
+                        'feriado' => $registro->feriado_id,
+                        'permiso_td_id' => $registro->permiso_td_id,
+                        'existe' => true,
+                    ];
+
+                    Log::info("   ✅ {$empleado->apellidos}: $fechaDia → $ingresoStr - $salidaStr ({$registro->estado})");
+                } else {
+                    $diasEmpleado[] = [
+                        'fecha' => $fechaDia,
+                        'ingreso' => null,
+                        'salida' => null,
+                        'estado' => null,
+                        'feriado' => null,
+                        'permiso_td_id' => null,
+                        'existe' => false,
+                    ];
+                }
+            }
+
+            Log::info("📊 {$empleado->apellidos}: $diasConHorario/7 días con horario");
+
+            $resultado[] = [
+                'empleado_id' => $empleado->id,
+                'nombre' => "{$empleado->apellidos} {$empleado->nombres}",
+                'horarios' => $diasEmpleado,
+            ];
+        }
+
+        Log::info("✅ Respuesta final: {$empleados->count()} empleados procesados");
+
+        return response()->json([
+            'success' => true,
+            'semana' => $weekDates,
+            'empleados' => $resultado,
+        ]);
     }
 
     public function empleados(Request $request)
@@ -504,65 +631,6 @@ class HorarioController extends Controller
         }
     }
 
-    public function storeMultiple_Respaldo(Request $request)
-    {
-        Log::info('📥 storeMultiple() - Datos recibidos:', $request->all());
-
-        $data = $request->validate([
-            'entries' => 'required|array|min:1',
-            'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
-            'entries.*.fecha' => 'required|date',
-            'entries.*.ingreso' => 'required|date_format:H:i',
-            'entries.*.salida' => 'required|date_format:H:i',
-            'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D',
-        ]);
-
-        try {
-            DB::transaction(function () use ($data) {
-                $porEmpleado = collect($data['entries'])->groupBy('empleado_id');
-
-                foreach ($porEmpleado as $empleadoId => $entries) {
-                    $empleado = Empleado::findOrFail($empleadoId);
-
-                    // 🆕 AGRUPAR POR ESTADO para respetar tu lógica
-                    $porEstado = collect($entries)->groupBy('estado');
-
-                    foreach ($porEstado as $estado => $entriesDelEstado) {
-                        $fechas = collect($entriesDelEstado)->pluck('fecha')->map(fn ($f) => Carbon::parse($f));
-                        $fechaInicio = $fechas->min();
-                        $fechaFin = $fechas->max();
-
-                        $horarioBase = collect($entriesDelEstado)->first();
-
-                        $datosHorario = [
-                            'ingreso' => $horarioBase['ingreso'],
-                            'salida' => $horarioBase['salida'],
-                            'estado' => $estado, // 🆕 ESTADO ESPECÍFICO DEL GRUPO
-                        ];
-
-                        Log::info("✅ Procesando {$empleado->nombre_completo} - Estado: {$estado}", [
-                            'rango' => "{$fechaInicio->format('Y-m-d')} al {$fechaFin->format('Y-m-d')}",
-                            'horario' => $datosHorario,
-                            'dias' => count($entriesDelEstado),
-                        ]);
-
-                        // 🆕 LLAMAR POR CADA GRUPO DE ESTADO
-                        $this->crearHorariosParaEmpleado($empleado, $fechaInicio, $fechaFin, $datosHorario);
-                    }
-                }
-            });
-
-            Log::info('✅ HORARIOS GUARDADOS CORRECTAMENTE');
-
-            return redirect()->back()->with('success', '✅ Horarios guardados correctamente');
-
-        } catch (Exception $e) {
-            Log::error('❌ ERROR AL GUARDAR:', ['mensaje' => $e->getMessage()]);
-
-            return redirect()->back()->with('error', 'Error: '.$e->getMessage());
-        }
-    }
-
     public function storeMultiple(Request $request)
     {
         // 1) VALIDACIÓN INICIAL
@@ -579,14 +647,14 @@ class HorarioController extends Controller
 
         $entriesCollection = collect($data['entries']);
 
-        // 2) RANGO DE SEMANA (LUNES - DOMINGO) basado en la primer fecha del request
+        // 1) RANGO DE SEMANA (LUNES - DOMINGO) basado en la primer fecha del request
         $fechaReferencia = $entriesCollection->pluck('fecha')->sort()->first();
         $carbonDate = Carbon::parse($fechaReferencia);
         $startOfWeek = $carbonDate->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
         $endOfWeek = $carbonDate->copy()->endOfWeek(Carbon::SUNDAY)->format('Y-m-d');
         Log::info("📅 Semana detectada: $startOfWeek a $endOfWeek");
 
-        // 3) empleados y horarios existentes en BD para esa semana
+        // 2) empleados y horarios existentes en BD para esa semana
         $empleadoIds = $entriesCollection->pluck('empleado_id')->unique()->toArray();
 
         $horariosExistentesPorEmpleado = Horario::whereIn('empleado_id', $empleadoIds)
@@ -597,7 +665,7 @@ class HorarioController extends Controller
 
         Log::info('🔍 Horarios existentes por empleado:', $horariosExistentesPorEmpleado->toArray());
 
-        // 4) FILTRAR ENTRADAS: eliminar los días que ya existen (usar el resultado para TODO)
+        // 3) FILTRAR ENTRADAS: eliminar los días que ya existen (usar el resultado para TODO)
         $entriesFiltradas = $entriesCollection->filter(function ($entry) use ($horariosExistentesPorEmpleado) {
             $empleadoId = $entry['empleado_id'];
             $fecha = $entry['fecha'];
@@ -611,7 +679,7 @@ class HorarioController extends Controller
             'eliminados' => $entriesCollection->count() - $entriesFiltradas->count(),
         ]);
 
-        // 5) REPORTE POR EMPLEADO - basado en los datos *antes* del guardado (para mostrar qué pasó)
+        // 4) REPORTE POR EMPLEADO - basado en los datos *antes* del guardado (para mostrar qué pasó)
         $reportePorEmpleado = [];
 
         foreach ($empleadoIds as $empleadoId) {
@@ -663,6 +731,7 @@ class HorarioController extends Controller
                 // 1) si ya existe en BD -> no tocar
                 if (in_array($fecha, $diasBD)) {
                     Log::info("      ✔ Mantener (BD) $fecha");
+
                     continue;
                 }
 
@@ -699,6 +768,9 @@ class HorarioController extends Controller
         Log::info('🟦 Completado de semana finalizado. Totales entriesFiltradas ahora:', [
             'total_filtrado' => $entriesFiltradas->count(),
         ]);
+
+        // 5) SI NO HAY NADA NUEVO -> BLOQUEAR Y SALIR
+
         // ------------------------------------------------------------------------------------
 
         // 6) SI NO HAY NADA NUEVO -> BLOQUEAR Y SALIR (determinista, único return de error para este caso)
@@ -805,6 +877,10 @@ class HorarioController extends Controller
         $permiso_td_id = null
     ) {
 
+        if ($estado === 'TD') {
+            Log::info("🎯 ESTADO TD DETECTADO - empleado $empleadoId, fecha $fecha, permiso_td_id: ".($permiso_td_id ?? 'NULL'));
+        }
+
         $empleado = Empleado::findOrFail($empleadoId);
         $fechaCarbon = Carbon::parse($fecha);
 
@@ -858,7 +934,7 @@ class HorarioController extends Controller
                     // FULL TIME: siempre -1h
 
                     $minutosDelDia -= 60;
-                } elseif ($minutos >= 360) {
+                } elseif ($minutosDelDia >= 360) {
                     $minutosDelDia -= 60;
                 }
 
@@ -900,7 +976,6 @@ class HorarioController extends Controller
                 'ingreso' => $ingreso,
                 'salida' => $salida,
                 'descripcion' => $descripcion,
-                'validado' => 0,
                 'estado' => ($estado === 'L') ? 'L' : 'PE',
             ]
         );
@@ -1150,11 +1225,13 @@ class HorarioController extends Controller
                 ->whereYear('fecha', now()->year)
                 ->whereDate('fecha', '>=', now())
                 ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleadoId))
+                ->orderBy('fecha', 'asc')
                 ->get();
 
             $feriadoDisponible = Feriado::query()
                 ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleadoId))
                 ->whereIn('fecha', $fechasLaborables)
+                ->orderBy('fecha', 'asc')
                 ->get();
 
             $horariosFeriados = [];
@@ -1290,7 +1367,6 @@ class HorarioController extends Controller
                 // 🔥 CORRECCIÓN REFRIGERIO (Semanal): Se aplica el descuento de 60 minutos
                 // si la duración bruta del turno programado es >= 6 horas (360 min),
                 // independientemente de la Jornada ID, ya que un turno de 15 horas debe incluir descanso.
-
                 if ($empleado->jornada_id === 1 && $minutosDelDia > 0) {
                     // FULL TIME: siempre -1h
 
@@ -1468,8 +1544,8 @@ class HorarioController extends Controller
                     'CA',
                     'CHE',
                     'F',
-                    'V',
-                    'M',
+                    // 'V',
+                    // 'M',
                     'SN',
                     'ST',
                     'SFI',
@@ -1477,9 +1553,9 @@ class HorarioController extends Controller
                     'FJ',
                     'LCG',
                     'LSG',
-                    'LP',
-                    'LM',
-                    'LF',
+                    // 'LP',
+                    // 'LM',
+                    // 'LF',
                     'PE',
                 ])
                 ->get(); // Menso D y SP
@@ -1526,9 +1602,8 @@ class HorarioController extends Controller
                         // FULL TIME: siempre -1h
 
                         $minutosDelDia -= 60;
-                    } elseif ($minutosDelDia >= 360) {
-                        // PART TIME: solo si >6h
-                        $minutosDelDia -= 60;
+                    } elseif ($minutos > 360) {
+                        $minutos -= 60; // Restar 1 hora de refrigerio
                     }
 
                     $totalMinutos += $minutos;

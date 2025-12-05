@@ -21,6 +21,7 @@ interface EmployeeRowProps {
     } | null;
     permisosTDData?: any[] | null;
     isLoadingData?: boolean;
+    horariosExistentes: Set<string>;
 }
 
 const estadoOptions = [
@@ -64,6 +65,7 @@ export function EmployeeRow({
     feriadosData,
     permisosTDData,
     isLoadingData,
+     horariosExistentes
 }: EmployeeRowProps) {// Nombre completo
     const fullName = `${employee.apellidos ?? ''} ${employee.nombres ?? ''}`.trim();
 
@@ -289,6 +291,7 @@ export function EmployeeRow({
                             defaultExitTime={defaultExitTime}
                             feriadosData={feriadosData}
                             permisosTDData={permisosTDData}
+                            horariosExistentes={horariosExistentes}
                         />
                     </div>
                 </div>

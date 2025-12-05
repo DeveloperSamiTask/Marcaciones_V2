@@ -88,6 +88,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     ])
         ->name('horarios.getHorasMensualesPT');
 
+    Route::get('/horarios/getWeekSchedules', [HorarioController::class, 'getWeekSchedules'])
+        ->name('horarios.getWeekSchedules');
+
     // feriados
     // Route::get('/horarios/nuevo', HorarioController::class ()
 

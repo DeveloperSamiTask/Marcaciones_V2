@@ -16,6 +16,7 @@ interface WeekScheduleTableProps {
         feriadoFuturo: any[];
     } | null;
     permisosTDData?: any[] | null; // 🔥 NUEVA PROP
+    horariosExistentes: Set<string>;
 }
 const estadoOptions = [
     { value: 'L', label: '1.LABORAL' },
@@ -81,7 +82,8 @@ export function WeekScheduleTable({
     defaultEntryTime,
     defaultExitTime,
     feriadosData,
-    permisosTDData // 🔥 RECIBIR NUEVA PROP
+    permisosTDData,
+    horariosExistentes
 }: WeekScheduleTableProps) {
 
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -101,7 +103,7 @@ export function WeekScheduleTable({
         //Se quita M ,V , LF , LP , LM
         const workingStatuses = [
             'L', 'AHE', 'TD', 'FL', 'C', 'CA', 'CHE', 'F',
-            'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG','PE'
+            'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'PE'
         ];
         // NOTA: 'D' (DESCANSO SEMANAL) y 'SP' (SIN PROGRAMACION) NO están aquí.
 
@@ -193,6 +195,8 @@ export function WeekScheduleTable({
     const feriadosActuales = feriadosLocal || feriadosData;
 
 
+    // --------------------- CARGAR HORARIOS PARA QUIENES YA TIENEN HORARIOS SETEADOS
+
 
 
     return (
@@ -215,13 +219,17 @@ export function WeekScheduleTable({
                         const esTipoCompensacion = dayData?.status === 'C' || dayData?.status === 'CA';
                         const tipoFeriado = dayData?.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
                         const feriadosList = feriadosActuales?.[tipoFeriado] || [];
+                        const yaExiste = horariosExistentes?.has(`${employeeId}-${dateStr}`) || false;
 
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">
                                 {/* Día */}
                                 <td className="p-2">
                                     <div>
-                                        <div className="text-xs font-medium">{dayNames[dayIndex]}</div>
+                                        <div className="text-xs font-medium">
+                                            {dayNames[dayIndex]}
+                                            {yaExiste && <span className="ml-1 text-blue-600">✓</span>}
+                                        </div>
                                         <div className="text-xs text-gray-600">
                                             {date.getDate()}/{date.getMonth() + 1}
                                         </div>
@@ -234,8 +242,8 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
-                                        disabled={isHorarioBloqueado}
-                                        className="w-full text-xs h-8"
+                                        disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
+                                        className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
                                     />
                                 </td>
 
@@ -245,8 +253,8 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
-                                        disabled={isHorarioBloqueado}
-                                        className="w-full text-xs h-8"
+                                        disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
+                                        className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
                                     />
                                 </td>
 
@@ -255,6 +263,7 @@ export function WeekScheduleTable({
                                     <Select
                                         value={dayData?.status || 'L'}
                                         onValueChange={(value) => onFieldChange(employeeId, dateStr, 'status', value)}
+                                        disabled={yaExiste}
                                     >
                                         <SelectTrigger className="text-xs h-8">
                                             <SelectValue>
@@ -280,15 +289,30 @@ export function WeekScheduleTable({
                                             ) : (
                                                 <div>
                                                     <strong>
-                                                        {dayData.status === 'C' ? '🟢 Feriados Disponibles' : '🔵 Feriados Futuros'} ({feriadosList.length})
+                                                        {dayData.status === 'C' ? '🟢 Feriados Disponibles' : '🔵 Feriados Futuros'}
+                                                        ({dayData.status === 'C' ? feriadosList.length : Math.min(1, feriadosList.length)})
                                                     </strong>
 
                                                     {feriadosList.length > 0 ? (
-                                                        feriadosList.map((feriado: any) => (
-                                                            <div key={feriado.id}>
-                                                                • {feriado.nombre} - {new Date(feriado.fecha).toLocaleDateString('es-PE')}
+                                                        // 🔥 LOGICA DIFERENTE SEGÚN TIPO
+                                                        dayData.status === 'C' ? (
+                                                            // FERIADOS DISPONIBLES: MOSTRAR TODOS
+                                                            feriadosList.map((feriado: any) => (
+                                                                <div key={feriado.id}>
+                                                                    • {feriado.nombre} - {new Date(feriado.fecha).toLocaleDateString('es-PE')}
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            // FERIADOS FUTUROS: SOLO EL PRIMERO
+                                                            <div key={feriadosList[0].id}>
+                                                                • {feriadosList[0].nombre} - {new Date(feriadosList[0].fecha).toLocaleDateString('es-PE')}
+                                                                {feriadosList.length > 1 && (
+                                                                    <span className="text-gray-500 ml-1">
+                                                                        (+{feriadosList.length - 1} más)
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                        ))
+                                                        )
                                                     ) : (
                                                         <div>⚠️ No hay feriados {dayData.status === 'C' ? 'disponibles' : 'futuros'}</div>
                                                     )}
@@ -326,19 +350,6 @@ export function WeekScheduleTable({
                         );
                     })}
                 </tbody>
-                {/*
-<tfoot className="border-t-2 bg-gray-50 font-bold">
-    <tr>
-        <td colSpan={3} className="p-2 text-sm text-right">
-            Total de horas de la semana
-        </td>
-
-        <td className="p-2 text-sm text-left text-lg text-green-700">
-            {totalHoursFormatted}
-        </td>
-    </tr>
-</tfoot>
-*/}
 
 
             </table>

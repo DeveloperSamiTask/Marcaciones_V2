@@ -18,6 +18,7 @@ interface EmployeeListProps {
     onFieldChange: (employeeId: string, date: string, field: 'entryTime' | 'exitTime' | 'status', value: string) => void;
     defaultEntryTime: string;
     defaultExitTime: string;
+     horariosExistentes: Set<string>; // 🔥 NUEVA PROP
 }
 
 export function EmployeeList({
@@ -29,7 +30,8 @@ export function EmployeeList({
     scheduleData,
     onFieldChange,
     defaultEntryTime,
-    defaultExitTime
+    defaultExitTime,
+     horariosExistentes // 🔥 RECIBE LA PRO
 }: EmployeeListProps) {
 
     // ✅ Estado para feriados
@@ -211,6 +213,7 @@ export function EmployeeList({
                                         feriadosData={feriadosData[employee.id] || null}
                                         permisosTDData={permisosTDData[employee.id] || null} // 🔥 NUEVA PROP
                                         isLoadingData={loadingData.has(employee.id)}
+                                        horariosExistentes={horariosExistentes}
                                     />
                                 );
                             })

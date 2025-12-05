@@ -77,7 +77,7 @@
         ];
     @endphp
 
-    <div class="contenedor">  
+    <div class="contenedor">
         @for ($i = 0; $i < 2; $i++)
             <div class="memorandum">
                 <h2>MEMORANDUM {{ $fechaMemo }}-RRHH/GVS</h2>
