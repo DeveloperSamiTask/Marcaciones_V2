@@ -428,13 +428,93 @@ export default function App({ empleados, empresas, url, supervisores }) {
         });
     };
 
+
+    // 🔥 ---------------------- CARGAR HORARIOS EXISTENTES CUANDO CAMBIA SEMANA O EMPRESA ----------------------
+    const [horariosExistentes, setHorariosExistentes] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        const cargarHorariosExistentes = async () => {
+            if (!selectedEmpresa || !currentWeekStart) return;
+
+            try {
+                const fecha = formatDate(currentWeekStart); // Cualquier fecha de la semana
+                const response = await fetch(
+                    `/horarios/getWeekSchedules?empresa_id=${selectedEmpresa}&fecha=${fecha}`
+                );
+
+                if (!response.ok) throw new Error('Error al cargar horarios');
+
+                const data = await response.json();
+                console.log('📦 Horarios existentes:', data);
+
+                if (data.success && data.empleados) {
+                    const newScheduleData = {};
+                    const existentes = new Set<string>();
+
+                    data.empleados.forEach((emp: any) => {
+                        newScheduleData[emp.empleado_id] = {};
+
+                        emp.horarios.forEach((dia: any) => {
+                            if (dia.existe) {
+                                // Marcar este día como existente
+                                existentes.add(`${emp.empleado_id}-${dia.fecha}`);
+
+                                // Poblar con datos existentes
+                                newScheduleData[emp.empleado_id][dia.fecha] = {
+                                    entryTime: dia.ingreso?.substring(0, 5) || '00:00',
+                                    exitTime: dia.salida?.substring(0, 5) || '00:00',
+                                    status: dia.estado || 'L',
+                                    feriado_id: dia.feriado,
+                                    permiso_td_id: dia.permiso_td_id,
+                                    existe: dia.existe
+                                };
+                            }
+                        });
+                    });
+
+                    // 🔥 MERGEAR con scheduleData existente (no sobrescribir todo)
+                    setScheduleData(prev => {
+                        const merged = { ...prev };
+                        Object.keys(newScheduleData).forEach(empId => {
+                            if (!merged[empId]) {
+                                merged[empId] = {};
+                            }
+                            Object.keys(newScheduleData[empId]).forEach(fecha => {
+                                merged[empId][fecha] = newScheduleData[empId][fecha];
+                            });
+                        });
+                        return merged;
+                    });
+
+                    setHorariosExistentes(existentes);
+                    console.log('✅ Horarios cargados:', existentes.size, 'días con horario');
+                }
+            } catch (error) {
+                console.error('❌ Error cargando horarios existentes:', error);
+            }
+        };
+
+        cargarHorariosExistentes();
+    }, [selectedEmpresa, currentWeekStart]);
+
     /* ----------------------- Seteo de horas por dia  ----------------------- */
     const handleFieldChange = async (
         employeeId: string,
         date: string,
         field: 'entryTime' | 'exitTime' | 'status',
         value: string
+
+
     ) => {
+        const yaExiste = horariosExistentes?.has(`${employeeId}-${date}`) || false;
+
+        if (yaExiste) {
+            console.log(`⛔ Bloqueado desde WeekScheduleTable: ${employeeId}-${date}`);
+            return; // No llama a la función del padre
+        }
+
+
+
         setScheduleData(prev => {
             const employeeData = prev[employeeId] || {};
             const dayData = employeeData[date] || {
@@ -442,6 +522,25 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 exitTime: '00:00',
                 status: 'L' as const,
             };
+
+            /* ------------------ Bloquear si hay fechas previas registradas ------------------*/
+
+
+            // Si el día ya existe en la BD (existe: true), bloquear
+            if (dayData?.existe) {
+                console.log(`⛔ Día existente (existe: true): ${employeeId}-${date}`);
+                return prev;
+            }
+
+            // También verificar en el Set por si acaso
+            if (horariosExistentes.has(`${employeeId}-${date}`)) {
+                console.log(`⛔ Día en horariosExistentes: ${employeeId}-${date}`);
+                return prev;
+            }
+
+            console.log('🔥 handleFieldChange - dayData:', dayData);
+            console.log('🔥 handleFieldChange - existe?', dayData?.existe);
+            console.log('🔥 handleFieldChange - horariosExistentes check:', horariosExistentes.has(`${employeeId}-${date}`));
 
             // 🔥 CASO 1: Cambiar a NO LABORAL
             if (field === 'status' && value !== 'L') {
@@ -586,8 +685,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
     const [isSaving, setIsSaving] = useState(false);
 
-
-    // ---------------------- VALIDACIONES , descansos , TD , Compensas ----------------------
+    // ---------------------- VALIDACIONES , descansos , TD , Compensas  , envio al backend ----------------------
     const handleSaveSchedules = async () => {
         // ==================== EVITAR CREAR HORARIOS ON FECHAS PASADAS ====================
         const hoy = new Date();
@@ -1091,73 +1189,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
         });
     }, [expandedEmployees]);
 
-    // ---------------------- TRAER HORARIOS A LA VISTA ----------------------
-    const [horariosExistentes, setHorariosExistentes] = useState<Set<string>>(new Set());
 
-    // 🔥 CARGAR HORARIOS EXISTENTES CUANDO CAMBIA SEMANA O EMPRESA
-    useEffect(() => {
-        const cargarHorariosExistentes = async () => {
-            if (!selectedEmpresa || !currentWeekStart) return;
-
-            try {
-                const fecha = formatDate(currentWeekStart); // Cualquier fecha de la semana
-                const response = await fetch(
-                    `/horarios/getWeekSchedules?empresa_id=${selectedEmpresa}&fecha=${fecha}`
-                );
-
-                if (!response.ok) throw new Error('Error al cargar horarios');
-
-                const data = await response.json();
-                console.log('📦 Horarios existentes:', data);
-
-                if (data.success && data.empleados) {
-                    const newScheduleData = {};
-                    const existentes = new Set<string>();
-
-                    data.empleados.forEach((emp: any) => {
-                        newScheduleData[emp.empleado_id] = {};
-
-                        emp.horarios.forEach((dia: any) => {
-                            if (dia.existe) {
-                                // Marcar este día como existente
-                                existentes.add(`${emp.empleado_id}-${dia.fecha}`);
-
-                                // Poblar con datos existentes
-                                newScheduleData[emp.empleado_id][dia.fecha] = {
-                                    entryTime: dia.ingreso?.substring(0, 5) || '00:00',
-                                    exitTime: dia.salida?.substring(0, 5) || '00:00',
-                                    status: dia.estado || 'L',
-                                    feriado_id: dia.feriado,
-                                    permiso_td_id: dia.permiso_td_id,
-                                };
-                            }
-                        });
-                    });
-
-                    // 🔥 MERGEAR con scheduleData existente (no sobrescribir todo)
-                    setScheduleData(prev => {
-                        const merged = { ...prev };
-                        Object.keys(newScheduleData).forEach(empId => {
-                            if (!merged[empId]) {
-                                merged[empId] = {};
-                            }
-                            Object.keys(newScheduleData[empId]).forEach(fecha => {
-                                merged[empId][fecha] = newScheduleData[empId][fecha];
-                            });
-                        });
-                        return merged;
-                    });
-
-                    setHorariosExistentes(existentes);
-                    console.log('✅ Horarios cargados:', existentes.size, 'días con horario');
-                }
-            } catch (error) {
-                console.error('❌ Error cargando horarios existentes:', error);
-            }
-        };
-
-        cargarHorariosExistentes();
-    }, [selectedEmpresa, currentWeekStart]);
 
 
 

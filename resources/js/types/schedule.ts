@@ -56,4 +56,5 @@ export interface DaySchedule {
   exitTime: string;
   status: ScheduleStatus;
    feriadoId?: string;
+   existe?: boolean;
 }

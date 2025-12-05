@@ -219,7 +219,8 @@ export function WeekScheduleTable({
                         const esTipoCompensacion = dayData?.status === 'C' || dayData?.status === 'CA';
                         const tipoFeriado = dayData?.status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
                         const feriadosList = feriadosActuales?.[tipoFeriado] || [];
-                        const yaExiste = horariosExistentes?.has(`${employeeId}-${dateStr}`) || false;
+                        //const yaExiste = horariosExistentes?.has(`${employeeId}-${dateStr}`) || false;
+                        const yaExiste = dayData?.existe || horariosExistentes?.has(`${employeeId}-${dateStr}`) || false;
 
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">
@@ -242,7 +243,8 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
-                                        disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
+                                           readOnly={yaExiste}
+                                        //disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
                                         className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
                                     />
                                 </td>
@@ -253,7 +255,8 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
-                                        disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
+                                         readOnly={yaExiste}
+                                        //disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
                                         className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
                                     />
                                 </td>
