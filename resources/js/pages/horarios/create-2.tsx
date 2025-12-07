@@ -200,7 +200,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
     // 1. Horario Base a Todos (handleApplyBaseToAll)
     // =========================================================================
 
-    /* -------------- LOGICA DEL SP ------------------- */
+    /* -------------- LOGICA DEL SP / aplicar horarios ya existentes ------------------- */
     const handleApplyBaseToAll = () => {
         const newExpanded = new Set<string>();
 
@@ -215,6 +215,15 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
+
+                    if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
+                        console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
+                        // Mantener el día tal cual está
+                        if (prev[employee.id]?.[dateStr]) {
+                            newData[employee.id][dateStr] = prev[employee.id][dateStr];
+                        }
+                        return; // No sobrescribir
+                    }
 
                     const existingDaySchedule = prev[employee.id]?.[dateStr] || {
                         entryTime: '00:00',
@@ -279,6 +288,15 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
 
+                    if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
+                        console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
+                        // Mantener el día tal cual está
+                        if (prev[employee.id]?.[dateStr]) {
+                            newData[employee.id][dateStr] = prev[employee.id][dateStr];
+                        }
+                        return; // No sobrescribir
+                    }
+
                     if (dayOfWeek >= 1 && dayOfWeek <= 4) { // Lunes a Jueves
                         const existingDaySchedule = prev[employee.id]?.[dateStr] || { status: 'L' };
                         const existingStatus = existingDaySchedule.status;
@@ -330,6 +348,15 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
 
+                    if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
+                        console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
+                        // Mantener el día tal cual está
+                        if (prev[employee.id]?.[dateStr]) {
+                            newData[employee.id][dateStr] = prev[employee.id][dateStr];
+                        }
+                        return; // No sobrescribir
+                    }
+
                     if (dayOfWeek === 5) { // Viernes
                         const existingDaySchedule = prev[employee.id]?.[dateStr] || { status: 'L' };
                         const existingStatus = existingDaySchedule.status;
@@ -380,6 +407,15 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
+
+                    if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
+                        console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
+                        // Mantener el día tal cual está
+                        if (prev[employee.id]?.[dateStr]) {
+                            newData[employee.id][dateStr] = prev[employee.id][dateStr];
+                        }
+                        return; // No sobrescribir
+                    }
 
                     if (dayOfWeek === 0 || dayOfWeek === 6) { // Domingo o Sábado
                         const existingDaySchedule = prev[employee.id]?.[dateStr] || { status: 'L' };
@@ -528,19 +564,17 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
             // Si el día ya existe en la BD (existe: true), bloquear
             if (dayData?.existe) {
-                console.log(`⛔ Día existente (existe: true): ${employeeId}-${date}`);
+                // console.log(`⛔ Día existente (existe: true): ${employeeId}-${date}`);
                 return prev;
             }
 
             // También verificar en el Set por si acaso
             if (horariosExistentes.has(`${employeeId}-${date}`)) {
-                console.log(`⛔ Día en horariosExistentes: ${employeeId}-${date}`);
+                // console.log(`⛔ Día en horariosExistentes: ${employeeId}-${date}`);
                 return prev;
             }
 
-            console.log('🔥 handleFieldChange - dayData:', dayData);
-            console.log('🔥 handleFieldChange - existe?', dayData?.existe);
-            console.log('🔥 handleFieldChange - horariosExistentes check:', horariosExistentes.has(`${employeeId}-${date}`));
+
 
             // 🔥 CASO 1: Cambiar a NO LABORAL
             if (field === 'status' && value !== 'L') {
@@ -848,20 +882,31 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 return;
             }
 
-
+            /*SI YA TIENE HORARIOS REGISTRADOS Y ES FT */
             if (employee.jornada_id === 1) {
-                // Excepciones que permiten no tener descanso
-                const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
+                // 🔥 VERIFICAR SI YA TIENE DÍAS REGISTRADOS EN LA SEMANA
+                const tieneDiasRegistrados = weekDates.some(date => {
+                    const dateStr = formatDate(date);
+                    return horariosExistentes.has(`${employee.id}-${dateStr}`);
+                });
 
-                // Si no hay descanso y tampoco hay ningún día con estado de excepción → error
-                const tieneExcepcion = Object.values(employeeSchedule).some(day =>
-                    excepciones.includes(day.status)
-                );
+                // 🔥 SOLO VALIDAR SI NO TIENE DÍAS PREVIOS
+                if (!tieneDiasRegistrados) {
+                    // Excepciones que permiten no tener descanso
+                    const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
 
-                if (diasDescanso === 0 && !tieneExcepcion) {
-                    toast.error(`${employee.apellidos} ${employee.nombres}  debe tener al menos 1 día de descanso`);
-                    hasValidationErrors = true;
-                    return;
+                    // Si no hay descanso y tampoco hay ningún día con estado de excepción → error
+                    const tieneExcepcion = Object.values(employeeSchedule).some(day =>
+                        excepciones.includes(day.status)
+                    );
+
+                    if (diasDescanso === 0 && !tieneExcepcion) {
+                        toast.error(`${employee.apellidos} ${employee.nombres} debe tener al menos 1 día de descanso`);
+                        hasValidationErrors = true;
+                        return;
+                    }
+                } else {
+                    console.log(`⏭️ Saltando validación de descanso para ${employee.apellidos}: ya tiene días registrados`);
                 }
             }
 

@@ -22,6 +22,7 @@ interface EmployeeRowProps {
     permisosTDData?: any[] | null;
     isLoadingData?: boolean;
     horariosExistentes: Set<string>;
+    tieneDiasRegistrados?: boolean;
 }
 
 const estadoOptions = [
@@ -65,7 +66,8 @@ export function EmployeeRow({
     feriadosData,
     permisosTDData,
     isLoadingData,
-     horariosExistentes
+    horariosExistentes,
+    tieneDiasRegistrados
 }: EmployeeRowProps) {// Nombre completo
     const fullName = `${employee.apellidos ?? ''} ${employee.nombres ?? ''}`.trim();
 
@@ -231,7 +233,7 @@ export function EmployeeRow({
                         </Badge>
                     )}
 
-                    {hasRestDayValidationError && employee.jornada_id === 1 && (
+                    {hasRestDayValidationError && employee.jornada_id === 1 &&  !tieneDiasRegistrados &&(
                         <Badge variant="destructive" className="text-xs flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
                             Falta día de descanso

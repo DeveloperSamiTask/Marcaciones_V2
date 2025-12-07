@@ -18,7 +18,7 @@ interface EmployeeListProps {
     onFieldChange: (employeeId: string, date: string, field: 'entryTime' | 'exitTime' | 'status', value: string) => void;
     defaultEntryTime: string;
     defaultExitTime: string;
-     horariosExistentes: Set<string>; // 🔥 NUEVA PROP
+    horariosExistentes: Set<string>; // 🔥 NUEVA PROP
 }
 
 export function EmployeeList({
@@ -31,8 +31,15 @@ export function EmployeeList({
     onFieldChange,
     defaultEntryTime,
     defaultExitTime,
-     horariosExistentes // 🔥 RECIBE LA PRO
+    horariosExistentes // 🔥 RECIBE LA PRO
 }: EmployeeListProps) {
+
+    const formatDate = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
 
     // ✅ Estado para feriados
     const [feriadosData, setFeriadosData] = useState<{
@@ -192,10 +199,18 @@ export function EmployeeList({
                                 const tieneMedico = Object.values(employeeSchedule).some(day => day.status === 'M');
                                 const tieneFallecimiento = Object.values(employeeSchedule).some(day => day.status === 'LF');
                                 const tieneMaternidad = Object.values(employeeSchedule).some(day => day.status === 'LM');
-                                 const tienePaternidad = Object.values(employeeSchedule).some(day => day.status === 'LP');
+                                const tienePaternidad = Object.values(employeeSchedule).some(day => day.status === 'LP');
 
+                                const tieneDiasRegistrados = weekDates.some(date => {
+                                    const dateStr = formatDate(date);
+                                    return horariosExistentes?.has(`${employee.id}-${dateStr}`);
+                                });
+
+                                const debeValidarDescanso = !tieneDiasRegistrados;
                                 const necesitaDescanso = !tieneVacaciones && !tieneDescanso && !tieneMedico && !tieneFallecimiento && !tieneMaternidad && !tienePaternidad;
                                 const scheduleKey = `${employee.id}-${Object.keys(employeeSchedule).length}`;
+
+
                                 return (
 
                                     <EmployeeRow
@@ -214,6 +229,7 @@ export function EmployeeList({
                                         permisosTDData={permisosTDData[employee.id] || null} // 🔥 NUEVA PROP
                                         isLoadingData={loadingData.has(employee.id)}
                                         horariosExistentes={horariosExistentes}
+                                        tieneDiasRegistrados={tieneDiasRegistrados}
                                     />
                                 );
                             })
