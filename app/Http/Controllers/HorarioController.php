@@ -163,17 +163,19 @@ class HorarioController extends Controller
         $lunes = $fecha->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
         $domingo = $fecha->copy()->endOfWeek(Carbon::SUNDAY)->format('Y-m-d');
 
-        Log::info("📅 GET WEEK SCHEDULES - Semana: $lunes → $domingo (empresa $empresaId)");
+     //   Log::info("📅 GET WEEK SCHEDULES - Semana: $lunes → $domingo (empresa $empresaId)");
 
         // 1) Traer empleados
         $empleados = Empleado::where('empresa_id', $empresaId)
             ->select('id', 'nombres', 'apellidos')
             ->orderBy('apellidos')
             ->get();
-
-        Log::info("👥 Empleados encontrados: {$empleados->count()}", [
+/*
+ Log::info("👥 Empleados encontrados: {$empleados->count()}", [
             'ids' => $empleados->pluck('id')->toArray(),
         ]);
+*/
+
 
         if ($empleados->isEmpty()) {
             return response()->json([
@@ -192,14 +194,15 @@ class HorarioController extends Controller
             $weekDates[] = $tmp->copy()->addDays($i)->format('Y-m-d');
         }
 
-        Log::info('📆 Fechas de la semana:', $weekDates);
+      //  Log::info('📆 Fechas de la semana:', $weekDates);
 
         // 2) Traer horarios
         $horariosBD = Horario::whereBetween('fecha', [$lunes, $domingo])
             ->whereIn('empleado_id', $empleadoIds)
             ->get();
 
-        Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
+            /*
+Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
             'horarios' => $horariosBD->map(fn ($h) => [
                 'empleado_id' => $h->empleado_id,
                 'fecha' => $h->fecha->format('Y-m-d'),
@@ -208,6 +211,8 @@ class HorarioController extends Controller
                 'estado' => $h->estado,
             ])->toArray(),
         ]);
+            */
+
 
         $horariosAgrupados = $horariosBD->groupBy('empleado_id');
 
@@ -246,7 +251,7 @@ class HorarioController extends Controller
                         'existe' => true,
                     ];
 
-                    Log::info("   ✅ {$empleado->apellidos}: $fechaDia → $ingresoStr - $salidaStr ({$registro->estado})");
+                    // Log::info("   ✅ {$empleado->apellidos}: $fechaDia → $ingresoStr - $salidaStr ({$registro->estado})");
                 } else {
                     $diasEmpleado[] = [
                         'fecha' => $fechaDia,
@@ -260,7 +265,7 @@ class HorarioController extends Controller
                 }
             }
 
-            Log::info("📊 {$empleado->apellidos}: $diasConHorario/7 días con horario");
+            //Log::info("📊 {$empleado->apellidos}: $diasConHorario/7 días con horario");
 
             $resultado[] = [
                 'empleado_id' => $empleado->id,
@@ -269,7 +274,7 @@ class HorarioController extends Controller
             ];
         }
 
-        Log::info("✅ Respuesta final: {$empleados->count()} empleados procesados");
+       // Log::info("✅ Respuesta final: {$empleados->count()} empleados procesados");
 
         return response()->json([
             'success' => true,
@@ -290,7 +295,7 @@ class HorarioController extends Controller
         // Empresas donde NO se incluye al supervisor en la lista
         $EXCLUDE_SUPERVISOR_COMPANIES = [1, 5];
 
-        \Log::info('🔥 empleados() LLAMADO', $request->all());
+       //  \Log::info('🔥 empleados() LLAMADO', $request->all());
 
         // ============================
         // 1. MODO: supervisor_id enviado desde frontend
@@ -700,16 +705,16 @@ class HorarioController extends Controller
             ];
         }
 
-        Log::info('📊 Reporte por empleado (pre-save):', $reportePorEmpleado);
+       // Log::info('📊 Reporte por empleado (pre-save):', $reportePorEmpleado);
 
         // ----------------- BLOQUE NUEVO: COMPLETAR SEMANA SIN TOCAR EXISTENTES -----------------
         // Este bloque añade a $entriesFiltradas SOLO los días faltantes que vienen en el request.
         // No toca BD y no inventa días: si el usuario no envió un día, no se crea.
-        Log::info('🧩 Iniciando completado de semana (solo agregar faltantes que vinieron en request).');
+      //  Log::info('🧩 Iniciando completado de semana (solo agregar faltantes que vinieron en request).');
 
         foreach ($empleadoIds as $empleadoId) {
 
-            Log::info("➡️ Procesando empleado para completado: $empleadoId");
+        //    Log::info("➡️ Procesando empleado para completado: $empleadoId");
 
             // días que ya existen en BD para este empleado
             $diasBD = $horariosExistentesPorEmpleado[$empleadoId] ?? [];
@@ -719,8 +724,8 @@ class HorarioController extends Controller
                 ->where('empleado_id', $empleadoId)
                 ->keyBy('fecha');
 
-            Log::info('   📌 Días BD:', $diasBD);
-            Log::info('   📨 Días request:', $diasRequest->keys()->toArray());
+           // Log::info('   📌 Días BD:', $diasBD);
+            //Log::info('   📨 Días request:', $diasRequest->keys()->toArray());
 
             // recorrer la semana completa y añadir SOLO lo que falta y viene en request
             $period = CarbonPeriod::create($startOfWeek, $endOfWeek);
@@ -760,7 +765,7 @@ class HorarioController extends Controller
                     }
                     unset($rep); // good practice para evitar referencias colgantes
                 } else {
-                    Log::info("      ❌ No enviado en request: $fecha (no se crea)");
+                    //Log::info("      ❌ No enviado en request: $fecha (no se crea)");
                 }
             }
         }

@@ -191,7 +191,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
         setExpandedEmployees(new Set());
 
         setScheduleData({});
-    }, [currentWeekStart, selectedEmpresa, selectedModality]);
+    }, [currentWeekStart, selectedEmpresa]);
 
 
     const UNTOUCHABLE_STATUSES = new Set(['D', 'SP']);
