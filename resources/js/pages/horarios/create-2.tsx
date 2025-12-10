@@ -222,6 +222,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     const ingreso = employee.fecha_ingreso
                         ? new Date(employee.fecha_ingreso).toISOString().split("T")[0]
                         : null;
+
                     const bloqueadoPorIngreso = ingreso && dateStr < ingreso;
 
                     if (bloqueadoPorIngreso) {
@@ -232,18 +233,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         };
                         return;
                     }
-
-                    /*
-                       if (bloqueadoPorIngreso) {
-                        newData[employee.id][dateStr] = {
-                            entryTime: '00:00',
-                            exitTime: '00:00',
-                            status: 'AI',
-                        };
-                        return; // continuar al siguiente día
-                    }
-                    */
-
 
                     // 🔥 SI EL DÍA ES ANTES DEL INGRESO
                     if (employee.fecha_ingreso && dateObj < employee.fecha_ingreso) {
@@ -326,6 +315,32 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
+                    const diasAntesSet: Set<string> | undefined = diasAntesDeIngresoGlobal?.[employee.id];
+                    const dateObj = new Date(date);
+                    const ingreso = employee.fecha_ingreso
+                        ? new Date(employee.fecha_ingreso).toISOString().split("T")[0]
+                        : null;
+                    const bloqueadoPorIngreso = ingreso && dateStr < ingreso;
+
+                    if (bloqueadoPorIngreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: "00:00",
+                            exitTime: "00:00",
+                            status: "AI",
+                        };
+                        return;
+                    }
+
+                    // 🔥 SI EL DÍA ES ANTES DEL INGRESO
+                    if (employee.fecha_ingreso && dateObj < employee.fecha_ingreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: '00:00',
+                            exitTime: '00:00',
+                            status: 'AI', // 🔥 NUEVO ESTADO
+                        };
+                        return; // Saltar al siguiente día
+                    }
+
 
                     if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
                         console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
@@ -386,6 +401,31 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
+                    const diasAntesSet: Set<string> | undefined = diasAntesDeIngresoGlobal?.[employee.id];
+                    const dateObj = new Date(date);
+                    const ingreso = employee.fecha_ingreso
+                        ? new Date(employee.fecha_ingreso).toISOString().split("T")[0]
+                        : null;
+                    const bloqueadoPorIngreso = ingreso && dateStr < ingreso;
+
+                    if (bloqueadoPorIngreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: "00:00",
+                            exitTime: "00:00",
+                            status: "AI",
+                        };
+                        return;
+                    }
+
+                    // 🔥 SI EL DÍA ES ANTES DEL INGRESO
+                    if (employee.fecha_ingreso && dateObj < employee.fecha_ingreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: '00:00',
+                            exitTime: '00:00',
+                            status: 'AI', // 🔥 NUEVO ESTADO
+                        };
+                        return; // Saltar al siguiente día
+                    }
 
                     if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
                         console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
@@ -446,6 +486,33 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
                     const dayOfWeek = date.getDay();
+
+                    const diasAntesSet: Set<string> | undefined = diasAntesDeIngresoGlobal?.[employee.id];
+                    const dateObj = new Date(date);
+                    const ingreso = employee.fecha_ingreso
+                        ? new Date(employee.fecha_ingreso).toISOString().split("T")[0]
+                        : null;
+                    const bloqueadoPorIngreso = ingreso && dateStr < ingreso;
+
+                    if (bloqueadoPorIngreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: "00:00",
+                            exitTime: "00:00",
+                            status: "AI",
+                        };
+                        return;
+                    }
+
+                    // 🔥 SI EL DÍA ES ANTES DEL INGRESO
+                    if (employee.fecha_ingreso && dateObj < employee.fecha_ingreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: '00:00',
+                            exitTime: '00:00',
+                            status: 'AI', // 🔥 NUEVO ESTADO
+                        };
+                        return; // Saltar al siguiente día
+                    }
+
 
                     if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
                         console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
@@ -788,6 +855,17 @@ export default function App({ empleados, empresas, url, supervisores }) {
         let hasValidationErrors = false;
         //  console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
 
+        // -------------- Función auxiliar: Verificar si ingresó esta semana
+        const ingresoEnSemanaActual = (employee: Empleado): boolean => {
+            if (!employee.fecha_ingreso) return false;
+
+            const fechaIngreso = new Date(employee.fecha_ingreso);
+            const primerDiaSemana = new Date(weekDates[0]);
+            const ultimoDiaSemana = new Date(weekDates[6]);
+
+            return fechaIngreso >= primerDiaSemana && fechaIngreso <= ultimoDiaSemana;
+        };
+
         // ==================== VALIDACIONES DE HORAS SEMANALES ====================
         filteredEmployees.forEach(employee => {
             const employeeSchedule = scheduleData[employee.id] || {};
@@ -798,11 +876,25 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 const MAX_HORAS = 2880;  // 48 horas en minutos
                 const MIN_HORAS = 2820;  // 47 horas en minutos
 
+                const esEmpleadoNuevo = ingresoEnSemanaActual(employee);
+
                 if (ingresoEnSemanaActual(employee)) {
-                    console.log("🟡 Empleado nuevo esta semana → sin validación FT:", employee.nombres);
+                    //console.log("🟡 Empleado nuevo esta semana → sin validación FT:", employee.nombres);
                     // PERO igual muestra advertencia amigable si quieres (opcional)
                     return;
                 }
+
+                if (esEmpleadoNuevo) {
+                    //console.log(`🟢 ${employee.apellidos} ${employee.nombres} - NUEVO → Solo máximo`);
+
+                    if (horasSemanales > MAX_HORAS) {
+                        const excedente = horasSemanales - MAX_HORAS;
+                        toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: ${formatearHoras(horasSemanales)} | EXCEDE: +${formatearHoras(excedente)}`);
+                        hasValidationErrors = true;
+                    }
+                    return;
+                }
+
 
                 // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES
                 const todosSonVacaciones = Object.values(employeeSchedule).every(day =>
@@ -937,11 +1029,29 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
             /*SI YA TIENE HORARIOS REGISTRADOS Y ES FT */
             if (employee.jornada_id === 1) {
+
+                const ingresoEstaSemana = (() => {
+                    if (!employee.fecha_ingreso) return false;
+
+                    const fechaIngreso = new Date(employee.fecha_ingreso);
+                    const primerDiaSemana = new Date(weekDates[0]);
+                    const ultimoDiaSemana = new Date(weekDates[6]);
+
+                    return fechaIngreso >= primerDiaSemana && fechaIngreso <= ultimoDiaSemana;
+                })();
+
+
                 // 🔥 VERIFICAR SI YA TIENE DÍAS REGISTRADOS EN LA SEMANA
                 const tieneDiasRegistrados = weekDates.some(date => {
                     const dateStr = formatDate(date);
                     return horariosExistentes.has(`${employee.id}-${dateStr}`);
                 });
+
+
+                if (ingresoEstaSemana) {
+                    //console.log(`🟢 ${employee.apellidos} ${employee.nombres} - EMPLEADO NUEVO → Descanso NO obligatorio`);
+                    return; // Saltar validación de descanso
+                }
 
                 // 🔥 SOLO VALIDAR SI NO TIENE DÍAS PREVIOS
                 if (!tieneDiasRegistrados) {
@@ -1137,6 +1247,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
 
         // ==================== ENVÍO AL BACKEND ====================
+        console.log("📦 ENTRIES QUE SE ESTÁN ENVIANDO:", JSON.parse(JSON.stringify(entries)));
+
         router.post(route('horarios.store-multiple'), { entries }, {
             preserveScroll: true,
             preserveState: true,
