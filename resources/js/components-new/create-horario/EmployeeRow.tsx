@@ -286,6 +286,7 @@ export function EmployeeRow({
                         <WeekScheduleTable
                             key={keySchedule}
                             employeeId={employee.id}
+                            employee={employee}
                             weekDates={weekDates}
                             scheduleData={scheduleData}
                             onFieldChange={onFieldChange}

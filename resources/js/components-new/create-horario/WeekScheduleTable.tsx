@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { DaySchedule, ScheduleStatus } from '../../types/schedule';
 import { formatDate } from '../../utils/dateUtils';
 import { useEffect, useState, useMemo } from 'react';
+import { Employee } from '../../types/schedule';
 
 interface WeekScheduleTableProps {
     employeeId: string;
@@ -17,6 +18,7 @@ interface WeekScheduleTableProps {
     } | null;
     permisosTDData?: any[] | null; // 🔥 NUEVA PROP
     horariosExistentes: Set<string>;
+    employee: Employee;
 }
 const estadoOptions = [
     { value: 'L', label: '1.LABORAL' },
@@ -83,7 +85,8 @@ export function WeekScheduleTable({
     defaultExitTime,
     feriadosData,
     permisosTDData,
-    horariosExistentes
+    horariosExistentes,
+    employee
 }: WeekScheduleTableProps) {
 
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -195,8 +198,19 @@ export function WeekScheduleTable({
     const feriadosActuales = feriadosLocal || feriadosData;
 
 
-    // --------------------- CARGAR HORARIOS PARA QUIENES YA TIENEN HORARIOS SETEADOS
+    // --------------------- EVITAR QUE FT TENGA ESTADO SP
+    const filteredEstadoOptions = useMemo(() => {
 
+        if (!employee) return estadoOptions;
+
+
+        if (Number(employee.jornada_id) === 1) {
+            return estadoOptions.filter(opt => opt.value !== 'SP');
+        }
+
+        // Para Part Time u otros, mostramos todo
+        return estadoOptions;
+    }, [employee]);
 
 
     return (
@@ -243,7 +257,7 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
-                                           readOnly={yaExiste}
+                                        readOnly={yaExiste}
                                         //disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
                                         className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
                                     />
@@ -255,7 +269,7 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
-                                         readOnly={yaExiste}
+                                        readOnly={yaExiste}
                                         //disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
                                         className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
                                     />
@@ -274,7 +288,7 @@ export function WeekScheduleTable({
                                             </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {estadoOptions.map((option) => (
+                                            {filteredEstadoOptions.map((option) => (
                                                 <SelectItem key={option.value} value={option.value}>
                                                     {option.label}
                                                 </SelectItem>

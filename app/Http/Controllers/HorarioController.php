@@ -163,19 +163,18 @@ class HorarioController extends Controller
         $lunes = $fecha->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
         $domingo = $fecha->copy()->endOfWeek(Carbon::SUNDAY)->format('Y-m-d');
 
-     //   Log::info("📅 GET WEEK SCHEDULES - Semana: $lunes → $domingo (empresa $empresaId)");
+        //   Log::info("📅 GET WEEK SCHEDULES - Semana: $lunes → $domingo (empresa $empresaId)");
 
         // 1) Traer empleados
         $empleados = Empleado::where('empresa_id', $empresaId)
             ->select('id', 'nombres', 'apellidos')
             ->orderBy('apellidos')
             ->get();
-/*
- Log::info("👥 Empleados encontrados: {$empleados->count()}", [
-            'ids' => $empleados->pluck('id')->toArray(),
-        ]);
-*/
-
+        /*
+         Log::info("👥 Empleados encontrados: {$empleados->count()}", [
+                    'ids' => $empleados->pluck('id')->toArray(),
+                ]);
+        */
 
         if ($empleados->isEmpty()) {
             return response()->json([
@@ -194,25 +193,12 @@ class HorarioController extends Controller
             $weekDates[] = $tmp->copy()->addDays($i)->format('Y-m-d');
         }
 
-      //  Log::info('📆 Fechas de la semana:', $weekDates);
+        //  Log::info('📆 Fechas de la semana:', $weekDates);
 
         // 2) Traer horarios
         $horariosBD = Horario::whereBetween('fecha', [$lunes, $domingo])
             ->whereIn('empleado_id', $empleadoIds)
             ->get();
-
-            /*
-Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
-            'horarios' => $horariosBD->map(fn ($h) => [
-                'empleado_id' => $h->empleado_id,
-                'fecha' => $h->fecha->format('Y-m-d'),
-                'ingreso' => $h->ingreso,
-                'salida' => $h->salida,
-                'estado' => $h->estado,
-            ])->toArray(),
-        ]);
-            */
-
 
         $horariosAgrupados = $horariosBD->groupBy('empleado_id');
 
@@ -265,7 +251,7 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
                 }
             }
 
-            //Log::info("📊 {$empleado->apellidos}: $diasConHorario/7 días con horario");
+            // Log::info("📊 {$empleado->apellidos}: $diasConHorario/7 días con horario");
 
             $resultado[] = [
                 'empleado_id' => $empleado->id,
@@ -274,7 +260,7 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
             ];
         }
 
-       // Log::info("✅ Respuesta final: {$empleados->count()} empleados procesados");
+        // Log::info("✅ Respuesta final: {$empleados->count()} empleados procesados");
 
         return response()->json([
             'success' => true,
@@ -295,7 +281,7 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
         // Empresas donde NO se incluye al supervisor en la lista
         $EXCLUDE_SUPERVISOR_COMPANIES = [1, 5];
 
-       //  \Log::info('🔥 empleados() LLAMADO', $request->all());
+        //  \Log::info('🔥 empleados() LLAMADO', $request->all());
 
         // ============================
         // 1. MODO: supervisor_id enviado desde frontend
@@ -668,7 +654,7 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
             ->groupBy('empleado_id')
             ->map(fn ($horarios) => $horarios->pluck('fecha')->map(fn ($f) => $f->format('Y-m-d'))->toArray());
 
-        Log::info('🔍 Horarios existentes por empleado:', $horariosExistentesPorEmpleado->toArray());
+        // Log::info('🔍 Horarios existentes por empleado:', $horariosExistentesPorEmpleado->toArray());
 
         // 3) FILTRAR ENTRADAS: eliminar los días que ya existen (usar el resultado para TODO)
         $entriesFiltradas = $entriesCollection->filter(function ($entry) use ($horariosExistentesPorEmpleado) {
@@ -677,12 +663,13 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
 
             return ! (isset($horariosExistentesPorEmpleado[$empleadoId]) && in_array($fecha, $horariosExistentesPorEmpleado[$empleadoId]));
         })->values();
-
-        Log::info('✅ Entries después de filtrar duplicados:', [
-            'total_original' => $entriesCollection->count(),
-            'total_filtrado' => $entriesFiltradas->count(),
-            'eliminados' => $entriesCollection->count() - $entriesFiltradas->count(),
-        ]);
+        /*
+            Log::info('✅ Entries después de filtrar duplicados:', [
+                    'total_original' => $entriesCollection->count(),
+                    'total_filtrado' => $entriesFiltradas->count(),
+                    'eliminados' => $entriesCollection->count() - $entriesFiltradas->count(),
+                ]);
+        */
 
         // 4) REPORTE POR EMPLEADO - basado en los datos *antes* del guardado (para mostrar qué pasó)
         $reportePorEmpleado = [];
@@ -705,16 +692,16 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
             ];
         }
 
-       // Log::info('📊 Reporte por empleado (pre-save):', $reportePorEmpleado);
+        // Log::info('📊 Reporte por empleado (pre-save):', $reportePorEmpleado);
 
         // ----------------- BLOQUE NUEVO: COMPLETAR SEMANA SIN TOCAR EXISTENTES -----------------
         // Este bloque añade a $entriesFiltradas SOLO los días faltantes que vienen en el request.
         // No toca BD y no inventa días: si el usuario no envió un día, no se crea.
-      //  Log::info('🧩 Iniciando completado de semana (solo agregar faltantes que vinieron en request).');
+        //  Log::info('🧩 Iniciando completado de semana (solo agregar faltantes que vinieron en request).');
 
         foreach ($empleadoIds as $empleadoId) {
 
-        //    Log::info("➡️ Procesando empleado para completado: $empleadoId");
+            //    Log::info("➡️ Procesando empleado para completado: $empleadoId");
 
             // días que ya existen en BD para este empleado
             $diasBD = $horariosExistentesPorEmpleado[$empleadoId] ?? [];
@@ -724,8 +711,8 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
                 ->where('empleado_id', $empleadoId)
                 ->keyBy('fecha');
 
-           // Log::info('   📌 Días BD:', $diasBD);
-            //Log::info('   📨 Días request:', $diasRequest->keys()->toArray());
+            // Log::info('   📌 Días BD:', $diasBD);
+            // Log::info('   📨 Días request:', $diasRequest->keys()->toArray());
 
             // recorrer la semana completa y añadir SOLO lo que falta y viene en request
             $period = CarbonPeriod::create($startOfWeek, $endOfWeek);
@@ -765,7 +752,7 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
                     }
                     unset($rep); // good practice para evitar referencias colgantes
                 } else {
-                    //Log::info("      ❌ No enviado en request: $fecha (no se crea)");
+                    // Log::info("      ❌ No enviado en request: $fecha (no se crea)");
                 }
             }
         }
@@ -976,8 +963,7 @@ Log::info("📄 Horarios encontrados en BD: {$horariosBD->count()}", [
             [
                 'empleado_id' => $empleadoId,
                 'fecha' => $fechaCarbon,
-            ],
-            [
+
                 'ingreso' => $ingreso,
                 'salida' => $salida,
                 'descripcion' => $descripcion,
