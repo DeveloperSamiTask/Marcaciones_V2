@@ -238,7 +238,7 @@ export function WeekScheduleTable({
             }
         });
 
-        console.log(`🔒 Empleado ${employee.id} - fecha_ingreso: ${fechaIngresoISO} - Días bloqueados:`, Array.from(diasBloqueados));
+        //console.log(`🔒 Empleado ${employee.id} - fecha_ingreso: ${fechaIngresoISO} - Días bloqueados:`, Array.from(diasBloqueados));
         return diasBloqueados;
     }, [employee?.fecha_ingreso, employee?.id, weekDates]);
 

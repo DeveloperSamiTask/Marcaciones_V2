@@ -201,6 +201,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
     // =========================================================================
 
     /* -------------- LOGICA DEL SP / aplicar horarios ya existentes ------------------- */
+    const [diasAntesDeIngresoGlobal, setDiasAntesDeIngresoGlobal] = useState({});
+
     const handleApplyBaseToAll = () => {
         const newExpanded = new Set<string>();
 
@@ -212,10 +214,36 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 newExpanded.add(employee.id);
                 // Clonamos el objeto del empleado, asegurando que los días fuera de la semana se mantengan
                 newData[employee.id] = { ...prev[employee.id] };
-
+                //
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
+                    const diasAntesSet: Set<string> | undefined = diasAntesDeIngresoGlobal?.[employee.id];
                     const dateObj = new Date(date);
+                    const ingreso = employee.fecha_ingreso
+                        ? new Date(employee.fecha_ingreso).toISOString().split("T")[0]
+                        : null;
+                    const bloqueadoPorIngreso = ingreso && dateStr < ingreso;
+
+                    if (bloqueadoPorIngreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: "00:00",
+                            exitTime: "00:00",
+                            status: "AI",
+                        };
+                        return;
+                    }
+
+                    /*
+                       if (bloqueadoPorIngreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: '00:00',
+                            exitTime: '00:00',
+                            status: 'AI',
+                        };
+                        return; // continuar al siguiente día
+                    }
+                    */
+
 
                     // 🔥 SI EL DÍA ES ANTES DEL INGRESO
                     if (employee.fecha_ingreso && dateObj < employee.fecha_ingreso) {
@@ -227,7 +255,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         return; // Saltar al siguiente día
                     }
 
-                    if (horariosExistentes.has(`${employee.id}-${dateStr}`) || (employee.fecha_ingreso && dateObj < employee.fecha_ingreso)) {
+                    if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
                         // console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
                         // Mantener el día tal cual está
                         if (prev[employee.id]?.[dateStr]) {
