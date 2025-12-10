@@ -152,18 +152,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
-                        {auth.user.rol_id != 4 && (
-                            <SelectFilter
-                                items={empresas}
-                                selected={selectedEmpresa}
-                                onSelect={setSelectedEmpresa}
-                                getValue={(empresa) => empresa.id}
-                                displayValue={(empresa) => empresa.razonsocial}
-                                placeholder="SELECCIONAR EMPRESA"
-                            />
-                        )}
-
-                        {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
+                        {auth.user.rol_id != 4 && auth.user.id != 73 &&(
                             <SelectFilter
                                 items={empresas}
                                 selected={selectedEmpresa}

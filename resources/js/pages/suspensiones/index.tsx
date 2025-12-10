@@ -174,22 +174,23 @@ export default function IndexSuspension({
                         )}
 
                         {auth.user.id === 73 && (
-                                <SelectFilter
-                                    items={empresas}
-                                    selected={selectedEmpresa}
-                                    onSelect={setSelectedEmpresa}
-                                    getValue={(empresa) => empresa.id}
-                                    displayValue={(empresa) => empresa.razonsocial}
-                                    placeholder="SELECCIONAR EMPRESA"
-                                />
-                            )}
+                            <SelectFilter
+                                items={empresas}
+                                selected={selectedEmpresa}
+                                onSelect={setSelectedEmpresa}
+                                getValue={(empresa) => empresa.id}
+                                displayValue={(empresa) => empresa.razonsocial}
+                                placeholder="SELECCIONAR EMPRESA"
+                            />
+                        )}
+
                         <DateRangeFilter
                             dateRange={dateRange}
                             setDateRange={setDateRange}
                             placeholder="SELECCIONAR RANGO DE FECHAS"
                         />
 
-                        {![4,5].includes(auth.user.rol_id) && (
+                        {![4, 5].includes(auth.user.rol_id) && (
                             <SelectFilter
                                 items={encargados}
                                 selected={selectedEncargado}

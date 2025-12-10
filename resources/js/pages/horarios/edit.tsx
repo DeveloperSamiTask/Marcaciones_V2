@@ -53,6 +53,7 @@ const estadoOptions = [
     { value: 'LF', label: 'LICENCIA POR FALLECIMIENTO' },
     { value: 'PE', label: 'PENDIENTE' },
     { value: 'TD', label: 'TRABAJO DIA DESCANSO' },
+
 ];
 
 type HorarioForm = {

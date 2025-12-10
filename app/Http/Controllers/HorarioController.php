@@ -1373,6 +1373,7 @@ class HorarioController extends Controller
         $empleado->horas_trabajadas = $horas / 60; // Total de horas mensuales (en horas)
         $empleado->horas_semanal_trabajadas = $horasSemanal; // Total de minutos semanales (se convierte a minutos para el frontend)
 
+
         $fechasLorables = Horario::where('empleado_id', $horario->empleado_id) // fechas en las que el empleado a laborado
             ->where('estado', 'L')
             // ->whereYear('fecha', now()->year)
@@ -1384,13 +1385,16 @@ class HorarioController extends Controller
             ->whereDate('fecha', '>=', now())
             ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
             ->select(['id', 'fecha', 'nombre'])
+            ->orderBy('fecha', 'asc')
             ->get();
 
         $feriadoDisponible = Feriado::query() // feriados en los que los empleados tienen estado L, antes de la fecha actual para "COMPENSACION"
             ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
+            ->orderBy('fecha', 'asc')
             ->get();
+
         $diasTDDisponibles = Permiso::query()
             ->where('empleado_id', $horario->empleado_id)
             ->where('tipo_id', 24)
@@ -1399,6 +1403,10 @@ class HorarioController extends Controller
             ->orderBy('fecha', 'asc')
             ->get();
 
+        \Log::debug('Feriados futuros:', $feriadoFuturo->pluck('fecha')->toArray());
+        foreach (Feriado::all() as $f) {
+    dump($f->fecha, $f->horarios()->where('empleado_id', $horario->empleado_id)->exists());
+}
         return Inertia::render('horarios/edit', [
             'empleado' => $empleado,
             'horario' => $horario,
