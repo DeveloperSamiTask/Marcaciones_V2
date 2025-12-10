@@ -215,9 +215,20 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
                 weekDates.forEach(date => {
                     const dateStr = formatDate(date);
+                    const dateObj = new Date(date);
 
-                    if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
-                        console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
+                    // 🔥 SI EL DÍA ES ANTES DEL INGRESO
+                    if (employee.fecha_ingreso && dateObj < employee.fecha_ingreso) {
+                        newData[employee.id][dateStr] = {
+                            entryTime: '00:00',
+                            exitTime: '00:00',
+                            status: 'AI', // 🔥 NUEVO ESTADO
+                        };
+                        return; // Saltar al siguiente día
+                    }
+
+                    if (horariosExistentes.has(`${employee.id}-${dateStr}`) || (employee.fecha_ingreso && dateObj < employee.fecha_ingreso)) {
+                        // console.log(`⏭️ Saltando día existente: ${employee.id}-${dateStr}`);
                         // Mantener el día tal cual está
                         if (prev[employee.id]?.[dateStr]) {
                             newData[employee.id][dateStr] = prev[employee.id][dateStr];
@@ -719,6 +730,14 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
     const [isSaving, setIsSaving] = useState(false);
 
+    // ---------------------- validar que ingreso dentro de la semana actual ----------------------
+    const ingresoEnSemanaActual = (employee) => {
+        if (!employee.fecha_ingreso) return false;
+
+        const ingreso = employee.fecha_ingreso.substring(0, 10); // YYYY-MM-DD
+        return weekDates.includes(ingreso);
+    };
+
     // ---------------------- VALIDACIONES , descansos , TD , Compensas  , envio al backend ----------------------
     const handleSaveSchedules = async () => {
         // ==================== EVITAR CREAR HORARIOS ON FECHAS PASADAS ====================
@@ -731,16 +750,12 @@ export default function App({ empleados, empresas, url, supervisores }) {
         const diffToMonday = (dayOfWeek + 6) % 7;
         inicioSemanaActual.setDate(hoy.getDate() - diffToMonday);
         inicioSemanaActual.setHours(0, 0, 0, 0);
-
-/*
-  if (currentWeekStart < inicioSemanaActual) {
-            toast.error('❌ No se pueden crear ni editar horarios de semanas anteriores');
-            return;
-        }
-*/
-
-
-
+        /*
+          if (currentWeekStart < inicioSemanaActual) {
+                    toast.error('❌ No se pueden crear ni editar horarios de semanas anteriores');
+                    return;
+                }
+        */
         const entries = [];
         let hasValidationErrors = false;
         //  console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
@@ -754,6 +769,12 @@ export default function App({ empleados, empresas, url, supervisores }) {
             if (employee.jornada_id === 1) { // FULL TIME
                 const MAX_HORAS = 2880;  // 48 horas en minutos
                 const MIN_HORAS = 2820;  // 47 horas en minutos
+
+                if (ingresoEnSemanaActual(employee)) {
+                    console.log("🟡 Empleado nuevo esta semana → sin validación FT:", employee.nombres);
+                    // PERO igual muestra advertencia amigable si quieres (opcional)
+                    return;
+                }
 
                 // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES
                 const todosSonVacaciones = Object.values(employeeSchedule).every(day =>
@@ -781,12 +802,14 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     return;
                 }
 
+
                 if (horasSemanales < MIN_HORAS) {
                     const deficit = MIN_HORAS - horasSemanales;
                     toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | DIFERENCIA: -${formatearHoras(deficit)}`);
                     hasValidationErrors = true;
                     return;
                 }
+
             }
         });
 

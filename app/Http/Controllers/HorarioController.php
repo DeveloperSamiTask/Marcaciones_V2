@@ -1605,7 +1605,7 @@ class HorarioController extends Controller
             }
 
             // 🔥 DEBUG FINAL
-            // \Log::info("🎯 TOTAL: {$totalMinutos} minutos = ".($totalMinutos / 60).' horas');
+             \Log::info("🎯 TOTAL: {$totalMinutos} minutos = ".($totalMinutos / 60).' horas');
 
             $totalHoras = $totalMinutos / 60;
             $faltante = max(0, 93 - $totalHoras);

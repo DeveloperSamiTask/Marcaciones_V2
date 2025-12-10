@@ -45,6 +45,7 @@ const estadoOptions = [
     { value: 'HENA', label: '22.H. EXTRA NO AUTORIZADO' },
     { value: 'HE', label: '23.HORAS EXTRA' },
     { value: 'TD', label: '24.TRABAJO DIA DESCANSO' },
+    { value: 'AI', label: '25.ANTES INGRESO' },
 ];
 
 const estadoBadgeVariants = {
@@ -73,7 +74,9 @@ const estadoBadgeVariants = {
 
     HENA: { label: "23.H. EXTRA NO AUTORIZADO" },
     HE: { label: "24.HORAS EXTRA" },
+
     TD: { label: "25.TRABAJO DIA DESCANSO" },
+    AI: { label: "26. ANTES INGRESO" },
 } as const;
 
 export function WeekScheduleTable({
@@ -213,6 +216,34 @@ export function WeekScheduleTable({
     }, [employee]);
 
 
+    // ---------------------🔥 Calcular qué días están ANTES de la fecha de ingreso
+    const diasAntesDeIngreso = useMemo(() => {
+        // Si no hay fecha de ingreso -> nada bloqueado
+        if (!employee?.fecha_ingreso) return new Set<string>();
+
+        // Normalizamos la fecha de ingreso a YYYY-MM-DD (evita problemas de timezone/hora)
+        const fechaIngresoISO = (typeof employee.fecha_ingreso === 'string')
+            ? employee.fecha_ingreso.substring(0, 10)
+            : (new Date(employee.fecha_ingreso)).toISOString().split('T')[0];
+
+        const diasBloqueados = new Set<string>();
+
+        weekDates.forEach(d => {
+            // weekDates puede traer Date o string (YYYY-MM-DD). Normalizamos a YYYY-MM-DD.
+            const dateStr = (typeof d === 'string') ? d : d.toISOString().split('T')[0];
+
+            // Si dateStr es anterior a fechaIngresoISO (comparación lexicográfica funciona con YYYY-MM-DD)
+            if (dateStr < fechaIngresoISO) {
+                diasBloqueados.add(dateStr);
+            }
+        });
+
+        console.log(`🔒 Empleado ${employee.id} - fecha_ingreso: ${fechaIngresoISO} - Días bloqueados:`, Array.from(diasBloqueados));
+        return diasBloqueados;
+    }, [employee?.fecha_ingreso, employee?.id, weekDates]);
+
+
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full min-w-[800px]">
@@ -235,6 +266,7 @@ export function WeekScheduleTable({
                         const feriadosList = feriadosActuales?.[tipoFeriado] || [];
                         //const yaExiste = horariosExistentes?.has(`${employeeId}-${dateStr}`) || false;
                         const yaExiste = dayData?.existe || horariosExistentes?.has(`${employeeId}-${dateStr}`) || false;
+                        const bloqueadoPorIngreso = diasAntesDeIngreso.has(dateStr);
 
                         return (
                             <tr key={dayIndex} className="border-b last:border-b-0 hover:bg-gray-50">
@@ -257,9 +289,9 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.entryTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'entryTime', e.target.value)}
-                                        readOnly={yaExiste}
-                                        //disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
-                                        className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
+                                        readOnly={yaExiste || bloqueadoPorIngreso}
+                                        //  disabled={diasAntesDeIngreso.has(dateStr)}
+                                        className={`w-full text-xs h-8 ${yaExiste || bloqueadoPorIngreso ? 'bg-blue-100' : ''}`}
                                     />
                                 </td>
 
@@ -269,9 +301,10 @@ export function WeekScheduleTable({
                                         type="time"
                                         value={(dayData?.exitTime || '00:00')}
                                         onChange={(e) => onFieldChange(employeeId, dateStr, 'exitTime', e.target.value)}
-                                        readOnly={yaExiste}
-                                        //disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
-                                        className={`w-full text-xs h-8 ${yaExiste ? 'bg-blue-100' : ''}`}
+                                        readOnly={yaExiste || bloqueadoPorIngreso}
+                                        // disabled={isHorarioBloqueado || yaExiste} // 🔥 DESHABILITAR SI YA EXISTE
+
+                                        className={`w-full text-xs h-8 ${yaExiste || bloqueadoPorIngreso ? 'bg-blue-100' : ''}`}
                                     />
                                 </td>
 
@@ -280,7 +313,7 @@ export function WeekScheduleTable({
                                     <Select
                                         value={dayData?.status || 'L'}
                                         onValueChange={(value) => onFieldChange(employeeId, dateStr, 'status', value)}
-                                        disabled={yaExiste}
+                                        disabled={yaExiste || bloqueadoPorIngreso }
                                     >
                                         <SelectTrigger className="text-xs h-8">
                                             <SelectValue>

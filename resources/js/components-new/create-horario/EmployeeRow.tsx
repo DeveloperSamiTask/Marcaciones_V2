@@ -196,6 +196,22 @@ export function EmployeeRow({
         cargarHorasMensuales();
     }, [employee.id, weekDates]);
 
+    // 🔥 Verificar si es primera semana del empleado
+    const esPrimeraSemana = useMemo(() => {
+        if (!employee.fecha_ingreso) return false;
+
+        const fechaIngreso = new Date(employee.fecha_ingreso);
+        const primerDiaSemana = new Date(weekDates[0]);
+        const ultimoDiaSemana = new Date(weekDates[6]);
+
+        // Verificar si fecha_ingreso está entre el primer y último día de la semana
+        return fechaIngreso >= primerDiaSemana && fechaIngreso <= ultimoDiaSemana;
+    }, [employee.fecha_ingreso, weekDates]);
+
+
+    // 🔥 Calcular qué días están ANTES de la fecha de ingreso
+
+
 
 
 
@@ -233,12 +249,15 @@ export function EmployeeRow({
                         </Badge>
                     )}
 
-                    {hasRestDayValidationError && employee.jornada_id === 1 &&  !tieneDiasRegistrados &&(
-                        <Badge variant="destructive" className="text-xs flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            Falta día de descanso
-                        </Badge>
-                    )}
+                    {hasRestDayValidationError &&
+                        employee.jornada_id === 1 &&
+                        !tieneDiasRegistrados &&
+                        !esPrimeraSemana && ( // 🔥 NUEVA CONDICIÓN
+                            <Badge variant="destructive" className="text-xs flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                Falta día de descanso
+                            </Badge>
+                        )}
 
                     {/* ─────────────────────────────────────────────── */}
                     {/* 🔥 TOTALES EN UNA SOLA LÍNEA (SEMANAL + MENSUAL PT) */}
