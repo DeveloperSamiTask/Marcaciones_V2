@@ -866,39 +866,74 @@ export default function App({ empleados, empresas, url, supervisores }) {
             return fechaIngreso >= primerDiaSemana && fechaIngreso <= ultimoDiaSemana;
         };
 
+        const debeValidarEmpleado = (employee: Empleado): boolean => {
+            if (!employee.fecha_ingreso) return true;
+
+            const fechaIngreso = new Date(employee.fecha_ingreso);
+            fechaIngreso.setHours(0, 0, 0, 0);
+
+            const inicioSemana = new Date(weekDates[0]);
+            inicioSemana.setHours(0, 0, 0, 0);
+
+            const finSemana = new Date(weekDates[6]);
+            finSemana.setHours(23, 59, 59, 999);
+
+            // 🔥 CASO 1: Ingresa DESPUÉS de la semana → NO VALIDAR
+            if (fechaIngreso > finSemana) {
+                console.log(`🔴 ${employee.apellidos} - Ingresa DESPUÉS de la semana (${fechaIngreso.toISOString().split('T')[0]}) → NO validar`);
+                return false;
+            }
+
+            // 🔥 CASO 2: Ingresa DURANTE la semana → NO VALIDAR
+            if (fechaIngreso >= inicioSemana && fechaIngreso <= finSemana) {
+                console.log(`🟡 ${employee.apellidos} - Ingresa DURANTE la semana (${fechaIngreso.toISOString().split('T')[0]}) → NO validar`);
+                return false;
+            }
+
+            // 🔥 CASO 3: Calcular semana de ingreso
+            const diaIngreso = fechaIngreso.getDay();
+            const diffToMonday = (diaIngreso + 6) % 7;
+
+            const inicioSemanaIngreso = new Date(fechaIngreso);
+            inicioSemanaIngreso.setDate(fechaIngreso.getDate() - diffToMonday);
+            inicioSemanaIngreso.setHours(0, 0, 0, 0);
+
+            // 🔥 CASO 3a: Estamos creando horarios para la semana de ingreso → NO VALIDAR
+            if (inicioSemana.getTime() === inicioSemanaIngreso.getTime()) {
+                console.log(`🟢 ${employee.apellidos} - Semana de ingreso → NO validar`);
+                return false;
+            }
+
+            // ✅ CASO 4: Ingresó en una semana ANTERIOR → SÍ VALIDAR
+            console.log(`✅ ${employee.apellidos} - Ingresó hace ${Math.floor((inicioSemana.getTime() - fechaIngreso.getTime()) / (1000 * 60 * 60 * 24))} días → SÍ validar`);
+            return true;
+        };
         // ==================== VALIDACIONES DE HORAS SEMANALES ====================
+
         filteredEmployees.forEach(employee => {
             const employeeSchedule = scheduleData[employee.id] || {};
             const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
+            const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
+            const tieneExcepcionEnLaSemana = Object.values(employeeSchedule).some(day =>
+                excepciones.includes(day?.status) || excepciones.includes(day?.estado)
+            );
+
 
             /* -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------  */
             if (employee.jornada_id === 1) { // FULL TIME
+
+                const esSamiTask = employee.empresa_id === 2;
                 const MAX_HORAS = 2880;  // 48 horas en minutos
-                const MIN_HORAS = 2820;  // 47 horas en minutos
+                const MIN_HORAS = esSamiTask ? 2580 : 2620;  // 47 horas en minutos (2820)
 
-                const esEmpleadoNuevo = ingresoEnSemanaActual(employee);
-
-                if (ingresoEnSemanaActual(employee)) {
-                    //console.log("🟡 Empleado nuevo esta semana → sin validación FT:", employee.nombres);
-                    // PERO igual muestra advertencia amigable si quieres (opcional)
-                    return;
+                if (!debeValidarEmpleado(employee)) {
+                    return; // se salta TODAS las validaciones
                 }
 
-                if (esEmpleadoNuevo) {
-                    //console.log(`🟢 ${employee.apellidos} ${employee.nombres} - NUEVO → Solo máximo`);
-
-                    if (horasSemanales > MAX_HORAS) {
-                        const excedente = horasSemanales - MAX_HORAS;
-                        toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: ${formatearHoras(horasSemanales)} | EXCEDE: +${formatearHoras(excedente)}`);
-                        hasValidationErrors = true;
-                    }
-                    return;
-                }
-
-
-                // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES
+                // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES o Descanso Medico
                 const todosSonVacaciones = Object.values(employeeSchedule).every(day =>
-                    day?.status === 'V' || day?.estado === 'V'
+                    day?.status === 'V' || day?.estado === 'V' || day?.status === 'M' || day?.estado === 'M' || day?.status === 'LP' || day?.estado === 'LP' || day?.status === 'LM' || day?.estado === 'LM'
+                    || day?.status === 'LF' || day?.estado === 'LF'
                 );
 
                 // 🔥 EXCEPCIÓN: Si todos son V, no validar mínimo de horas
@@ -1008,172 +1043,220 @@ export default function App({ empleados, empresas, url, supervisores }) {
         const permisosTDUsados = {};
 
         // ==================== PROCESAR CADA EMPLEADO ====================
-         for (const employee of filteredEmployees) {
+        for (const employee of filteredEmployees) {
 
-        // Si ya encontramos un error grave, no procesamos más empleados.
-        if (hasValidationErrors) break;
+            // Si ya encontramos un error grave, no procesamos más empleados.
+            if (hasValidationErrors) break;
 
-        const empSchedule = scheduleData[employee.id];
+            const empSchedule = scheduleData[employee.id];
 
-        // 1. VALIDACIÓN BÁSICA: ¿Tiene horarios?
-        if (!empSchedule) {
-            toast.error(`${employee.apellidos} ${employee.nombres} no tiene horarios configurados`);
-            hasValidationErrors = true;
-            break; // Detener el ciclo completo de inmediato
-        }
+            // 1. VALIDACIÓN BÁSICA: ¿Tiene horarios?
+            if (!empSchedule) {
+                toast.error(`${employee.apellidos} ${employee.nombres} no tiene horarios configurados`);
+                hasValidationErrors = true;
+                break; // Detener el ciclo completo de inmediato
+            }
 
-        // --- LOG y CÁLCULOS PRELIMINARES (Sin cambios) ---
+            // --- LOG y CÁLCULOS PRELIMINARES (Sin cambios) ---
 
-        const employeeSchedule = scheduleData[employee.id] || {};
-        const diasDescanso = Object.values(employeeSchedule).filter(day => day.status === 'D').length;
-        const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
+            const employeeSchedule = scheduleData[employee.id] || {};
+            const diasDescanso = Object.values(employeeSchedule).filter(day => day.status === 'D').length;
+            const tieneVacaciones = Object.values(employeeSchedule).some(day => day.status === 'V');
 
-        const ingresoEstaSemana = (() => {
-            if (!employee.fecha_ingreso) return false;
-            // ... lógica de fecha_ingreso (Sin cambios) ...
-            const fechaIngreso = new Date(employee.fecha_ingreso);
-            const primerDiaSemana = new Date(weekDates[0]);
-            const ultimoDiaSemana = new Date(weekDates[6]);
+            const ingresoEstaSemana = (() => {
+                if (!employee.fecha_ingreso) return false;
+                // ... lógica de fecha_ingreso (Sin cambios) ...
+                const fechaIngreso = new Date(employee.fecha_ingreso);
+                const primerDiaSemana = new Date(weekDates[0]);
+                const ultimoDiaSemana = new Date(weekDates[6]);
 
-            return fechaIngreso >= primerDiaSemana && fechaIngreso <= ultimoDiaSemana;
-        })();
+                return fechaIngreso >= primerDiaSemana && fechaIngreso <= ultimoDiaSemana;
+            })();
 
-        // --- VALIDACIONES DE REGLAS DE NEGOCIO ---
+            // --- VALIDACIONES DE REGLAS DE NEGOCIO ---
 
-        // Validaciones de descanso (Máximo 1)
-        if (diasDescanso > 1) {
-            toast.error(`${employee.apellidos} ${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
-            hasValidationErrors = true;
-            continue; // Saltar al siguiente empleado
-        }
+            // Validaciones de descanso (Máximo 1)
+            if (diasDescanso > 1) {
+                toast.error(`${employee.apellidos} ${employee.nombres} tiene ${diasDescanso} días de descanso (máximo 1)`);
+                hasValidationErrors = true;
+                continue; // Saltar al siguiente empleado
+            }
 
-        /* SI YA TIENE HORARIOS REGISTRADOS Y ES FT (Jornada ID 1) */
-        if (employee.jornada_id === 1) {
+            /* SI YA TIENE HORARIOS REGISTRADOS Y ES FT (Jornada ID 1) */
+            if (employee.jornada_id === 1) {
 
-            if (ingresoEstaSemana) {
-                console.log(`🟢 ${employee.apellidos} ${employee.nombres} - EMPLEADO NUEVO esta semana → saltando validaciones estrictas`);
-                // Continuamos para procesar sus entries
-            } else {
-                // 🔥 VERIFICAR SI YA TIENE DÍAS REGISTRADOS EN LA SEMANA (para permitir rellenar huecos)
-                const tieneDiasRegistrados = weekDates.some(date => {
-                    const dateStr = formatDate(date); // Asumiendo que formatDate existe
-                    return horariosExistentes.has(`${employee.id}-${dateStr}`);
+                // 🔥 VERIFICAR SI DEBE VALIDARSE (misma lógica que arriba)
+                const debeValidar = (() => {
+                    if (!employee.fecha_ingreso) return true;
+
+                    const fechaIngreso = new Date(employee.fecha_ingreso);
+                    fechaIngreso.setHours(0, 0, 0, 0);
+
+                    const inicioSemana = new Date(weekDates[0]);
+                    inicioSemana.setHours(0, 0, 0, 0);
+
+                    const finSemana = new Date(weekDates[6]);
+                    finSemana.setHours(23, 59, 59, 999);
+
+                    // ❌ Ingresa DESPUÉS de la semana → NO validar
+                    if (fechaIngreso > finSemana) {
+                        console.log(`🔴 ${employee.apellidos} - Ingresa DESPUÉS → NO validar descanso`);
+                        return false;
+                    }
+
+                    // ❌ Ingresa DURANTE la semana → NO validar
+                    if (fechaIngreso >= inicioSemana && fechaIngreso <= finSemana) {
+                        console.log(`🟡 ${employee.apellidos} - Ingresa DURANTE → NO validar descanso`);
+                        return false;
+                    }
+
+                    // ❌ Calcular semana de ingreso
+                    const diaIngreso = fechaIngreso.getDay();
+                    const diffToMonday = (diaIngreso + 6) % 7;
+
+                    const inicioSemanaIngreso = new Date(fechaIngreso);
+                    inicioSemanaIngreso.setDate(fechaIngreso.getDate() - diffToMonday);
+                    inicioSemanaIngreso.setHours(0, 0, 0, 0);
+
+                    // ❌ Semana de ingreso → NO validar
+                    if (inicioSemana.getTime() === inicioSemanaIngreso.getTime()) {
+                        console.log(`🟢 ${employee.apellidos} - Semana de ingreso → NO validar descanso`);
+                        return false;
+                    }
+
+                    // ✅ Cualquier otra semana → SÍ validar
+                    return true;
+                })();
+
+                // 🔥 SI NO DEBE VALIDARSE, SALTAR
+                if (!debeValidar) {
+                    console.log(`⏭️ ${employee.apellidos} - Saltando validación de descanso (empleado nuevo/futuro)`);
+                    // NO hacer nada, continuar al siguiente
+                } else {
+                    // 🔥 VALIDACIÓN NORMAL DE DESCANSO
+
+                    // Verificar si ya tiene días registrados
+                    const tieneDiasRegistrados = weekDates.some(date => {
+                        const dateStr = formatDate(date);
+                        return horariosExistentes.has(`${employee.id}-${dateStr}`);
+                    });
+
+                    // Solo validar si NO tiene días previos
+                    if (!tieneDiasRegistrados) {
+                        const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
+                        const tieneExcepcion = Object.values(employeeSchedule).some(day =>
+                            excepciones.includes(day.status)
+                        );
+
+                        if (diasDescanso === 0 && !tieneExcepcion) {
+                            toast.error(`${employee.apellidos} ${employee.nombres} debe tener al menos 1 día de descanso`);
+                            hasValidationErrors = true;
+                            return; // O continue si estás en un forEach
+                        }
+                    } else {
+                        console.log(`⏭️ Saltando validación de descanso para ${employee.apellidos}: ya tiene días registrados`);
+                    }
+                }
+            } // Fin de jornada_id === 1
+
+            // --- INICIALIZAR TRACKING PARA ASIGNACIONES ---
+            feriadosUsadosPorEmpleado[employee.id] = { C: [], CA: [] };
+            permisosTDUsados[employee.id] = [];
+            let tieneHorariosInvalidos = false;
+
+            // ==================== PROCESAR CADA DÍA ====================
+            // Se mantiene forEach aquí porque no necesitamos detener el bucle externo, solo el interno.
+            Object.keys(empSchedule).forEach(date => {
+                if (tieneHorariosInvalidos) return; // Salir de este forEach interno si ya falló
+
+                const { entryTime, exitTime, status } = empSchedule[date];
+
+                // Validar horarios laborales
+                if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
+                    toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
+                    tieneHorariosInvalidos = true;
+                    return; // Solo sale de este forEach interno
+                }
+
+                let feriadoId = null;
+                let permisoTDId = null;
+
+                // ==================== ASIGNAR FERIADO PARA C/CA ====================
+                if (status === 'C' || status === 'CA') {
+                    // ... Tu lógica de asignación de feriados (Sin cambios) ...
+                    const feriadosDelEmpleado = feriadosMap[employee.id] || { feriadoDisponible: [], feriadoFuturo: [] };
+                    const tipoFeriado = status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
+                    const listaFeriados = Array.isArray(feriadosDelEmpleado[tipoFeriado]) ? feriadosDelEmpleado[tipoFeriado] : [];
+
+                    const feriadosDisponibles = listaFeriados.filter(f => !feriadosUsadosPorEmpleado[employee.id][status].includes(f.id));
+
+                    if (feriadosDisponibles.length > 0) {
+                        const feriadosOrdenados = [...feriadosDisponibles].sort(
+                            (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+                        );
+                        feriadoId = feriadosOrdenados[0].id;
+                        feriadosUsadosPorEmpleado[employee.id][status].push(feriadoId);
+
+                    } else {
+                        const tipoTexto = status === 'C' ? 'compensaciones (pasadas)' : 'compensaciones adelantadas (futuras)';
+                        const totalDisponibles = listaFeriados.length;
+                        const yaUsados = feriadosUsadosPorEmpleado[employee.id][status].length;
+                        toast.error(
+                            `❌ ${employee.apellidos} ${employee.nombres}: No puede marcar más días como "${status}". ` +
+                            `Solo tiene ${totalDisponibles} ${tipoTexto} y ya usó ${yaUsados}.`,
+                            { duration: 8000 }
+                        );
+                        tieneHorariosInvalidos = true;
+                        return;
+                    }
+                }
+
+                // ==================== ASIGNAR PERMISO TD ====================
+                if (status === 'TD') {
+                    // ... Tu lógica de asignación de permisos TD (Sin cambios) ...
+                    const permisosTD = Array.isArray(permisosTDMap[employee.id]) ? permisosTDMap[employee.id] : [];
+                    const permisosDisponibles = permisosTD.filter(permiso => permiso && permiso.id && !permisosTDUsados[employee.id].includes(permiso.id));
+
+                    if (permisosDisponibles.length > 0) {
+                        const permisosOrdenados = [...permisosDisponibles].sort(
+                            (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+                        );
+                        permisoTDId = permisosOrdenados[0].id;
+                        permisosTDUsados[employee.id].push(permisoTDId);
+
+                    } else {
+                        const totalPermisos = permisosTD.length;
+                        const yaUsados = permisosTDUsados[employee.id].length;
+                        toast.error(
+                            `❌ ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
+                            `Solo tiene ${totalPermisos} permisos TD disponibles y ya usó ${yaUsados}.`,
+                            { duration: 8000 }
+                        );
+                        tieneHorariosInvalidos = true;
+                        return;
+                    }
+                }
+
+                // ==================== AGREGAR A ENTRIES ====================
+                // Solo agrega si todo está OK en este día
+                entries.push({
+                    empleado_id: employee.id,
+                    fecha: date,
+                    ingreso: entryTime,
+                    salida: exitTime,
+                    estado: status,
+                    feriado: feriadoId,
+                    permiso_td_id: permisoTDId,
                 });
 
-                // 🔥 SOLO VALIDAR SI NO TIENE DÍAS PREVIOS
-                if (!tieneDiasRegistrados) {
-                    const excepciones = ['V', 'M', 'LF', 'LM', 'LP'];
-                    const tieneExcepcion = Object.values(employeeSchedule).some(day => excepciones.includes(day.status));
+            }); // Fin de Object.keys(empSchedule).forEach
 
-                    if (diasDescanso === 0 && !tieneExcepcion) {
-                        toast.error(`${employee.apellidos} ${employee.nombres} debe tener al menos 1 día de descanso`);
-                        hasValidationErrors = true;
-                        continue; // Saltar al siguiente empleado (CORREGIDO)
-                    }
-                } else {
-                    console.log(`⏭️ Saltando validación de descanso para ${employee.apellidos}: ya tiene días registrados`);
-                }
+            // 🔥 Verificar si hubo un error en el forEach interno para detener el externo
+            if (tieneHorariosInvalidos) {
+                hasValidationErrors = true;
+                continue; // Saltar al siguiente empleado
             }
-        } // Fin de jornada_id === 1
-
-        // --- INICIALIZAR TRACKING PARA ASIGNACIONES ---
-        feriadosUsadosPorEmpleado[employee.id] = { C: [], CA: [] };
-        permisosTDUsados[employee.id] = [];
-        let tieneHorariosInvalidos = false;
-
-        // ==================== PROCESAR CADA DÍA ====================
-        // Se mantiene forEach aquí porque no necesitamos detener el bucle externo, solo el interno.
-        Object.keys(empSchedule).forEach(date => {
-            if (tieneHorariosInvalidos) return; // Salir de este forEach interno si ya falló
-
-            const { entryTime, exitTime, status } = empSchedule[date];
-
-            // Validar horarios laborales
-            if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
-                toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
-                tieneHorariosInvalidos = true;
-                return; // Solo sale de este forEach interno
-            }
-
-            let feriadoId = null;
-            let permisoTDId = null;
-
-            // ==================== ASIGNAR FERIADO PARA C/CA ====================
-            if (status === 'C' || status === 'CA') {
-                // ... Tu lógica de asignación de feriados (Sin cambios) ...
-                const feriadosDelEmpleado = feriadosMap[employee.id] || { feriadoDisponible: [], feriadoFuturo: [] };
-                const tipoFeriado = status === 'C' ? 'feriadoDisponible' : 'feriadoFuturo';
-                const listaFeriados = Array.isArray(feriadosDelEmpleado[tipoFeriado]) ? feriadosDelEmpleado[tipoFeriado] : [];
-
-                const feriadosDisponibles = listaFeriados.filter(f => !feriadosUsadosPorEmpleado[employee.id][status].includes(f.id));
-
-                if (feriadosDisponibles.length > 0) {
-                    const feriadosOrdenados = [...feriadosDisponibles].sort(
-                        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-                    );
-                    feriadoId = feriadosOrdenados[0].id;
-                    feriadosUsadosPorEmpleado[employee.id][status].push(feriadoId);
-
-                } else {
-                    const tipoTexto = status === 'C' ? 'compensaciones (pasadas)' : 'compensaciones adelantadas (futuras)';
-                    const totalDisponibles = listaFeriados.length;
-                    const yaUsados = feriadosUsadosPorEmpleado[employee.id][status].length;
-                    toast.error(
-                        `❌ ${employee.apellidos} ${employee.nombres}: No puede marcar más días como "${status}". ` +
-                        `Solo tiene ${totalDisponibles} ${tipoTexto} y ya usó ${yaUsados}.`,
-                        { duration: 8000 }
-                    );
-                    tieneHorariosInvalidos = true;
-                    return;
-                }
-            }
-
-            // ==================== ASIGNAR PERMISO TD ====================
-            if (status === 'TD') {
-                // ... Tu lógica de asignación de permisos TD (Sin cambios) ...
-                const permisosTD = Array.isArray(permisosTDMap[employee.id]) ? permisosTDMap[employee.id] : [];
-                const permisosDisponibles = permisosTD.filter(permiso => permiso && permiso.id && !permisosTDUsados[employee.id].includes(permiso.id));
-
-                if (permisosDisponibles.length > 0) {
-                    const permisosOrdenados = [...permisosDisponibles].sort(
-                        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-                    );
-                    permisoTDId = permisosOrdenados[0].id;
-                    permisosTDUsados[employee.id].push(permisoTDId);
-
-                } else {
-                    const totalPermisos = permisosTD.length;
-                    const yaUsados = permisosTDUsados[employee.id].length;
-                    toast.error(
-                        `❌ ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
-                        `Solo tiene ${totalPermisos} permisos TD disponibles y ya usó ${yaUsados}.`,
-                        { duration: 8000 }
-                    );
-                    tieneHorariosInvalidos = true;
-                    return;
-                }
-            }
-
-            // ==================== AGREGAR A ENTRIES ====================
-            // Solo agrega si todo está OK en este día
-            entries.push({
-                empleado_id: employee.id,
-                fecha: date,
-                ingreso: entryTime,
-                salida: exitTime,
-                estado: status,
-                feriado: feriadoId,
-                permiso_td_id: permisoTDId,
-            });
-
-        }); // Fin de Object.keys(empSchedule).forEach
-
-        // 🔥 Verificar si hubo un error en el forEach interno para detener el externo
-        if (tieneHorariosInvalidos) {
-            hasValidationErrors = true;
-            continue; // Saltar al siguiente empleado
         }
-    }
 
 
 
@@ -1330,7 +1413,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
         return totalMinutos;
     };
-
 
     const tiempoAMinutos = (tiempo) => {
         const [horas, minutos] = tiempo.split(':').map(Number);

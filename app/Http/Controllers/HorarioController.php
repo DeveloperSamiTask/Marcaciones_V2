@@ -958,6 +958,11 @@ class HorarioController extends Controller
         $empleadoEsFullTime = ($empleado->jornada_id === 1);
         $excedeHorasMaximas = ($horasSemanales > 2880); // Solo si EXCEDE, no iguala
 
+        if ($estado === 'AI') {
+           // Log::info("⏭️ NO SE CREA HORARIO - estado AI para empleado $empleadoId, fecha $fecha");
+
+            return; // o continue si estás en un foreach arriba
+        }
         // 5. Crear o actualizar horario
         $horario = Horario::updateOrCreate(
             [
@@ -1022,7 +1027,7 @@ class HorarioController extends Controller
             }
         }
         // B. CREAR PERMISO SI ES DÍA NO LABORAL
-        if ($estado !== 'L' && $estado !== 'TD') {
+        if ($estado !== 'L' && $estado !== 'TD' && $estado !== 'AI') {
             $tipoPermiso = PermisoTipo::firstWhere('codigo', $estado);
             if ($tipoPermiso) {
                 $permisoData = [
@@ -1373,7 +1378,6 @@ class HorarioController extends Controller
         $empleado->horas_trabajadas = $horas / 60; // Total de horas mensuales (en horas)
         $empleado->horas_semanal_trabajadas = $horasSemanal; // Total de minutos semanales (se convierte a minutos para el frontend)
 
-
         $fechasLorables = Horario::where('empleado_id', $horario->empleado_id) // fechas en las que el empleado a laborado
             ->where('estado', 'L')
             // ->whereYear('fecha', now()->year)
@@ -1403,10 +1407,8 @@ class HorarioController extends Controller
             ->orderBy('fecha', 'asc')
             ->get();
 
-        \Log::debug('Feriados futuros:', $feriadoFuturo->pluck('fecha')->toArray());
-        foreach (Feriado::all() as $f) {
-    dump($f->fecha, $f->horarios()->where('empleado_id', $horario->empleado_id)->exists());
-}
+
+
         return Inertia::render('horarios/edit', [
             'empleado' => $empleado,
             'horario' => $horario,
@@ -1613,7 +1615,7 @@ class HorarioController extends Controller
             }
 
             // 🔥 DEBUG FINAL
-             \Log::info("🎯 TOTAL: {$totalMinutos} minutos = ".($totalMinutos / 60).' horas');
+            \Log::info("🎯 TOTAL: {$totalMinutos} minutos = ".($totalMinutos / 60).' horas');
 
             $totalHoras = $totalMinutos / 60;
             $faltante = max(0, 93 - $totalHoras);

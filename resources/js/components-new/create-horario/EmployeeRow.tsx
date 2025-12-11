@@ -209,11 +209,6 @@ export function EmployeeRow({
     }, [employee.fecha_ingreso, weekDates]);
 
 
-    // 🔥 Calcular qué días están ANTES de la fecha de ingreso
-
-
-
-
 
 
     return (
