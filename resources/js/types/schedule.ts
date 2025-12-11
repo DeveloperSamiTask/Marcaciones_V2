@@ -1,6 +1,6 @@
 export type Modality = 'Full Time' | 'Part Time';
 
-export type ScheduleStatus = 'Programado' | 'Activo' | 'Completado' | 'Ausente' | 'Cancelado' | 'Descanso';
+export type ScheduleStatus = 'Programado' | 'Activo' | 'Completado' | 'Ausente' | 'Cancelado' | 'Descanso' | 'AI';
 
 export interface Company {
   id: number;

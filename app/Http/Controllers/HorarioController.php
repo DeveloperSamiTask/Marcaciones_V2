@@ -631,7 +631,7 @@ class HorarioController extends Controller
             'entries.*.fecha' => 'required|date',
             'entries.*.ingreso' => 'required|date_format:H:i',
             'entries.*.salida' => 'required|date_format:H:i',
-            'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D,AHE,C,CA,CHE,FL,SP,M,SN,ST,SFI,FI,FJ,LCG,LSG,LP,LM,LF,TD',
+            'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D,AHE,C,CA,CHE,FL,SP,M,SN,ST,SFI,FI,FJ,LCG,LSG,LP,LM,LF,TD,AI',
             'entries.*.feriado' => 'nullable|integer|exists:feriados,id',
             'entries.*.permiso_td_id' => 'nullable|integer|exists:permisos,id',
         ]);
