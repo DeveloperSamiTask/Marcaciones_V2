@@ -825,14 +825,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
     const [isSaving, setIsSaving] = useState(false);
 
-    // ---------------------- validar que ingreso dentro de la semana actual ----------------------
-    const ingresoEnSemanaActual = (employee) => {
-        if (!employee.fecha_ingreso) return false;
-
-        const ingreso = employee.fecha_ingreso.substring(0, 10); // YYYY-MM-DD
-        return weekDates.includes(ingreso);
-    };
-
     // ---------------------- VALIDACIONES , descansos , TD , Compensas  , envio al backend ----------------------
     const handleSaveSchedules = async () => {
         // ==================== EVITAR CREAR HORARIOS ON FECHAS PASADAS ====================
@@ -967,18 +959,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
             }
         });
-
-        /*
-         else if (employee.jornada_id === 2) { // PART TIME
-            // No menos de 23.5 horas
-            if (horasSemanales < 1410) {
-                toast.error(`🚨 ${employee.nombres}: ${formatearHoras(horasSemanales)} (MENOS de 23.5 horas mínimas para Part Time)`);
-                hasValidationErrors = true;
-                return;
-            }
-            // Part Time no debería tener máximo? O agregas si necesitas
-        }
-        */
 
 
 
@@ -1287,17 +1267,14 @@ export default function App({ empleados, empresas, url, supervisores }) {
         // ==================== ENVÍO AL BACKEND ====================
         //console.log("📦 ENTRIES QUE SE ESTÁN ENVIANDO:", JSON.parse(JSON.stringify(entries)));
 
-        console.log('📤 ENTRIES GENERADOS:', {
-            total: entries.length,
-            por_empleado: entries.reduce((acc, e) => {
-                acc[e.empleado_id] = (acc[e.empleado_id] || 0) + 1;
-                return acc;
-            }, {}),
-            estados: entries.reduce((acc, e) => {
-                acc[e.estado] = (acc[e.estado] || 0) + 1;
-                return acc;
-            }, {}),
+        console.log("📤 ENTRIES ENVIADOS:");
+        Object.entries(entries).forEach(([index, entry]) => {
+            console.log(
+                `#${index} → ${entry.fecha} | estado: ${entry.estado} | ` +
+                `ingreso: ${entry.ingreso || '—'} | salida: ${entry.salida || '—'}`
+            );
         });
+
 
         router.post(route('horarios.store-multiple'), { entries }, {
             preserveScroll: true,

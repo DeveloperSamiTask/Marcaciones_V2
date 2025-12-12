@@ -1386,10 +1386,11 @@ class HorarioController extends Controller
 
         $feriadoFuturo = Feriado::query() // feriados futuros para COMPENSA ADELANTADA
             ->whereYear('fecha', now()->year)
-            ->whereDate('fecha', '>=', now())
+            ->whereDate('fecha', '<=', now())
             ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
             ->select(['id', 'fecha', 'nombre'])
-            ->orderBy('fecha', 'asc')
+            ->orderBy('fecha', 'desc')
+            ->limit(1)
             ->get();
 
         $feriadoDisponible = Feriado::query() // feriados en los que los empleados tienen estado L, antes de la fecha actual para "COMPENSACION"

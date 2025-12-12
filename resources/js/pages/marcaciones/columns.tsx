@@ -382,49 +382,142 @@ import { sendSomething } from "./send";
         },
     },
     {
-        accessorKey: 'horas', // horas trabajadas
+        accessorKey: 'horas',
         header: 'TOTAL',
         cell: ({ row, table }) => {
-            const horas = row.original.horas;
-            const horario = row.original.horario?.estado;
-            const empleadoId = row.original.empleado.id;
-            const fecha = format(row.original.fecha, 'yyyy-MM-dd');
+            // Helper: parse "HH:MM" -> minutes since 00:00
+            const parseTimeToMinutes = (time: string | undefined | null) => {
+                if (!time) return null;
+                // aceptar formatos "09:00", "9:00", "00:00"
+                const parts = String(time).split(':');
+                if (parts.length < 2) return null;
+                const hh = parseInt(parts[0], 10);
+                const mm = parseInt(parts[1], 10);
+                if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+                return hh * 60 + mm;
+            };
 
-            // SOLO calcular y loguear en la PRIMERA fila para evitar spam
+            // Helper: calcular diferencia en minutos entre dos tiempos (puede cruzar medianoche)
+            const diffMinutes = (startStr?: string | null, endStr?: string | null) => {
+                const start = parseTimeToMinutes(startStr);
+                const end = parseTimeToMinutes(endStr);
+                if (start === null || end === null) return null;
+                // si end < start asumimos paso de medianoche -> sumamos 24h
+                if (end < start) {
+                    return (end + 24 * 60) - start;
+                }
+                return end - start;
+            };
+
+            // Helper: formatear minutos a "HH:MM"
+            const formatMinutes = (mins?: number | null) => {
+                if (mins === null || mins === undefined) return '00:00';
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            };
+
+            // ---- obtener datos de la fila ----
+            const horasFromBackend: number | undefined = row.original.horas; // minutos si viene así
+            const horario = row.original.horario || {}; // objeto horario asociado (puede tener estado, entryTime, exitTime, ingreso/salida)
+            const estado = horario?.estado ?? row.original.estado; // fallback si viene directo
+            const empleado = row.original.empleado;
+            const jornadaId = empleado?.jornada_id;
+            const fecha = row.original.fecha;
+
+            // Buscar posibles campos de ingreso/salida (se adaptan a diferentes nombres)
+            const ingresoStr =
+                horario?.entryTime ??
+                horario?.ingreso ??
+                row.original.ingreso ??
+                horario?.entrada ??
+                null;
+
+            const salidaStr =
+                horario?.exitTime ??
+                horario?.salida ??
+                row.original.salida ??
+                horario?.salidaHorario ??
+                null;
+
+            // 1) Si estado === 'C' => calculamos desde ingreso/salida del día
+            let minutesForRow: number | null = null;
+
+            if (estado === 'C' && jornadaId == 2) {
+                // calculamos duración bruta
+                const dur = diffMinutes(ingresoStr, salidaStr); // en minutos o null
+                if (dur !== null) {
+                    minutesForRow = dur;
+                    // Opcional: restar refrigerio si corresponde
+                    // if (jornadaId === 1 && minutesForRow > 60) minutesForRow -= 60;
+                    // if (jornadaId !== 1 && minutesForRow >= 360) minutesForRow -= 60;
+                } else {
+                    // Si faltan tiempos, fallback a horas del backend si existe
+                    minutesForRow = horasFromBackend ?? 0;
+                }
+            } else {
+                // No es C -> usar horas que vengan del backend (en minutos)
+                minutesForRow = typeof horasFromBackend === 'number' ? horasFromBackend : 0;
+            }
+
+            // ---- sumar TOTALS: solo en la primera fila calculamos y mostramos ----
             if (row.index === 0) {
-                // Usamos setTimeout para que no bloquee el render
+                // calculamos sumatorio usando las filas actuales de la tabla y la misma lógica por fila
                 setTimeout(() => {
-                    const totalHoras = table.getRowModel().rows.reduce((sum, row) => {
-                        return sum + (row.original.horas || 0);
+                    const totalMinutes = table.getRowModel().rows.reduce((sum, r) => {
+                        const hr = r.original.horario || {};
+                        const st = hr?.estado ?? r.original.estado;
+                        // obtener ingreso/salida para esa fila (misma extracción)
+                        const inStr =
+                            hr?.entryTime ??
+                            hr?.ingreso ??
+                            r.original.ingreso ??
+                            null;
+                        const outStr =
+                            hr?.exitTime ??
+                            hr?.salida ??
+                            r.original.salida ??
+                            null;
+
+                        let mins = 0;
+                        if (st === 'C') {
+                            const d = diffMinutes(inStr, outStr);
+                            mins = d !== null ? d : (typeof r.original.horas === 'number' ? r.original.horas : 0);
+                            // opcional: restar refrigerio aquí si quieres
+                        } else {
+                            mins = typeof r.original.horas === 'number' ? r.original.horas : 0;
+                        }
+
+                        return sum + mins;
                     }, 0);
+
                     console.log('=== TOTAL HORAS DEL DÍA ===');
-                    //console.log('Total minutos:', totalHoras);
-                    console.log('Total horas:', formatMinutes(totalHoras));
+                    console.log('Total minutos:', totalMinutes);
+                    console.log('Total horas:', formatMinutes(totalMinutes));
                     console.log('Número de registros:', table.getRowModel().rows.length);
                     console.log('========================');
-
                 }, 0);
             }
 
+            const cssClass = minutesForRow < 480 && estado === 'L' ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold';
+
             return (
-                <span
-                    key={`horas-${empleadoId}-${fecha}`}
-                    className={horas < 480 && horario == 'L' ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}
-                >
-                    {horas ? formatMinutes(horas) : '00:00'}
+                <span key={`horas-${row.original.empleado.id}-${fecha}`} className={cssClass}>
+                    {formatMinutes(minutesForRow)}
                 </span>
-            )
+            );
         }
     },
+
     // ELIMINA completamente la columna horas_log
-      {
+    {
         accessorKey: 'tardanza', // tardanza
         header: 'TARDANZA',
         cell: ({ row }) => {
             const tardanza = row.original.tardanza;
             return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
         }
-    },{
+    }, {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
         cell: ({ row }) => {
