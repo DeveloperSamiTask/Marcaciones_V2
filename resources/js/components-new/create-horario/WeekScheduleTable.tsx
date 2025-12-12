@@ -218,6 +218,11 @@ export function WeekScheduleTable({
 
     // ---------------------🔥 Calcular qué días están ANTES de la fecha de ingreso
     const diasAntesDeIngreso = useMemo(() => {
+        if (!employee?.fecha_ingreso) {
+            console.log(`⚠️ Empleado ${employee?.id} - SIN fecha_ingreso`);
+            return new Set<string>();
+        }
+
         // Si no hay fecha de ingreso -> nada bloqueado
         if (!employee?.fecha_ingreso) return new Set<string>();
 
@@ -313,7 +318,7 @@ export function WeekScheduleTable({
                                     <Select
                                         value={dayData?.status || 'L'}
                                         onValueChange={(value) => onFieldChange(employeeId, dateStr, 'status', value)}
-                                        disabled={yaExiste || bloqueadoPorIngreso }
+                                        disabled={yaExiste || bloqueadoPorIngreso}
                                     >
                                         <SelectTrigger className="text-xs h-8">
                                             <SelectValue>

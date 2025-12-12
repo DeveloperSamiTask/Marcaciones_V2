@@ -26,6 +26,7 @@ export interface Employee {
   };
   empresa_id: number;
   jefe_id?: number;
+    fecha_ingreso: string;
 }
 
 export interface ScheduleEntry {
