@@ -416,7 +416,7 @@ class HorarioController extends Controller
 
         $empleados = $query
             ->orderBy('apellidos')
-            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id', 'jornada_id', 'cargo' , 'fecha_ingreso']);
+            ->get(['id', 'apellidos', 'nombres', 'empresa_id', 'jefe_id', 'jornada_id', 'cargo', 'fecha_ingreso']);
 
         return response()->json($empleados);
     }
@@ -1418,8 +1418,14 @@ class HorarioController extends Controller
         $user = auth()->user();
         $data = $request->validated();
 
+        if (! isset($data['estado']) || $data['estado'] === null) {
+            $data['estado'] = $horario->estado;
+        }
+
+        $estadoEnviado = isset($data['estado']) ? $data['estado'] : null;
+        $estadoCambio = ($estadoEnviado !== null && $estadoEnviado !== $horario->estado);
         try {
-            DB::transaction(function () use ($data, $horario, $user) {
+            DB::transaction(function () use ($data, $horario, $user, $estadoCambio) {
 
                 // 🔥 SI ES ROL 4 o 5: IGNORAR COMPLETAMENTE LA LÓGICA DE ESTADO
                 if (in_array($user->rol_id, [4, 5])) {
@@ -1433,6 +1439,24 @@ class HorarioController extends Controller
                     $horario->update($updateData);
 
                     return; // ← SALIR, no ejecutar nada más
+                }
+
+                // 🔥 SI EL ESTADO NO CAMBIÓ: Solo actualizar horas
+                if (! $estadoCambio) {
+                    $updateData = [
+                        'ingreso' => $data['ingreso'],
+                        'salida' => $data['salida'],
+                        'descripcion' => $data['descripcion'] ?? $horario->descripcion,
+                    ];
+
+                    // Mantener feriado si ya tenía
+                    if (in_array($horario->estado, ['C', 'CA', 'TD'])) {
+                        $updateData['feriado_id'] = $horario->feriado_id;
+                    }
+
+                    $horario->update($updateData);
+
+                    return;
                 }
 
                 $horario->update($data);

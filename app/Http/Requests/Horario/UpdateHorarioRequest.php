@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Horario;
 
+use App\Models\Horario;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateHorarioRequest extends FormRequest
@@ -26,20 +27,22 @@ class UpdateHorarioRequest extends FormRequest
             'ingreso' => ['required'],
             'salida' => ['required'],
             'descripcion' => ['nullable', 'string', 'max:255'],
-            'estado' => ['required', 'in:L,D,C,AHE,HE,CA,CHE,F,FL,SP,V,M,SN,ST,SFI,HE,,FI,FJ,LCG,LSG,LP,LM,LF,TD'],
+            'estado' => ['nullable', 'in:L,D,C,AHE,HE,CA,CHE,F,FL,SP,V,M,SN,ST,SFI,HE,,FI,FJ,LCG,LSG,LP,LM,LF,TD'],
             'extras' => 'nullable',
             'feriado' => ['nullable'],
             // 'comprobante' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:2048',
         ];
     }
 
-    public function withValidator($validator)
+    /*
+      public function withValidator($validator)
     {
-        $validator->sometimes('feriado', ['required'], function ($input) { // se aplica en automatico cuando se envia el estado con valor C o CA
-            return $input->estado === 'C' || $input->estado === 'CA' || $input->estado === 'TD';
+        // 🔥 SOLUCIÓN SIMPLE: No intentar obtener el horario actual
+        // Solo validar feriado cuando se ENVÍA un estado C/CA/TD
+        $validator->sometimes('feriado', ['required'], function ($input) {
+            return ! empty($input->estado) && in_array($input->estado, ['C', 'CA', 'TD']);
         });
-        // $validator->sometimes('comprobante', ['required', 'file', 'mimes:pdf,jpeg,png,jpg', 'max:2048'], function ($input) {
-        //     return $input->estado !== 'L';
-        // });
     }
+    */
+
 }

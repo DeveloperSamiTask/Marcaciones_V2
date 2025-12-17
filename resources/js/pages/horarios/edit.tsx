@@ -99,8 +99,6 @@ const getDiaMasAntiguo = (dias: Feriado[]): Feriado | undefined => {
         .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())[0];
 };
 
-
-
 const FeriadoInfo = ({ feriado, tipo }: { feriado: Feriado[]; tipo: string }) => {
     if (!feriado.length) {
         return (
@@ -152,6 +150,7 @@ const chartConfig = {
     },
 } satisfies ChartConfig;
 
+
 export default function EditHorario({ horario, empleado, feriadoDisponible, feriadoFuturo, diasTD, url }:
     { horario: Horario; empleado: Empleado; feriadoDisponible: Feriado[]; feriadoFuturo: Feriado[]; diasTD: Feriado[]; url: string }) {
 
@@ -167,7 +166,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         salida: horario.salida,
         estado: horario.estado,
         descripcion: horario.descripcion || '',
-        feriado: '',
+         feriado: horario.feriado_id || '',
         extras: '',
     });
 
@@ -179,7 +178,6 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
             return;
         }
 
-
         setExcedente(false);
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
@@ -190,25 +188,9 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         const total_semanal = empleado.horas_semanal_trabajadas ?? 0;
         let extras = '';
 
-
-        /*
-        if (value == 'L' && total + total_semanal > horas) {
-            value = 'HE';
-            extras = formatMinutes(total + total_semanal - horas);
-            setExcedente(true);
-            toast.error('Estas excediente el total de horas permitidas en la semana', {
-                richColors: true,
-                position: 'top-center',
-                duration: 6000,
-            });
-        }
-      */
-
-
         setData('estado', value);
         setData('feriado', '');
         setData('extras', extras);
-
 
         const getDiaMasAntiguo = (dias: Feriado[]) => {
             // Ordena del más antiguo al más reciente y toma el primero (el que se debe consumir)
@@ -268,6 +250,8 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
 
     };
 
+
+    // ----------------------------------- CALCULAR EL INGRESO Y SALIDA
     useEffect(() => {
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
@@ -281,20 +265,6 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         setExcedente(false);
         setData('extras', '');
         setData('estado', data.estado == 'HE' ? 'L' : data.estado);
-
-        /*
-         if (total + total_semanal > horas) {
-            setExcedente(true);
-            setData('estado', 'HE'); // lo enviamos en minutos
-            setData('extras', formatMinutes(total + total_semanal - horas)); // lo enviamos en formato horas
-            toast.error('Estas excediente el total de horas permitidas en la semana', {
-                richColors: true,
-                position: 'top-center',
-                duration: 6000,
-            });
-        }
-
-        */
 
     }, [data.ingreso, data.salida])
 
@@ -473,6 +443,9 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <InputError message={errors.descripcion} />
                                     </div>
 
+
+
+
                                     <div className="grid gap-2">
                                         <Label htmlFor="estado">ESTADO</Label>
 
@@ -515,6 +488,20 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         />
                                     )}
                                 </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
                                 <div className="flex items-center gap-4">
                                     <Button type='submit' variant={excedente ? 'info' : 'default'} disabled={processing} tabIndex={8}>

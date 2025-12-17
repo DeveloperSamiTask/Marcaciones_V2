@@ -78,10 +78,10 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     params.set("supervisor_id", String(sup));
                     if (emp) params.set("empresa_id", String(emp));
                     url = `/horarios/empleados?${params.toString()}`;
-                    console.log("🔄 Fetching (SUPERVISOR endpoint):", url);
+                    // console.log("🔄 Fetching (SUPERVISOR endpoint):", url);
                 } else if (emp) {
                     url = `/horarios/empleados-por-empresa?empresa_id=${emp}`;
-                    console.log("🔄 Fetching (EMPRESA endpoint):", url);
+                    // console.log("🔄 Fetching (EMPRESA endpoint):", url);
                 } else {
                     // console.log("🔄 No filtro -> limpiando lista");
                     setEmpleadosList([]);
@@ -97,8 +97,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 const data = await res.json();
 
                 // Debug: contar y mostrar primer elemento
-
-                console.log("📦 Respuesta fetch:", {
+                /*
+   console.log("📦 Respuesta fetch:", {
                     url,
                     length: Array.isArray(data) ? data.length : null,
                     // Verificar si el supervisor está en los resultados
@@ -107,17 +107,16 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     employeesWithSelectedBoss: sup ? data.filter(e => e.jefe_id === sup).length : 'N/A'
                 });
 
-
-
+                */
                 // Solo actualizar si no se abortó
                 if (!controller.signal.aborted) {
                     setEmpleadosList(Array.isArray(data) ? data : []);
                 }
             } catch (err) {
                 if (err.name === "AbortError") {
-                    console.log("Fetch aborted:", err);
+                    // console.log("Fetch aborted:", err);
                 } else {
-                    console.error("Fetch failed:", err);
+                    //  console.error("Fetch failed:", err);
                     setEmpleadosList([]);
                 }
             }
@@ -129,8 +128,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
             controller.abort(); // cancela cualquier petición pendiente al desmontar o re-ejecutar
         };
     }, [selectedSupervisor, selectedEmpresa, user]);
-
-
 
     // Estados principales
     const [currentSupervisorId] = useState('sup1'); // Simular supervisor actual (Granja Villa)
