@@ -4,6 +4,8 @@ import { WeekScheduleTable } from './WeekScheduleTable';
 import { Employee, DaySchedule } from '../../types/schedule';
 import { useEffect, useState, useMemo } from 'react';
 
+
+
 interface EmployeeRowProps {
     keySchedule: string;
     employee: Employee;
@@ -50,6 +52,7 @@ const estadoOptions = [
     { value: 'HENA', label: '22.H. EXTRA NO AUTORIZADO' },
     { value: 'HE', label: '23.HORAS EXTRA' },
     { value: 'TD', label: '24.TRABAJO DIA DESCANSO' },
+    { value: 'AI', label: '25.ANTES INGRESO' },
 ];
 
 export function EmployeeRow({
@@ -81,20 +84,64 @@ export function EmployeeRow({
     // ------------------------------------------------------------
     // 🔥 CÁLCULO DE HORAS TRABAJADAS EN LA SEMANA (useMemo)
     // ------------------------------------------------------------
+
+
+
+    const weekDateKeys = useMemo(() => {
+        return new Set(
+            weekDates.map(d => d.toISOString().slice(0, 10))
+        );
+    }, [weekDates]);
+
     const totalMinutesWorked = useMemo(() => {
         let totalMinutes = 0;
 
         // Estados que SÍ cuentan (todos excepto D y SP)
+        // Lista de estados que SÍ deben contar para la suma final (TODO menos 'D' y 'SP')
+        //Se quita M ,V , LF , LP , LM , AI
         const workingStatuses = [
-            'L', 'AHE', 'TD', 'FL', 'C', 'CA', 'CHE', 'F', 'V', 'M',
-            'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM',
-            'LF', 'PE'
+            'L', 'AHE', 'TD', 'FL', 'C', 'CA', 'CHE', 'F',
+            'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'PE'
         ];
 
+        const detalleDias: any[] = [];
+        const fechasEnSemana: string[] = [];
+        const fechasFueraSemana: string[] = [];
+
+
+        /*
+ console.log(
+            `🧪 SEMANA ACTUAL | ${employee.nombres} ${employee.apellidos}`,
+            [...weekDateKeys]
+        );
+        */
+
+
+
+        const horasPorDia: Record<string, {
+            entrada: string;
+            salida: string;
+            minutos: number;
+        }> = {};
+
+
         // Recorrer días del schedule
-        Object.values(scheduleData).forEach(dayData => {
+        Object.entries(scheduleData).forEach(([dateKey, dayData]) => {
+
+            // ------
+            if (!weekDateKeys.has(dateKey)) {
+                fechasFueraSemana.push(dateKey);
+                return;
+            }
+            fechasEnSemana.push(dateKey);
+            // ------
+            const entrada = dayData.entryTime || '00:00';
+            const salida = dayData.exitTime || '00:00';
+
+
             const entryMin = timeToMinutes(dayData.entryTime || '00:00');
             const exitMin = timeToMinutes(dayData.exitTime || '00:00');
+            let minutos = 0;
             const status = dayData.status as keyof typeof estadoOptions;
 
             if (workingStatuses.includes(status)) {
@@ -103,11 +150,19 @@ export function EmployeeRow({
                 // Caso normal
                 if (exitMin > entryMin) {
                     dailyDuration = exitMin - entryMin;
+                    minutos = exitMin - entryMin;
 
                     // Turno nocturno
                 } else if (exitMin < entryMin && entryMin !== 0 && exitMin !== 0) {
                     dailyDuration = (exitMin + 1440) - entryMin;
+                    minutos = (exitMin + 1440) - entryMin;
                 }
+
+                horasPorDia[dateKey] = {
+                    entrada,
+                    salida,
+                    minutos
+                };
 
                 // ------------------------------------------------------------
                 // 🔥 Regla del Refrigerio (si dura más de 6h se descuenta 1h)
@@ -131,6 +186,17 @@ export function EmployeeRow({
             }
             // Si es D o SP, no suma nada.
         });
+
+        console.log(
+            `📊 RESUMEN SEMANAL | ${employee.apellidos} ${employee.nombres} `,
+            {
+                dias: horasPorDia,
+                enSemana: fechasEnSemana,
+                fueraSemana: fechasFueraSemana
+            }
+        );
+
+
 
         return totalMinutes;
     }, [scheduleData]);
@@ -163,9 +229,13 @@ export function EmployeeRow({
     // 🔥 Cargar horas mensuales desde backend
     // ------------------------------------------------------------
     useEffect(() => {
+        if (employee.jornada_id !== 2) {
+            setHorasMensuales(null);
+            return;
+        }
+
         const cargarHorasMensuales = async () => {
             setLoadingMensual(true);
-
             try {
                 const fecha = weekDates[0];
                 const mes = fecha.getMonth() + 1;
@@ -175,26 +245,19 @@ export function EmployeeRow({
                     `/horarios/getHorasMensualesPT?empleado_id=${employee.id}&mes=${mes}&anio=${anio}`
                 );
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const data = await response.json();
-                //console.log('📊 Horas mensuales cargadas:', data);
-
                 setHorasMensuales(data);
-
-            } catch (error) {
-                // console.error('❌ Error cargando horas mensuales:', error);
+            } catch {
                 setHorasMensuales(null);
-
             } finally {
                 setLoadingMensual(false);
             }
         };
 
         cargarHorasMensuales();
-    }, [employee.id, weekDates]);
+    }, [employee.id, weekDates, employee.jornada_id]);
 
     // 🔥 Verificar si es primera semana del empleado
     const esPrimeraSemana = useMemo(() => {

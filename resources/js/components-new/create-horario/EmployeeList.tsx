@@ -78,11 +78,14 @@ export function EmployeeList({
             if (!resTD.ok) throw new Error('Error al cargar TD');
             const dataTD = await resTD.json();
 
-            console.log('✅ Datos cargados para empleado:', employeeId, {
+            /*
+                  console.log('✅ Datos cargados para empleado:', employeeId, {
                 feriados_disponibles: dataFeriados.feriadoDisponible?.length || 0,
                 feriados_futuros: dataFeriados.feriadoFuturo?.length || 0,
                 permisos_td: dataTD.length || 0
             });
+            */
+
 
             // Guardar ambos en estado
             setFeriadosData(prev => ({

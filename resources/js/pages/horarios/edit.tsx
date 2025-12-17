@@ -53,7 +53,6 @@ const estadoOptions = [
     { value: 'LF', label: 'LICENCIA POR FALLECIMIENTO' },
     { value: 'PE', label: 'PENDIENTE' },
     { value: 'TD', label: 'TRABAJO DIA DESCANSO' },
-
 ];
 
 type HorarioForm = {
@@ -478,7 +477,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <Label htmlFor="estado">ESTADO</Label>
 
                                         <Select
-                                            disabled={data.estado == 'PE' || data.estado == 'E'}
+                                            disabled={data.estado == 'PE' || data.estado == 'E' || auth.user.rol_id === 4 || auth.user.rol_id === 5}
                                             defaultValue={data.estado}
                                             autoComplete="estado"
                                             onValueChange={handleEstadoChange}
@@ -488,9 +487,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {estadoOptions.filter(option => {
-                                                    // Ocultar 'SP' para full time
                                                     if (option.value === 'SP' && horario.empleado.jornada_id === 1) return false;
-                                                    // Ocultar 'TD' para part time
                                                     if (option.value === 'TD' && horario.empleado.jornada_id !== 1) return false;
                                                     return true;
                                                 }).map((option) => (

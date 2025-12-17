@@ -29,7 +29,8 @@ type Filters = {
     fechaFin?: string;
 };
 
-export default function IndexHorario({ horarios, empresas, filters }: { horarios: Horario[]; empresas: Empresa[]; filters: Filters }) {
+export default function IndexHorario({ horarios, empresas, filters}: { horarios: Horario[]; empresas: Empresa[]; filters: Filters }) {
+
     const { auth } = usePage<SharedData>().props;
 
     // valores iniciales
@@ -184,7 +185,7 @@ export default function IndexHorario({ horarios, empresas, filters }: { horarios
                             ) : isFiltering ? (
                                 <LoadingSkeleton />
                             ) : (
-                                <DataTable key="datatable-horarios" columns={columns} data={horarios} />
+                                <DataTable key="datatable-horarios"columns={columns(auth)} data={horarios} />
                             )}
                         </CardContent>
                     </Card>

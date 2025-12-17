@@ -106,7 +106,7 @@ export function WeekScheduleTable({
         let totalMinutes = 0;
 
         // Lista de estados que SÍ deben contar para la suma final (TODO menos 'D' y 'SP')
-        //Se quita M ,V , LF , LP , LM
+        //Se quita M ,V , LF , LP , LM , AI
         const workingStatuses = [
             'L', 'AHE', 'TD', 'FL', 'C', 'CA', 'CHE', 'F',
             'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'PE'
@@ -219,7 +219,7 @@ export function WeekScheduleTable({
     // ---------------------🔥 Calcular qué días están ANTES de la fecha de ingreso
     const diasAntesDeIngreso = useMemo(() => {
         if (!employee?.fecha_ingreso) {
-            console.log(`⚠️ Empleado ${employee?.id} - SIN fecha_ingreso`);
+            // console.log(`⚠️ Empleado ${employee?.id} - SIN fecha_ingreso`);
             return new Set<string>();
         }
 
@@ -243,10 +243,42 @@ export function WeekScheduleTable({
             }
         });
 
-        //console.log(`🔒 Empleado ${employee.id} - fecha_ingreso: ${fechaIngresoISO} - Días bloqueados:`, Array.from(diasBloqueados));
+        console.log(`🔒 Empleado ${employee.id} - fecha_ingreso: ${fechaIngresoISO} - Días bloqueados:`, Array.from(diasBloqueados));
         return diasBloqueados;
     }, [employee?.fecha_ingreso, employee?.id, weekDates]);
 
+    // 🔥 CORRECCIÓN: AUTO-ASIGNAR ESTADO AI A DÍAS ANTES DE INGRESO
+    useEffect(() => {
+        if (!employee?.fecha_ingreso) return;
+
+        const fechaIngresoISO = (typeof employee.fecha_ingreso === 'string')
+            ? employee.fecha_ingreso.substring(0, 10)
+            : (new Date(employee.fecha_ingreso)).toISOString().split('T')[0];
+
+        weekDates.forEach(d => {
+            const dateStr = (typeof d === 'string') ? d : d.toISOString().split('T')[0];
+
+            // Si el día es anterior al ingreso
+            if (dateStr < fechaIngresoISO) {
+                const dayData = scheduleData[dateStr];
+
+                // Solo asignar AI si no tiene estado o no es AI
+                if (!dayData?.status || dayData.status !== 'AI') {
+                    // Cambiar estado a AI
+                    onFieldChange(employeeId, dateStr, 'status', 'AI');
+
+                    // Asegurar horas en 00:00
+                    if (dayData?.entryTime !== '00:00') {
+                        onFieldChange(employeeId, dateStr, 'entryTime', '00:00');
+                    }
+                    if (dayData?.exitTime !== '00:00') {
+                        onFieldChange(employeeId, dateStr, 'exitTime', '00:00');
+                    }
+                }
+            }
+        });
+    }, [employee?.fecha_ingreso, employeeId, weekDates, onFieldChange]);
+    // ---------------------🔥 Calcular qué días están ANTES de la fecha de ingreso
 
 
     return (
@@ -316,7 +348,7 @@ export function WeekScheduleTable({
                                 {/* Estado */}
                                 <td className="p-2">
                                     <Select
-                                        value={dayData?.status || 'L'}
+                                        value={bloqueadoPorIngreso ? 'AI' : (dayData?.status || 'L')}
                                         onValueChange={(value) => onFieldChange(employeeId, dateStr, 'status', value)}
                                         disabled={yaExiste || bloqueadoPorIngreso}
                                     >

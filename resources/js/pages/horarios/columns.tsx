@@ -8,6 +8,9 @@ import { ColumnDef } from '@tanstack/react-table';
 import { format, isAfter, isSameWeek, startOfWeek } from 'date-fns';
 import { ArrowUpDown, SquarePen } from 'lucide-react';
 
+
+
+
 const estadoBadgeVariants = {
     L: { label: '1.LABORAL', variant: 'success' },
     D: { label: '2.DESCANSO SEMANAL', variant: 'info' },
@@ -41,7 +44,11 @@ const estadoBadgeVariants = {
 
 } as const;
 
-export const columns: ColumnDef<Horario>[] = [
+
+
+export const columns = (auth: any): ColumnDef<Horario>[] => [
+
+
     {
         accessorKey: 'id',
         header: 'CODIGO',

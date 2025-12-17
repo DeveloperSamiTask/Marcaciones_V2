@@ -566,7 +566,7 @@ class MarcacionController extends Controller
                                 ->where('estado', '!=', 2) // que no esté rechazado
                                 ->exists();
 
-                            if (! $permisoExistente) {
+                            if (!$permisoExistente) {
                                 Permiso::create([
                                     'empleado_id' => $empleadoId,
                                     'tipo_id' => 24, // TRABAJO DIA DESCANSO
