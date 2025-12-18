@@ -38,11 +38,10 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         ]);
         */
 
-
         $solicitudesGeneradas = collect();
 
         foreach ($this->empleadosPartTime as $empleado) {
-           // Log::info("🔎 Verificando: {$empleado->nombre_completo} - Empresa: {$empleado->empresa_id}");
+            // Log::info("🔎 Verificando: {$empleado->nombre_completo} - Empresa: {$empleado->empresa_id}");
             $solicitud = $this->verificarEmpleado($empleado);
             if ($solicitud) {
                 $solicitudesGeneradas[] = $solicitud;
@@ -51,14 +50,14 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 
         // 🟢 ENVIAR 1 SOLO EMAIL AGRUPADO CON TODAS LAS SOLICITUDES
         if (count($solicitudesGeneradas) > 0) {
-           // Log::info("📧 Enviando email agrupado con {$solicitudesGeneradas->count()} solicitudes");
+            // Log::info("📧 Enviando email agrupado con {$solicitudesGeneradas->count()} solicitudes");
             $this->enviarNotificacionAgrupada($solicitudesGeneradas);
         } else {
             Log::info('📭 No hay solicitudes para notificar');
         }
     }
 
-    public  function enviarNotificacionAgrupada($solicitudes)
+    public function enviarNotificacionAgrupada($solicitudes)
     {
         try {
             $emailsGerencia = [
@@ -71,24 +70,23 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                     $usuarioTemporal = new \App\Models\User;
                     $usuarioTemporal->email = $email;
 
-                   // Log::info("🔴 ENVIANDO NOTIFICACIÓN A: {$email}");
+                    // Log::info("🔴 ENVIANDO NOTIFICACIÓN A: {$email}");
 
                     $usuarioTemporal->notify(new \App\Notifications\NotificacionHorasExtrasPartTimeAgrupada($solicitudes));
 
-                    //Log::info("📧 Email agrupado enviado a: {$email}");
+                    // Log::info("📧 Email agrupado enviado a: {$email}");
 
                 } catch (\Exception $e) {
-                   // Log::error("❌ ERROR con email {$email}: ".$e->getMessage());
-                   // Log::error('❌ STACK TRACE: '.$e->getTraceAsString());
+                    // Log::error("❌ ERROR con email {$email}: ".$e->getMessage());
+                    // Log::error('❌ STACK TRACE: '.$e->getTraceAsString());
                 }
             }
 
         } catch (\Exception $e) {
-            //Log::error('❌ Error general en enviarNotificacionAgrupada: '.$e->getMessage());
-            //Log::error('❌ Stack trace: '.$e->getTraceAsString());
+            // Log::error('❌ Error general en enviarNotificacionAgrupada: '.$e->getMessage());
+            // Log::error('❌ Stack trace: '.$e->getTraceAsString());
         }
     }
-
 
     /*
     El conteo de horas es acumulativo desde la fecha ??? en la que se llama al Job en adelante.
@@ -96,7 +94,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
     */
     private function verificarEmpleado($empleado)
     {
-        //Log::info("🔍 INICIANDO VERIFICACIÓN PARA: {$empleado->nombres}");
+        // Log::info("🔍 INICIANDO VERIFICACIÓN PARA: {$empleado->nombres}");
 
         $ultimaSolicitud = SolicitudHorasExtrasPT::where('empleado_id', $empleado->id)
             ->orderBy('fecha_deteccion', 'desc')
@@ -106,27 +104,27 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         // 🟢 FIX: CONTAR DESDE EL DÍA DESPUÉS DE CUMPLIR 93H
         if ($ultimaSolicitud && $ultimaSolicitud->fecha_cumplimiento_93h) {
             $fechaInicioConteo = $ultimaSolicitud->fecha_cumplimiento_93h->copy()->addDay();
-           // Log::info("♻️ Empleado tiene solicitud previa. Nuevo periodo desde: {$fechaInicioConteo->format('d/m/Y')}");
+            // Log::info("♻️ Empleado tiene solicitud previa. Nuevo periodo desde: {$fechaInicioConteo->format('d/m/Y')}");
         } elseif ($this->fechaMinima) {
             // 🔥 CONVERTIR STRING A CARBON
             $fechaInicioConteo = \Carbon\Carbon::parse($this->fechaMinima);
-           // Log::info("📅 Usando fecha mínima del rango: {$fechaInicioConteo->format('d/m/Y')}");
+            // Log::info("📅 Usando fecha mínima del rango: {$fechaInicioConteo->format('d/m/Y')}");
         } else {
             $fechaInicioConteo = now()->startOfMonth();
-           // Log::info("📅 Usando inicio del mes actual: {$fechaInicioConteo->format('d/m/Y')}");
+            // Log::info("📅 Usando inicio del mes actual: {$fechaInicioConteo->format('d/m/Y')}");
         }
 
         // 🔥 CONVERTIR STRING A CARBON
         $fechaFinConteo = $this->fechaMaxima ? \Carbon\Carbon::parse($this->fechaMaxima) : now();
 
-      //  Log::info("📊 {$empleado->apellidos}.{$empleado->nombres} - Contando desde: {$fechaInicioConteo->format('d/m/Y')} hasta: {$fechaFinConteo->format('d/m/Y')}");
+        //  Log::info("📊 {$empleado->apellidos}.{$empleado->nombres} - Contando desde: {$fechaInicioConteo->format('d/m/Y')} hasta: {$fechaFinConteo->format('d/m/Y')}");
 
         $horarios = $empleado->horarios()
             ->where('fecha', '>=', $fechaInicioConteo)
             ->where('fecha', '<=', $fechaFinConteo)
             ->get();
 
-      //  Log::info("📋 {$empleado->nombres} - Horarios encontrados: ".$horarios->count());
+        //  Log::info("📋 {$empleado->nombres} - Horarios encontrados: ".$horarios->count());
 
         $totalHoras = 0;
         $fechaCumplimiento = null;
@@ -136,11 +134,11 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 $horasDia = $this->calcularHorasDia($horario);
                 $totalHoras += $horasDia;
 
-              //  Log::info("📅 {$empleado->nombres} - {$horario->fecha->format('d/m/Y')}: {$horario->ingreso} a {$horario->salida} = {$horasDia}h (Total: {$totalHoras}h)");
+                //  Log::info("📅 {$empleado->nombres} - {$horario->fecha->format('d/m/Y')}: {$horario->ingreso} a {$horario->salida} = {$horasDia}h (Total: {$totalHoras}h)");
 
                 if ($totalHoras >= 93 && ! $fechaCumplimiento) {
                     $fechaCumplimiento = $horario->fecha;
-                   // Log::info("🎯 {$empleado->nombres} alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
+                    // Log::info("🎯 {$empleado->nombres} alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
                 }
             }
         }
@@ -148,7 +146,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         Log::info("🏁 {$empleado->nombres} - TOTAL HORAS: {$totalHoras}h");
 
         if ($totalHoras >= 93 && $fechaCumplimiento) {
-           // Log::info("🚨 GENERANDO SOLICITUD para {$empleado->nombres}");
+            // Log::info("🚨 GENERANDO SOLICITUD para {$empleado->nombres}");
 
             return $this->generarSolicitud($empleado, $totalHoras, $fechaCumplimiento, $fechaInicioConteo);
         }
@@ -187,7 +185,6 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         ]);
         */
 
-
         // 🟢 COMBINAR CON LA FECHA REAL DEL HORARIO
         $entrada = \Carbon\Carbon::parse($horario->fecha->format('Y-m-d').' '.$horaEntrada);
         $salida = \Carbon\Carbon::parse($horario->fecha->format('Y-m-d').' '.$horaSalida);
@@ -217,7 +214,6 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         ]);
         */
 
-
         $minutosDia = max(0, $minutosDia);
 
         if ($minutosDia > 360) {
@@ -237,9 +233,9 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             ->where('estado', '0')
             ->first();
 
-       // Log::info("🔍 Verificando solicitud existente para empleado: {$empleado->id} - Existe: ".($solicitudExistente ? 'SÍ' : 'NO'));
+        // Log::info("🔍 Verificando solicitud existente para empleado: {$empleado->id} - Existe: ".($solicitudExistente ? 'SÍ' : 'NO'));
 
-        if (!$solicitudExistente) {
+        if (! $solicitudExistente) {
             // CREAR SOLICITUD
             $solicitud = SolicitudHorasExtrasPT::create([
                 'empleado_id' => $empleado->id,
@@ -255,7 +251,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 'fecha_aprobacion' => null,
             ]);
 
-           // Log::info("✅ Solicitud creada - ID: {$solicitud->id}");
+            // Log::info("✅ Solicitud creada - ID: {$solicitud->id}");
 
             // CREAR PERMISO
             try {
@@ -273,7 +269,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                     'permiso_HE_PT' => $solicitud->id,
                 ]);
 
-             //  Log::info("✅ Permiso creado - ID: {$permiso->id} - Vinculado a solicitud: {$solicitud->id}");
+                //  Log::info("✅ Permiso creado - ID: {$permiso->id} - Vinculado a solicitud: {$solicitud->id}");
 
             } catch (\Exception $e) {
                 Log::error('❌ Error creando permiso: '.$e->getMessage());
@@ -288,7 +284,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 
             return $solicitud;
         } else {
-           // Log::info("⏸️  No se creó solicitud - Ya existe una activa para empleado: {$empleado->id}");
+            // Log::info("⏸️  No se creó solicitud - Ya existe una activa para empleado: {$empleado->id}");
         }
     }
 }

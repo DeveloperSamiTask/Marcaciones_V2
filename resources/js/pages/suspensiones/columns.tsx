@@ -98,7 +98,20 @@ export const columns: ColumnDef<Suspension>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => row.original.fecha_print ? <p className='text-red-400'>{format(row.original.fecha_print, 'dd/MM/yyyy')}</p> : null // Capitaliza la primera letra
+        cell: ({ row }) => {
+            // 🔥 DEBUG: Ver qué valor tiene fecha_print
+            console.log('DEBUG fecha_print:', {
+                valorCrudo: row.original.fecha_print,
+                tipo: typeof row.original.fecha_print,
+                filaIndex: row.index,
+                empleadoId: row.original.empleado?.id,
+                empleadoNombre: row.original.empleado?.nombres
+            });
+
+            return row.original.fecha_print ?
+                <p className='text-red-400'>{format(row.original.fecha_print, 'dd/MM/yyyy')}</p> :
+                null;
+        }
     },
     {
         accessorKey: 'hora', // ingreso de refrigerio de la marcacion
@@ -120,7 +133,7 @@ export const columns: ColumnDef<Suspension>[] = [
                             </Link>
                         </Button>}
 
-                     {/* Estado print es si ya esta impreso o no */}
+                    {/* Estado print es si ya esta impreso o no */}
                     {/* Imprimir en esta parte debe estar el calendario */}
                     {(suspension.codigo[0] == 'S' || suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && auth.user.rol_id != 4 &&
                         <PrintSuspension key={`print-suspension${suspension.id}`} suspension={suspension} isPrint={suspension.estado_print} />}

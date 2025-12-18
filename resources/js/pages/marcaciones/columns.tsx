@@ -450,7 +450,7 @@ import { sendSomething } from "./send";
                     minutesForRow = dur;
                     // Opcional: restar refrigerio si corresponde
                     // if (jornadaId === 1 && minutesForRow > 60) minutesForRow -= 60;
-                    // if (jornadaId !== 1 && minutesForRow >= 360) minutesForRow -= 60;
+                     if (jornadaId !== 1 && minutesForRow >= 360) minutesForRow -= 60;
                 } else {
                     // Si faltan tiempos, fallback a horas del backend si existe
                     minutesForRow = horasFromBackend ?? 0;

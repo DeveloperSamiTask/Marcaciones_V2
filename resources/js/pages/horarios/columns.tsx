@@ -135,16 +135,29 @@ export const columns = (auth: any): ColumnDef<Horario>[] => [
         cell: ({ row }) => {
             const horario = row.original;
 
+            // 🔥 ROLES QUE PUEDEN EDITAR TODO
+            const rolesLibres = [1, 2]; // ADMIN (1) y RRHH (2)
+            const esAdminRRHH = rolesLibres.includes(auth.user.rol_id);
+
+            // 🔥 REGLAS:
+            // 1. Si es ADMIN o RRHH → PUEDE EDITAR TODO (incluso PE y validados)
+            // 2. Si no es ADMIN/RRHH → solo editar si: estado !== 'PE' Y validado == 0
+            const puedeEditar = esAdminRRHH
+                ? true // Admin/RRHH editan todo
+                : (horario.estado !== 'PE' && horario.validado == 0); // Otros roles con reglas
+
+            if (!puedeEditar) {
+                return null; // No mostrar botón
+            }
+
             return (
-                horario.estado !== 'PE' && horario.validado == 0 && (
-                    <div className="flex items-center gap-2">
-                        <Button asChild key={`edit-horario-${horario.id}`} size="sm">
-                            <Link href={route('horarios.edit', horario.id)}>
-                                <SquarePen />
-                            </Link>
-                        </Button>
-                    </div>
-                )
+                <div className="flex items-center gap-2">
+                    <Button asChild key={`edit-horario-${horario.id}`} size="sm">
+                        <Link href={route('horarios.edit', horario.id)}>
+                            <SquarePen />
+                        </Link>
+                    </Button>
+                </div>
             );
         },
     }

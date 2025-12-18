@@ -830,23 +830,15 @@ class HorarioController extends Controller
         $permiso_td_id = null
     ) {
 
-        Log::critical('🔍 DEBUG FECHA ENTRADA', [
-            'raw_fecha' => $fecha,
-            'tipo' => gettype($fecha),
-            'servidor_timezone' => date_default_timezone_get(),
-            'config_timezone' => config('app.timezone'),
-            'db_timezone' => DB::select('SELECT @@session.time_zone as tz')[0]->tz ?? 'unknown',
-        ]);
-
         // ==================== NORMALIZACIÓN INICIAL ====================
         $empleado = Empleado::findOrFail($empleadoId);
         $fechaCarbon = Carbon::parse($fecha)->startOfDay(); // FORZAR 00:00:00
 
         Log::info('🔧 Procesando día', [
-            'empleado' => $empleadoId,
+            'empleado' => $empleado->apellidos.$empleado->nombres,
             'fecha' => $fechaCarbon->toDateString(),
             'estado' => $estado,
-            'permiso_td_id' => $permiso_td_id,
+            // 'permiso_td_id' => $permiso_td_id,
         ]);
 
         // ==================== CASO ESPECIAL: AI (Ausencia Injustificada) ====================
@@ -869,16 +861,18 @@ class HorarioController extends Controller
         // ==================== LIMPIAR PERMISOS PENDIENTES ====================
         // Solo elimina permisos PENDIENTES (estado = 0)
         // NUNCA tocar aprobados (1) ni rechazados (2)
-        $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
+        /*
+            $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
             ->whereDate('fecha', $fechaCarbon)
             ->whereNotIn('estado', [1, 2]) // SOLO PENDIENTES
             ->delete();
 
-        if ($permisosEliminados > 0) {
+            if ($permisosEliminados > 0) {
             Log::info("🧹 Eliminados {$permisosEliminados} permisos pendientes", [
                 'fecha' => $fechaCarbon->toDateString(),
             ]);
         }
+        */
 
         // ==================== CALCULAR HORAS SEMANALES (CORRECTO) ====================
         // Solo contar días LABORABLES de la MISMA semana ANTES de esta fecha
@@ -900,10 +894,13 @@ class HorarioController extends Controller
         }
 
         $horasSemanalesTotales = round($horasSemanales / 60, 2);
+        /*
+
+        */
         Log::info('📊 Horas semanales calculadas', [
-            'minutos' => $horasSemanales,
+            //'minutos' => $horasSemanales,
             'horas' => $horasSemanalesTotales,
-            'empleado' => $empleadoId,
+            'empleado' => $empleado->apellidos.$empleado->nombres,
             'fecha' => $fechaCarbon->toDateString(),
         ]);
 
@@ -925,11 +922,14 @@ class HorarioController extends Controller
             'id' => $horario->id,
             'estado' => $horario->estado
         ]);*/
-        Log::critical('🔍 DEBUG FECHA GUARDADA', [
+        /*
+         Log::critical('🔍 DEBUG FECHA GUARDADA', [
             'horario_id' => $horario->id,
             'fecha_guardada_bd' => $horario->fecha,
             'fecha_guardada_raw' => $horario->getRawOriginal('fecha'),
         ]);
+        */
+
 
         // ==================== GESTIÓN DE FERIADOS ====================
         if ($estado === 'C' || $estado === 'CA') {
@@ -953,9 +953,12 @@ class HorarioController extends Controller
         $excedeHorasMaximas = ($horasSemanales > 2880); // 48h
 
         // CASO 1: Horas Extra (solo Full Time que exceda 48h)
-        if ($empleadoEsFullTime && $excedeHorasMaximas && $estado === 'L') {
+        /*
+ if ($empleadoEsFullTime && $excedeHorasMaximas && $estado === 'L') {
             $this->crearPermisoHE($empleadoId, $fechaCarbon);
         }
+        */
+
 
         // CASO 2: Consumir TD específico
         if ($estado === 'TD') {
@@ -1026,10 +1029,13 @@ class HorarioController extends Controller
             }
         }
 
-        Log::debug('⏰ Horas anteriores calculadas', [
+        /*
+ Log::debug('⏰ Horas anteriores calculadas', [
             'dias_contados' => $horarios->count(),
             'minutos' => $minutosTotal,
         ]);
+        */
+
 
         return $minutosTotal;
     }
@@ -1037,7 +1043,8 @@ class HorarioController extends Controller
     /**
      * Crea permiso de Horas Extra
      */
-    private function crearPermisoHE(int $empleadoId, Carbon $fecha): void
+    /*
+     private function crearPermisoHE(int $empleadoId, Carbon $fecha): void
     {
         Permiso::create([
             'empleado_id' => $empleadoId,
@@ -1052,6 +1059,8 @@ class HorarioController extends Controller
             'fecha' => $fecha->toDateString(),
         ]);
     }
+    */
+
 
     /**
      * Consume un TD específico o el primero disponible
@@ -1126,9 +1135,18 @@ class HorarioController extends Controller
     ): void {
 
         $tipoPermiso = PermisoTipo::where('codigo', $estado)->first();
-
         if (! $tipoPermiso) {
-            Log::warning('⚠️ Tipo de permiso no encontrado', ['codigo' => $estado]);
+            return;
+        }
+
+        // 🚩 FIX: Verificar si ya existe un permiso para ese empleado y fecha
+        $existe = Permiso::where('empleado_id', $empleadoId)
+            ->where('fecha', $fecha->toDateString())
+            ->where('tipo_id', $tipoPermiso->id)
+            ->exists();
+
+        if ($existe) {
+            Log::info('⏭️ Permiso ya existente, saltando creación.');
 
             return;
         }
@@ -1198,13 +1216,13 @@ class HorarioController extends Controller
                     'feriadoDisponible' => [],
                     'feriadoFuturo' => [],
                     'horarios_feriados' => [],
-                    'es_part_time' => false, // 🔥 Agregar aquí también
+                    // 'es_part_time' => false, // 🔥 Agregar aquí también
                 ]);
             }
 
             // Obtener empleado y verificar si es PART TIME
             $empleado = Empleado::select('jornada_id')->find($empleadoId);
-            $esPartTime = $empleado && $empleado->jornada_id == 2; // 🔥 Definir variable
+            $esPartTime = $empleado && ($empleado->jornada_id == 2 || $empleado->jornada_id == 1); // 🔥 Definir variable
 
             // 🎯 COPIAR EXACTAMENTE esta parte de tu método edit() - YA PROBADA:
             $fechasLaborables = Horario::where('empleado_id', $empleadoId)
@@ -1227,7 +1245,7 @@ class HorarioController extends Controller
 
             $horariosFeriados = [];
 
-            if ($esPartTime && $feriadoDisponible->isNotEmpty()) {
+            if ($feriadoDisponible->isNotEmpty()) {
                 // Obtener fechas de feriados
                 $fechas = $feriadoDisponible->map(fn ($f) => $f->fecha->format('Y-m-d'));
 

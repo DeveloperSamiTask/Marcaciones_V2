@@ -657,7 +657,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         try {
                             const empleado = empleadosList.find(e => e.id === employeeId);
 
-                            if (empleado && empleado.jornada_id === 2) { // Solo Part Time
+                            if (empleado && empleado.jornada_id === 2 || empleado.jornada_id === 1)  { // Solo Part Time
                                 console.log('🔍 Cargando horarios de feriado para PT:', empleado.nombres);
 
                                 const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
