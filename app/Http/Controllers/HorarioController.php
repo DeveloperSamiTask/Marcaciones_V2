@@ -858,21 +858,7 @@ class HorarioController extends Controller
             'fin' => $finSemana->toDateString(),
         ]);
 
-        // ==================== LIMPIAR PERMISOS PENDIENTES ====================
-        // Solo elimina permisos PENDIENTES (estado = 0)
-        // NUNCA tocar aprobados (1) ni rechazados (2)
-        /*
-            $permisosEliminados = Permiso::where('empleado_id', $empleadoId)
-            ->whereDate('fecha', $fechaCarbon)
-            ->whereNotIn('estado', [1, 2]) // SOLO PENDIENTES
-            ->delete();
 
-            if ($permisosEliminados > 0) {
-            Log::info("🧹 Eliminados {$permisosEliminados} permisos pendientes", [
-                'fecha' => $fechaCarbon->toDateString(),
-            ]);
-        }
-        */
 
         // ==================== CALCULAR HORAS SEMANALES (CORRECTO) ====================
         // Solo contar días LABORABLES de la MISMA semana ANTES de esta fecha
@@ -952,12 +938,7 @@ class HorarioController extends Controller
         $empleadoEsFullTime = ($empleado->jornada_id === 1);
         $excedeHorasMaximas = ($horasSemanales > 2880); // 48h
 
-        // CASO 1: Horas Extra (solo Full Time que exceda 48h)
-        /*
- if ($empleadoEsFullTime && $excedeHorasMaximas && $estado === 'L') {
-            $this->crearPermisoHE($empleadoId, $fechaCarbon);
-        }
-        */
+
 
 
         // CASO 2: Consumir TD específico
@@ -975,9 +956,6 @@ class HorarioController extends Controller
 
     // ==================== MÉTODOS AUXILIARES ====================
 
-    /**
-     * Calcula minutos trabajados de un día, restando refrigerio
-     */
     private function calcularMinutosTrabajados(string $ingreso, string $salida, int $jornadaId): int
     {
         $ingresoCarbon = Carbon::parse($ingreso);
@@ -996,10 +974,6 @@ class HorarioController extends Controller
         return $minutos;
     }
 
-    /**
-     * Calcula horas semanales ANTES de la fecha indicada
-     * CRÍTICO: Solo cuenta días de la MISMA semana
-     */
     private function calcularHorasSemanalesAnteriores(
         Empleado $empleado,
         Carbon $fechaActual,
@@ -1029,42 +1003,12 @@ class HorarioController extends Controller
             }
         }
 
-        /*
- Log::debug('⏰ Horas anteriores calculadas', [
-            'dias_contados' => $horarios->count(),
-            'minutos' => $minutosTotal,
-        ]);
-        */
+
 
 
         return $minutosTotal;
     }
 
-    /**
-     * Crea permiso de Horas Extra
-     */
-    /*
-     private function crearPermisoHE(int $empleadoId, Carbon $fecha): void
-    {
-        Permiso::create([
-            'empleado_id' => $empleadoId,
-            'tipo_id' => 2, // HE
-            'fecha' => $fecha->toDateString(),
-            'motivo' => 'HORARIO PROGRAMADO EXTRA',
-            'estado' => 0, // Pendiente
-        ]);
-
-        Log::info('✅ Permiso HE creado', [
-            'empleado' => $empleadoId,
-            'fecha' => $fecha->toDateString(),
-        ]);
-    }
-    */
-
-
-    /**
-     * Consume un TD específico o el primero disponible
-     */
     private function consumirTD(
         int $empleadoId,
         Carbon $fecha,
@@ -1124,9 +1068,6 @@ class HorarioController extends Controller
         }
     }
 
-    /**
-     * Crea permiso para estados no laborales
-     */
     private function crearPermisoNoLaboral(
         int $empleadoId,
         Carbon $fecha,
