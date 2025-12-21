@@ -31,13 +31,6 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 
     public function handle()
     {
-
-        /*
- Log::info('🔍 Iniciando verificación horas extras Part Time', [
-            'empleados_count' => $this->empleadosPartTime->count(),
-        ]);
-        */
-
         $solicitudesGeneradas = collect();
 
         foreach ($this->empleadosPartTime as $empleado) {
@@ -48,6 +41,14 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             }
         }
 
+        Log::info('🔍 SOLICITUDES GENERADAS ANTES DE ENVIAR:', [
+            'total' => $solicitudesGeneradas->count(),
+            'por_empresa' => $solicitudesGeneradas->groupBy(function ($s) {
+                return $s->empleado->empresa_id;
+            })->map->count()->toArray(),
+            'ids' => $solicitudesGeneradas->pluck('id')->toArray(),
+        ]);
+
         // 🟢 ENVIAR 1 SOLO EMAIL AGRUPADO CON TODAS LAS SOLICITUDES
         if (count($solicitudesGeneradas) > 0) {
             // Log::info("📧 Enviando email agrupado con {$solicitudesGeneradas->count()} solicitudes");
@@ -57,34 +58,58 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
         }
     }
 
-    public function enviarNotificacionAgrupada($solicitudes)
+    private function enviarNotificacionAgrupada($solicitudes)
     {
-        try {
-            $emailsGerencia = [
-                'cordovasandro99@gmail.com',
-                'sandrocordova99@hotmail.com',
-            ];
 
-            foreach ($emailsGerencia as $email) {
-                try {
-                    $usuarioTemporal = new \App\Models\User;
-                    $usuarioTemporal->email = $email;
+        Log::info('🔥 ENTRANDO A enviarNotificacionAgrupada', [
+            'solicitudes_recibidas' => $solicitudes->count(),
+            'empresas_unicas' => $solicitudes->pluck('empleado.empresa_id')->unique()->values()->toArray(),
+        ]);
 
-                    // Log::info("🔴 ENVIANDO NOTIFICACIÓN A: {$email}");
+        $empresaCorreoMap = [
+            1 => ['cordovasandro99@gmail.com'],
+            3 => ['sandrocordova99@hotmail.com'],
+            5 => ['sandrocordova99@hotmail.com'],
+            10 => ['sandrocordova99@hotmail.com'],
+            11 => ['sandrocordova99@hotmail.com'],
+        ];
 
-                    $usuarioTemporal->notify(new \App\Notifications\NotificacionHorasExtrasPartTimeAgrupada($solicitudes));
+        // 🔥 AGRUPAR SOLICITUDES POR EMPRESA PRIMERO
+        $solicitudesPorEmpresa = [];
 
-                    // Log::info("📧 Email agrupado enviado a: {$email}");
-
-                } catch (\Exception $e) {
-                    // Log::error("❌ ERROR con email {$email}: ".$e->getMessage());
-                    // Log::error('❌ STACK TRACE: '.$e->getTraceAsString());
-                }
+        foreach ($solicitudes as $solicitud) {
+            if (! $solicitud->empleado) {
+                continue;
             }
 
-        } catch (\Exception $e) {
-            // Log::error('❌ Error general en enviarNotificacionAgrupada: '.$e->getMessage());
-            // Log::error('❌ Stack trace: '.$e->getTraceAsString());
+            $empresaId = $solicitud->empleado->empresa_id;
+
+            if (! isset($solicitudesPorEmpresa[$empresaId])) {
+                $solicitudesPorEmpresa[$empresaId] = collect();
+            }
+
+            $solicitudesPorEmpresa[$empresaId]->push($solicitud);
+        }
+
+        // 🔥 AHORA SÍ, ENVIAR POR EMPRESA
+        foreach ($solicitudesPorEmpresa as $empresaId => $solicitudesEmpresa) {
+
+            if (! isset($empresaCorreoMap[$empresaId]) || empty($empresaCorreoMap[$empresaId])) {
+                continue;
+            }
+
+            // 📧 ENVIAR A CADA CORREO DE ESA EMPRESA
+            foreach ($empresaCorreoMap[$empresaId] as $email) {
+
+                $usuarioTemporal = new \App\Models\User;
+                $usuarioTemporal->email = $email;
+
+                $usuarioTemporal->notify(
+                    new \App\Notifications\NotificacionHorasExtrasPartTimeAgrupada($solicitudesEmpresa)
+                );
+
+                Log::info("📧 Email enviado a {$email} con {$solicitudesEmpresa->count()} solicitudes de empresa {$empresaId}");
+            }
         }
     }
 
@@ -156,18 +181,6 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 
     private function calcularHorasDia($horario)
     {
-        // 🟢 DEBUG EXTRA PARA VER LOS DATOS REALES
-        /*
-          Log::info('🔴 DEBUG CRUDO DEL HORARIO:', [
-            'fecha' => $horario->fecha,
-            'ingreso_tipo' => gettype($horario->ingreso),
-            'ingreso_valor' => $horario->ingreso,
-            'salida_tipo' => gettype($horario->salida),
-            'salida_valor' => $horario->salida,
-            'ingreso_es_carbon' => $horario->ingreso instanceof \Carbon\Carbon,
-            'salida_es_carbon' => $horario->salida instanceof \Carbon\Carbon,
-        ]);
-        */
 
         // 🟢 USAR SOLO LA HORA IGNORANDO LA FECHA CORRUPTA
         $horaEntrada = $horario->ingreso instanceof \Carbon\Carbon
@@ -280,7 +293,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
                 ]));
             }
 
-            Log::info("📝 Solicitud generada para {$empleado->nombre_completo} - Alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
+            Log::info("📝 Solicitud generada para {$empleado->apellidos} {$empleado->nombres}  - Alcanzó 93h el {$fechaCumplimiento->format('d/m/Y')}");
 
             return $solicitud;
         } else {

@@ -91,34 +91,6 @@ class SolicitudHorasExtrasPT extends Model
         }
     }
 
-    /*
-     public function verificarAprobacionAutomatica()
-    {
-        // Si está pendiente (estado = 0) y tiene fecha límite
-        if ($this->estado == 0 && $this->fecha_limite_aprobacion) {
-
-            // FECHA ACTUAL vs FECHA LÍMITE
-            $fechaActual = now();
-            $fechaLimite = $this->fecha_limite_aprobacion;
-
-            // ¿LA FECHA ACTUAL ES MAYOR QUE LA LÍMITE?
-            if ($fechaActual->greaterThan($fechaLimite)) {
-
-                // ¡APROBAR AUTOMÁTICAMENTE!
-                $this->update([
-                    'estado' => 1, // Cambiar a aprobado
-                    'aprobado_por' => null,
-                    'fecha_aprobacion' => now(),
-                    'fecha_fin_extras' => $this->fecha_cumplimiento_93h,
-                ]);
-
-                // Opcional: puedes agregar un log aquí
-                \Log::info("Solicitud {$this->id} aprobada automáticamente por sistema");
-            }
-        }
-    }
-    */
-
     // 🎯 RELACIÓN CON EMPLEADO
     public function empleado()
     {

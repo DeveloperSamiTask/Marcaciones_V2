@@ -79,40 +79,11 @@ export default function IndexPermisoGerencia({
         return () => clearTimeout(timer);
     }, [selectedEmpresa, dateRange, applyFilters]);
 
-    //Componente para mostrar cuando no hay filtros
-    /*
-    const NoFiltersMessage = () => (
-        <div className="flex flex-col items-center justify-center p-8">
-            <div className="max-w-md space-y-4 text-center">
-                <CalendarIcon className="text-muted-foreground mx-auto h-12 w-12" />
-                <h3 className="text-lg font-medium">No hay filtros aplicados</h3>
-                <p className="text-muted-foreground text-sm">Selecciona una empresa, tipo y/o rango de fechas para ver los permisos</p>
-                <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => {
-                        setSelectedEmpresa(auth.user.empleado.empresa_id);
-                        setDateRange({
-                            from: new Date(),
-                            to: new Date(),
-                        });
-                    }}
-                >
-                    Mostrar registros de hoy
-                </Button>
-            </div>
-        </div>
-    );
-
-    */
-
-
 
     // Determinar si se deben mostrar los datos
     const showData = selectedEmpresa && dateRange?.from && dateRange?.to;
 
     return (
-
 
         <div className="flex flex-1 flex-col p-8">
             <div className="@container/main flex flex-1 flex-col gap-6">
@@ -120,8 +91,10 @@ export default function IndexPermisoGerencia({
                     <div className="flex items-center justify-between">
                         <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Solicitudes HE - Part Time - Gerencia</h2>
                     </div>
+                    {/*<DateRangeFilter dateRange={dateRange} setDateRange={setDateRange} placeholder="SELECCIONAR RANGO DE FECHAS" />*/}
+              {/*<DateRangeFilter dateRange={dateRange} setDateRange={setDateRange} placeholder="SELECCIONAR RANGO DE FECHAS"
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
                         <SelectFilter
                             items={empresas}
                             selected={selectedEmpresa}
@@ -130,32 +103,12 @@ export default function IndexPermisoGerencia({
                             displayValue={(empresa) => empresa.razonsocial}
                             placeholder="SELECCIONAR EMPRESA"
                         />
-                        {/*<DateRangeFilter dateRange={dateRange} setDateRange={setDateRange} placeholder="SELECCIONAR RANGO DE FECHAS" />*/}
+
                     </div>
+              />*/}
+
                 </div>
                 <Tabs defaultValue="pendientes">
-                    {/*
-                                                   <TabsList className="w-full"
-                                <TabsTrigger
-                            className="data-[state=active]:bg-warning data-[state=active]:text-warning-foreground dark:data-[state=active]:bg-warning dark:data-[state=active]:text-warning-foreground"
-                            value="pendientes"
-                        >
-                            PENDIENTES
-                        </TabsTrigger>
-                                 <TabsTrigger
-                            className="data-[state=active]:bg-success dark:data-[state=active]:bg-success data-[state=active]:text-success-foreground dark:data-[state=active]:text-success-foreground"
-                            value="aprobados"
-                        >
-                            APROBADOS
-                        </TabsTrigger>
-                                 <TabsTrigger
-                                className="data-[state=active]:bg-destructive dark:data-[state=active]:bg-destructive data-[state=active]:text-white dark:data-[state=active]:text-foreground"
-                                value="rechazados"
-                            >
-                                RECHAZADOS
-                            </TabsTrigger>
-                    </TabsList>
-                             */}
 
                     <Card>
                         <CardContent>

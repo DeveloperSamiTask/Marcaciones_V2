@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +13,9 @@ class Empleado extends Model
     use HasFactory, Notifiable;
 
     protected $connection = 'mysql';
+
     protected $table = 'empleados';
+
     protected $fillable = [
         // 'id',
         'jefe_id',
@@ -46,39 +46,44 @@ class Empleado extends Model
         ];
     }
 
-    public function area(): BelongsTo
+    // En Empleado.php
+    public function solicitudesHorasExtrasPT()
     {
-      return $this->belongsTo(Area::class);
+        return $this->hasMany(SolicitudHorasExtrasPT::class);
     }
 
     public function empresa(): BelongsTo
     {
-      return $this->belongsTo(Empresa::class);
+        return $this->belongsTo(Empresa::class);
+    }
+
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(Area::class);
     }
 
     public function jornada(): BelongsTo
     {
-      return $this->belongsTo(Jornada::class);
+        return $this->belongsTo(Jornada::class);
     }
 
     public function jefe(): BelongsTo
     {
-      return $this->belongsTo(Empleado::class, 'jefe_id', 'id');
+        return $this->belongsTo(Empleado::class, 'jefe_id', 'id');
     }
 
     public function horarios(): HasMany
     {
-      return $this->hasMany(Horario::class);
+        return $this->hasMany(Horario::class);
     }
 
     public function marcaciones(): HasMany
     {
-      return $this->hasMany(Marcacion::class);
+        return $this->hasMany(Marcacion::class);
     }
 
     public function suspensiones(): HasMany
     {
-      return $this->hasMany(Suspension::class);
+        return $this->hasMany(Suspension::class);
     }
-
 }

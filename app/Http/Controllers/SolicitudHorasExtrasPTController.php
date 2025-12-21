@@ -22,30 +22,24 @@ class SolicitudHorasExtrasPTController extends Controller
      */
     public function enviarTodaLasSolicitudes()
     {
-        // Log::info('⚡ INICIANDO FLUJO MANUAL DE VERIFICACIÓN HORAS EXTRAS PT');
-
+        Log::info('⚡ INICIANDO FLUJO MANUAL DE VERIFICACIÓN HORAS EXTRAS PT');
         // 1. 🗓️ DEFINIR EL RANGO DE TIEMPO (EJ. LAS ÚLTIMAS 2 SEMANAS O EL MES COMPLETO)
         // Opción B: Todo el mes actual (Recomendado para verificar las 93h)
         // oficial
         $fechaInicio = Carbon::now()->startOfMonth()->startOfDay();
-
         // oficial
         $fechaFin = Carbon::now()->endOfDay();
 
         // pruebas - a futur.
         // $fechaFin = Carbon::now()->addMonth()->endOfDay();
-
         // ---------------- Pruebas para RRHH (eliminar validacion fechas pasadas)
         // $fechaInicio = Carbon::create(2025, 11, 01)->startOfDay();
         // $fechaFin = Carbon::create(2025, 12, 01)->endOfDay();
-
-        // Log::info("📅 RANGO DE VERIFICACIÓN: Desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}");
-
+        Log::info("📅 RANGO DE VERIFICACIÓN: Desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}");
         // 2. 👥 BUSCAR TODOS LOS EMPLEADOS PART-TIME
         $empleadosPartTime = Empleado::where('jornada_id', 2)
             ->whereNull('fecha_cese')
             ->get();
-
         Log::info('👥 EMPLEADOS PART-TIME ENCONTRADOS: '.$empleadosPartTime->count());
 
         if ($empleadosPartTime->count() === 0) {
@@ -54,7 +48,6 @@ class SolicitudHorasExtrasPTController extends Controller
                 'message' => 'No se encontraron empleados Part-Time para verificar.',
             ]);
         }
-
         // 3. 🏃 DESPACHAR/EJECUTAR EL JOB DE VERIFICACIÓ
         // ⚠️ Esto puede causar timeout si hay muchos empleados, pero es bueno para debugging.
         $job = new VerificarHorasExtrasPartTime($empleadosPartTime, $fechaInicio, $fechaFin);
@@ -63,19 +56,39 @@ class SolicitudHorasExtrasPTController extends Controller
         // 4. 📝 BUSCAR LAS NUEVAS SOLICITUDES GENERADAS (Opcional, para la respuesta)
         // Devolvemos el feedback
         // $mensaje = "Se inició la verificación de {$empleadosPartTime->count()} empleados PT desde {$fechaInicio->format('d/m/Y')} hasta {$fechaFin->format('d/m/Y')}. Las notificaciones serán enviadas por el Job.";
-
         $mensaje = "Se verifican : {$empleadosPartTime->count()}";
 
         return redirect()->back()->with('success', $mensaje);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $solicitudes = SolicitudHorasExtrasPT::with('empleado')
-            ->orderBy('fecha_deteccion', 'desc')
-            ->paginate(20);
+        // 🔥 Obtener empresa del parámetro URL
+        $empresaId = $request->get('empresa');
 
-        return view('horas-extras-pt.index', compact('solicitudes'));
+        $query = SolicitudHorasExtrasPT::with(['empleado.empresa', 'empleado.area'])
+            ->where('estado', 0) // Solo pendientes
+            ->orderBy('fecha_deteccion', 'desc');
+
+        // 🔥 Si viene empresa en la URL, filtrar por esa empresa
+        if ($empresaId) {
+            $query->whereHas('empleado', function ($q) use ($empresaId) {
+                $q->where('empresa_id', $empresaId);
+            });
+        }
+
+        $solicitudes = $query->paginate(20);
+
+        // 🔥 Para el dropdown - todas las empresas que tienen solicitudes pendientes
+        $empresas = \App\Models\Empresa::whereHas('empleados.solicitudesHorasExtrasPT', function ($q) {
+            $q->where('estado', 0);
+        })->get();
+
+        return view('horas-extras-pt.index', [
+            'solicitudes' => $solicitudes,
+            'empresas' => $empresas,
+            'filters' => ['empresa' => $empresaId],
+        ]);
     }
 
     public function aprobar(Request $request, $solicitudId)
