@@ -12,7 +12,6 @@ import AprobarSolicitudHE from './edit-gerencia';
 import RechazarSolicitudHE from './delete-gerencia';
 import DetalleSolicitudHE from './searchHorarios-gerencia';
 
-
 const estadoBadgeVariants = {
     0: { label: 'PENDIENTE', variant: 'warning' },
     1: { label: 'APROBADO', variant: 'success' },
@@ -65,6 +64,7 @@ export const columnsSolicitudesHERRHH: ColumnDef<any>[] = [
         accessorKey: 'fecha_cumplimiento_93h',
         header: 'CUMPLIÓ EL',
     },
+    /*
     {
         accessorKey: 'fecha_limite_aprobacion',
         header: 'LÍMITE APROBACIÓN',
@@ -72,6 +72,8 @@ export const columnsSolicitudesHERRHH: ColumnDef<any>[] = [
             return <span>{row.original.fecha_limite_aprobacion}</span>;
         }
     },
+    */
+
     {
         accessorKey: 'fecha_aprobacion',
         header: 'F. REVISION',
@@ -80,6 +82,8 @@ export const columnsSolicitudesHERRHH: ColumnDef<any>[] = [
             return <span>{fecha || '-'}</span>;
         }
     },
+
+
     {
         accessorKey: 'aprobado_por_nombre',
         header: 'REVISADO POR',

@@ -46,6 +46,8 @@ export const columnsSolicitudesHE: ColumnDef<any>[] = [
             );
         },
     },
+
+    /*
     {
         accessorKey: 'horas_acumuladas',
         header: 'HORAS TOTALES',
@@ -53,6 +55,8 @@ export const columnsSolicitudesHE: ColumnDef<any>[] = [
             return <span className='font-semibold'>{row.original.horas_acumuladas}h</span>;
         },
     },
+    */
+
     {
         accessorKey: 'horas_excedentes',
         header: 'HORAS EXTRAS',
@@ -65,6 +69,7 @@ export const columnsSolicitudesHE: ColumnDef<any>[] = [
         accessorKey: 'fecha_cumplimiento_93h',
         header: 'CUMPLIÓ EL',
     },
+    /*
     {
         accessorKey: 'fecha_limite_aprobacion',
         header: 'LÍMITE APROBACIÓN',
@@ -72,7 +77,7 @@ export const columnsSolicitudesHE: ColumnDef<any>[] = [
             return <span>{row.original.fecha_limite_aprobacion}</span>;
         }
     },
-
+    */
     {
         accessorKey: 'estado',
         header: 'ESTADO',
@@ -103,8 +108,10 @@ export const columnsSolicitudesHE: ColumnDef<any>[] = [
                         </>
                     )}
 
-                    {/* DETALLE - SIEMPRE VISIBLE */}
-                    <DetalleSolicitudHE key={`detalle-${solicitud.id}`} solicitud={solicitud} />
+                    {/* DETALLE - SIEMPRE VISIBLE
+                        <DetalleSolicitudHE key={`detalle-${solicitud.id}`} solicitud={solicitud} />
+                    */}
+
                 </div>
             );
         },

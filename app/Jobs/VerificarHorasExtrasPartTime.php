@@ -65,14 +65,32 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
             'solicitudes_recibidas' => $solicitudes->count(),
             'empresas_unicas' => $solicitudes->pluck('empleado.empresa_id')->unique()->values()->toArray(),
         ]);
-
+    //LOCAL
         $empresaCorreoMap = [
+
             1 => ['cordovasandro99@gmail.com'],
             3 => ['sandrocordova99@hotmail.com'],
             5 => ['sandrocordova99@hotmail.com'],
             10 => ['sandrocordova99@hotmail.com'],
             11 => ['sandrocordova99@hotmail.com'],
         ];
+
+        /*
+        //REMOTO
+        $empresaCorreoMap = [
+            //EQEQO 5 , GRANJA 1 , INTURPESA 3
+            1 => ['cordovasandro99@gmail.com','ybustamante@lagranjavilla.com'],
+            3 => ['cordovasandro99@gmail.com','ybustamante@lagranjavilla.com'],
+            // CHAXRA 4
+            4 => ['cordovasandro99@gmail.com','4samy@cosmicbowling.com.pe'],
+            5 => ['cordovasandro99@gmail.com','ybustamante@lagranjavilla.com'],
+            //YAKU 10
+            10 => ['sandrocordova99@hotmail.com','samy@yakupark.com.pe'],
+            //INFLAVENTURA  11
+            11 => ['sandrocordova99@hotmail.com' , 'samy@inflaventura.com'],
+        ];
+        */
+
 
         // 🔥 AGRUPAR SOLICITUDES POR EMPRESA PRIMERO
         $solicitudesPorEmpresa = [];
@@ -235,7 +253,7 @@ class VerificarHorasExtrasPartTime implements ShouldQueue
 
         $horas = $minutosDia / 60;
 
-        Log::info("🕒 Cálculo día {$horario->fecha}: {$horaEntrada} a {$horaSalida} = {$horas}h");
+        //Log::info("🕒 Cálculo día {$horario->fecha}: {$horaEntrada} a {$horaSalida} = {$horas}h");
 
         return $horas;
     }

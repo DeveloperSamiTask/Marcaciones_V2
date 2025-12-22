@@ -5,7 +5,6 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Log;
 
 class SolicitudHorasExtrasPT extends Model
 {
@@ -44,11 +43,11 @@ class SolicitudHorasExtrasPT extends Model
 
         // Cada vez que alguien consulte , verifica si ya se venció
 
-        /*
-        static::retrieved(function ($solicitud) {
-            $solicitud->verificarYaprobarSiVencida();
-        });
-        */
+
+                 static::retrieved(function ($solicitud) {
+                    $solicitud->verificarYaprobarSiVencida();
+                });
+
 
     }
 
@@ -69,7 +68,7 @@ class SolicitudHorasExtrasPT extends Model
 
                 $this->update([
                     'estado' => 1,
-                    'aprobado_por' => null,
+                    'aprobado_por' => 'SISTEMA',
                     'fecha_aprobacion' => now(),
                     'fecha_fin_extras' => $this->fecha_cumplimiento_93h,
                 ]);

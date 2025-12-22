@@ -96,10 +96,11 @@ class SolicitudHorasExtrasPTController extends Controller
         try {
             DB::transaction(function () use ($solicitudId) {
                 // 1. ACTUALIZAR LA SOLICITUD
+                $user = auth()->user();
                 $solicitud = SolicitudHorasExtrasPT::findOrFail($solicitudId);
                 $solicitud->update([
                     'estado' => 1, // Aprobado
-                    'aprobado_por' => auth()->id(),
+                    'aprobado_por' =>$user->name,
                     'fecha_aprobacion' => now(),
                     // 'fecha_fin_extras' => $solicitud->fecha_cumplimiento_93h, // Llenar este campo
                     'observaciones' => null,
@@ -138,9 +139,10 @@ class SolicitudHorasExtrasPTController extends Controller
             DB::transaction(function () use ($request, $solicitudId) {
                 // 1. ACTUALIZAR LA SOLICITUD CON MOTIVO DE RECHAZO
                 $solicitud = SolicitudHorasExtrasPT::findOrFail($solicitudId);
+                $user = auth()->user();
                 $solicitud->update([
                     'estado' => 2, // Rechazado
-                    'aprobado_por' => auth()->id(),
+                    'aprobado_por' => $user->name,
                     'fecha_aprobacion' => now(),
                     'observaciones' => $request->observaciones, // 🚨 Motivo del rechazo
                 ]);
@@ -391,9 +393,7 @@ class SolicitudHorasExtrasPTController extends Controller
                 'estado' => $solicitud->estado,
 
                 'fecha_aprobacion' => $solicitud->fecha_aprobacion?->format('d/m/Y'),
-                'aprobado_por_nombre' => $solicitud->aprobado_por ?
-                    (\App\Models\User::find($solicitud->aprobado_por)->name ?? 'Usuario no encontrado') :
-                    ($solicitud->estado == 1 ? 'SISTEMA' : null),
+                'aprobado_por_nombre' => $solicitud->aprobado_por,
                 'observaciones' => $solicitud->observaciones,
             ];
         };

@@ -844,8 +844,9 @@ export default function App({ empleados, empresas, url, supervisores }) {
             );
 
 
-            /* -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------  */
-            if (employee.jornada_id === 1) { // FULL TIME
+            /* -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------*/
+
+             if (employee.jornada_id === 1) { // FULL TIME
 
                 const esSamiTask = employee.empresa_id === 2;
                 const MAX_HORAS = 2880;  // 48 horas en minutos
@@ -856,9 +857,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 }
 
                 // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES o Descanso Medico
-                const todosSonVacaciones = Object.values(employeeSchedule).every(day =>
-                    day?.status === 'V' || day?.estado === 'V' || day?.status === 'M' || day?.estado === 'M' || day?.status === 'LP' || day?.estado === 'LP' || day?.status === 'LM' || day?.estado === 'LM'
-                    || day?.status === 'LF' || day?.estado === 'AI'
+                const todosSonVacaciones = Object.values(employeeSchedule).some(day =>
+                    day?.status === 'V' || day?.estado === 'D' || day?.status === 'M'  || day?.status === 'LP' ||  day?.status === 'LM' || day?.status === 'LF' || day?.estado === 'AI'
                 );
 
                 // 🔥 EXCEPCIÓN: Si todos son V, no validar mínimo de horas
@@ -891,6 +891,9 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 }
 
             }
+
+
+
         });
 
 
