@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class HorarioController extends Controller
@@ -625,128 +626,300 @@ class HorarioController extends Controller
 
     // ------------------------------------------------------------------------- LOGICA DEL INSERTAR -------------------------------------------------------------------------
 
-    public function storeMultiple(Request $request)
+    /*
+    //Respaldo
+     public function storeMultiple(Request $request)
     {
-        $userId = auth()->id() ?? 'guest';
-        $lockKey = "horarios_save_{$userId}";
+        $requestId = (string) Str::uuid();
 
-        $lock = Cache::lock($lockKey, 60);
+        Log::info(
+            "🚀 INICIO storeMultiple\n".
+            "request_id: {$requestId}\n".
+            '----------------------------------'
+        );
 
-        if (! $lock->get()) {
-            return back()->with('error', 'Ya hay un guardado en progreso. Espera unos segundos.');
+        $data = $request->validate([
+            'entries' => 'required|array|min:1',
+            'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
+            'entries.*.fecha' => 'required|date',
+            'entries.*.ingreso' => 'required|date_format:H:i',
+            'entries.*.salida' => 'required|date_format:H:i',
+            'entries.*.estado' => 'required|string',
+            'entries.*.feriado' => 'nullable|integer',
+            'entries.*.permiso_td_id' => 'nullable|integer',
+        ]);
+
+        $entries = collect($data['entries']);
+
+        // ======================================================
+        // 1️⃣ DEFINIR SEMANA OFICIAL (LUNES → DOMINGO)
+        // ======================================================
+        $fechaRef = Carbon::parse($entries->min('fecha'), 'America/Lima')->startOfDay();
+        $inicioSemana = $fechaRef->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemana = $fechaRef->copy()->endOfWeek(Carbon::SUNDAY);
+
+        // Generamos las 7 fechas oficiales de la semana
+        $fechasSemana = collect();
+        for ($i = 0; $i < 7; $i++) {
+            $fechasSemana->push(
+                $inicioSemana->copy()->addDays($i)->toDateString()
+            );
         }
 
-        try {
-            $data = $request->validate([
-                'entries' => 'required|array|min:1',
-                'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
-                'entries.*.fecha' => 'required|date',
-                'entries.*.ingreso' => 'required|date_format:H:i',
-                'entries.*.salida' => 'required|date_format:H:i',
-                'entries.*.estado' => 'required|string|in:L,PE,V,F,S,D,AHE,C,CA,CHE,FL,SP,M,SN,ST,SFI,FI,FJ,LCG,LSG,LP,LM,LF,TD,AI',
-                'entries.*.feriado' => 'nullable|integer|exists:feriados,id',
-                'entries.*.permiso_td_id' => 'nullable|integer|exists:permisos,id',
-            ]);
+        Log::info(
+            "📅 SEMANA CALCULADA\n".
+            "inicio: {$inicioSemana->toDateString()}\n".
+            "fin: {$finSemana->toDateString()}\n".
+            'fechas: '.implode(', ', $fechasSemana->toArray())."\n".
+            '----------------------------------'
+        );
 
-            $entriesCollection = collect($data['entries']);
-            $fechaReferencia = $entriesCollection->pluck('fecha')->sort()->first();
-            $carbonDate = Carbon::parse($fechaReferencia, 'America/Lima')->startOfDay();
-            $startOfWeek = $carbonDate->copy()->startOfWeek(Carbon::MONDAY);
-            $endOfWeek = $carbonDate->copy()->endOfWeek(Carbon::SUNDAY);
+        // ======================================================
+        // 2️⃣ AGRUPAR POR EMPLEADO
+        // ======================================================
+        $porEmpleado = $entries->groupBy('empleado_id');
 
-            $empleadoIds = $entriesCollection->pluck('empleado_id')->unique()->toArray();
+        foreach ($porEmpleado as $empleadoId => $entriesEmpleado) {
 
-            Log::info('📅 Semana detectada', [
-                'inicio' => $startOfWeek->toDateString(),
-                'fin' => $endOfWeek->toDateString(),
-            ]);
+            $lockKey = "horarios_semana_{$empleadoId}_{$inicioSemana->toDateString()}";
+            $lock = Cache::lock($lockKey, 120);
 
-            // Horarios existentes (optimizado con DB::table)
-            $horariosExistentes = DB::table('horarios')
-                ->whereIn('empleado_id', $empleadoIds)
-                ->whereBetween('fecha', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
-                ->get(['empleado_id', 'fecha']);
+            if (! $lock->get()) {
+                Log::warning(
+                    "⛔ BLOQUEADO POR LOCK\n".
+                    "empleado_id: {$empleadoId}\n".
+                    "request_id: {$requestId}\n".
+                    '----------------------------------'
+                );
 
-            $horariosExistentesIndex = collect($horariosExistentes)->mapWithKeys(function ($h) {
-                $key = "{$h->empleado_id}|{$h->fecha}";
-
-                return [$key => true];
-            });
-
-            Log::info('🔍 Horarios existentes', [
-                'total' => $horariosExistentesIndex->count(),
-            ]);
-
-            // Filtrar duplicados
-            $entriesFiltradas = $entriesCollection->filter(function ($entry) use ($horariosExistentesIndex) {
-                $fecha = Carbon::parse($entry['fecha'], 'America/Lima')->toDateString();
-                $key = "{$entry['empleado_id']}|{$fecha}";
-
-                return ! isset($horariosExistentesIndex[$key]);
-            })->values();
-
-            if ($entriesFiltradas->isEmpty()) {
-                return back()->withErrors([
-                    'bloqueo_semanal' => '✅ Advertencia: el horario ya fue registrado previamente.',
-                ]);
+                continue;
             }
 
-            // Validar 00:00
-            $tieneInvalidos = $entriesFiltradas->filter(function ($entry) {
-                return $entry['estado'] === 'L' &&
-                       ($entry['ingreso'] === '00:00' || $entry['salida'] === '00:00');
-            })->isNotEmpty();
+            try {
 
-            if ($tieneInvalidos) {
-                return back()->with('error',
-                    'Error: Los horarios no pueden ser 00:00 para días laborables.');
-            }
+                // ======================================================
+                // 3️⃣ TRANSACCIÓN + BLOQUEO REAL EN BD
+                // ======================================================
+                DB::transaction(function () use (
+                    $empleadoId,
+                    $inicioSemana,
+                    $finSemana,
+                    $fechasSemana,
+                    $entriesEmpleado
 
-            // 🔥 GUARDADO CON procesarUnDia() (mantiene tu lógica)
-            $contador = 0;
-            $empleadoIdsGuardados = [];
+                ) {
 
-            DB::transaction(function () use ($entriesFiltradas, &$contador, &$empleadoIdsGuardados) {
-                foreach ($entriesFiltradas as $entry) {
-                    $horario = $this->procesarUnDia(
-                        $entry['empleado_id'],
-                        $entry['fecha'],
-                        $entry['ingreso'],
-                        $entry['salida'],
-                        $entry['estado'],
-                        '',
-                        $entry['feriado'] ?? null,
-                        $entry['permiso_td_id'] ?? null
+                    // 🔒 Bloqueo REAL: nadie más puede tocar esta semana
+                    $diasExistentes = DB::table('horarios')
+                        ->where('empleado_id', $empleadoId)
+                        ->whereBetween('fecha', [
+                            $inicioSemana->toDateString(),
+                            $finSemana->toDateString(),
+                        ])
+                        ->lockForUpdate()
+                        ->pluck('fecha')
+                        ->map(fn ($f) => Carbon::parse($f)->toDateString())
+                        ->toArray();
+
+                    Log::info(
+                        "📊 ESTADO ACTUAL BD\n".
+                        "empleado_id: {$empleadoId}\n".
+                        'dias_existentes: '.implode(', ', $diasExistentes)."\n".
+                        '----------------------------------'
                     );
 
-                    if ($horario) {
-                        $contador++;
-                        $empleadoIdsGuardados[] = $entry['empleado_id'];
+                    // 🚫 Semana completa → no tocar
+                    if (count($diasExistentes) === 7) {
+                        Log::warning(
+                            "🚫 SEMANA COMPLETA - SE OMITE\n".
+                            "empleado_id: {$empleadoId}\n".
+                            '----------------------------------'
+                        );
+
+                        return;
                     }
-                }
-            });
 
-            $mensaje = "✅ {$contador} horarios guardados correctamente";
-            Log::info('✅ Guardado masivo exitoso', [
-                'guardados' => $contador,
-                'empleados' => $empleadoIdsGuardados,
-            ]);
+                    // ======================================================
+                    // 4️⃣ DÍAS QUE REALMENTE FALTAN (SEGÚN SEMANA OFICIAL)
+                    // ======================================================
+                    $diasFaltantes = $fechasSemana->diff($diasExistentes);
 
-            return redirect()->back()->with('success', $mensaje);
+                    Log::info(
+                        "🛠️ DÍAS A CREAR\n".
+                        "empleado_id: {$empleadoId}\n".
+                        'faltantes: '.implode(', ', $diasFaltantes->toArray())."\n".
+                        '----------------------------------'
+                    );
 
-        } catch (Exception $e) {
-            Log::error('❌ ERROR AL GUARDAR', [
-                'mensaje' => $e->getMessage(),
-                'trace' => substr($e->getTraceAsString(), 0, 500),
-            ]);
+                    foreach ($diasFaltantes as $fecha) {
 
-            return redirect()->back()->with('error',
-                'Error al guardar horarios: '.$e->getMessage());
+                        // Tomamos datos del request SOLO como referencia
+                        $entry = $entriesEmpleado
+                            ->first(fn ($e) => Carbon::parse($e['fecha'])->toDateString() === $fecha);
 
-        } finally {
-            $lock->release();
+                        Log::info(
+                            "✍️ CREANDO DÍA\n".
+                            "empleado_id: {$empleadoId}\n".
+                            "fecha: {$fecha}\n".
+                            '----------------------------------'
+                        );
+
+                        $this->procesarUnDia(
+                            $empleadoId,
+                            $fecha,
+                            $entry['ingreso'] ?? '00:00',
+                            $entry['salida'] ?? '00:00',
+                            $entry['estado'] ?? 'L',
+                            '',
+                            $entry['feriado'] ?? null,
+                            $entry['permiso_td_id'] ?? null
+                        );
+                    }
+
+                    Log::info(
+                        "✅ SEMANA COMPLETADA\n".
+                        "empleado_id: {$empleadoId}\n".
+                        '----------------------------------'
+                    );
+                }, 2); // 🔁 retry 1 vez si hay deadlock
+
+            } catch (\Throwable $e) {
+                Log::error(
+                    "💥 ERROR GRAVE\n".
+                    "empleado_id: {$empleadoId}\n".
+                    "request_id: {$requestId}\n".
+                    "error: {$e->getMessage()}\n".
+                    '----------------------------------'
+                );
+            } finally {
+                $lock->release();
+            }
         }
+
+        Log::info(
+            "🏁 FIN storeMultiple\n".
+            "request_id: {$requestId}\n".
+            '----------------------------------'
+        );
+
+        return back()->with('success', 'Proceso ejecutado');
     }
+    */
+public function storeMultiple(Request $request)
+{
+    // 1. VALIDACIÓN ORIGINAL (Mantenemos tu seguridad)
+    \Log::info("\n".
+        "🚀 STORE MULTIPLE - INICIO DE PROCESO\n".
+        "\n".
+        "📥 Datos recibidos del request:\n".
+        '  Total de entries: '.count($request->input('entries', []))."\n".
+        '  Fecha/hora: '.now()->format('Y-m-d H:i:s')."\n".
+        '');
+
+    $validated = $request->validate([
+        'entries' => 'required|array|min:1',
+        'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
+        'entries.*.fecha' => 'required|date',
+        'entries.*.ingreso' => 'required|date_format:H:i',
+        'entries.*.salida' => 'required|date_format:H:i',
+        'entries.*.estado' => 'required|string',
+        'entries.*.feriado' => 'nullable|integer',
+        'entries.*.permiso_td_id' => 'nullable|integer',
+    ]);
+
+    $entries = $validated['entries'];
+
+    \Log::info('--- INICIO PROCESAMIENTO ENTRIES ---', ['cantidad' => count($entries)]);
+
+    // 2. EL ANCLA
+    $fechaReferencia = Carbon::parse($entries[0]['fecha'], 'America/Lima');
+    $inicioSemana = $fechaReferencia->copy()->startOfWeek(Carbon::MONDAY);
+    $finSemana = $fechaReferencia->copy()->endOfWeek(Carbon::SUNDAY);
+
+    \Log::info("📅 CÁLCULO DE SEMANA OFICIAL:\n".
+        '  Fecha referencia (primera entry): '.$entries[0]['fecha']."\n".
+        '  Lunes de la semana: '.$inicioSemana->format('d/m/Y')."\n".
+        '  Domingo de la semana: '.$finSemana->format('d/m/Y')."\n".
+        "  Días de la semana:\n".
+        '    Lunes: '.$inicioSemana->format('d/m/Y')."\n".
+        '    Martes: '.$inicioSemana->copy()->addDay()->format('d/m/Y')."\n".
+        '    Miércoles: '.$inicioSemana->copy()->addDays(2)->format('d/m/Y')."\n".
+        '    Jueves: '.$inicioSemana->copy()->addDays(3)->format('d/m/Y')."\n".
+        '    Viernes: '.$inicioSemana->copy()->addDays(4)->format('d/m/Y')."\n".
+        '    Sábado: '.$inicioSemana->copy()->addDays(5)->format('d/m/Y')."\n".
+        '    Domingo: '.$inicioSemana->copy()->addDays(6)->format('d/m/Y')."\n".
+        '');
+
+    // 4. TRANSACCIÓN Y PROCESAMIENTO (Movimos la Foto aquí adentro con LOCK)
+    return DB::transaction(function () use ($entries, $inicioSemana, $finSemana) {
+
+        // 3. LA FOTO (AHORA CON LOCK): Esto detiene al segundo proceso en el remoto
+        $empleadosIds = collect($entries)->pluck('empleado_id')->unique();
+        $horariosExistentes = DB::table('horarios')
+            ->whereIn('empleado_id', $empleadosIds)
+            ->whereBetween('fecha', [$inicioSemana->toDateString(), $finSemana->toDateString()])
+            ->lockForUpdate() // 🔒 EL CANDADO PARA PRODUCCIÓN
+            ->get()
+            ->groupBy('empleado_id');
+
+        // LOG DE EXISTENTES ENCONTRADOS (Dentro de la transacción para ver la realidad post-bloqueo)
+        \Log::info("🔍 HORARIOS EXISTENTES ENCONTRADOS EN BD (LOCK ACTIVADO):\n".
+            '  Empleados con registros existentes: '.$horariosExistentes->count()."\n".
+            "  Distribución por empleado:\n".
+            collect($horariosExistentes)->map(function ($registros, $empleadoId) {
+                return "    • Empleado {$empleadoId}: ".$registros->count().' registros';
+            })->implode("\n")."\n".
+            '');
+
+        $contadorProcesados = 0;
+
+        foreach ($entries as $data) {
+            $empId = $data['empleado_id'];
+            $EmpleadosNombre = Empleado::find($empId);
+            $fechaDeseada = Carbon::parse($data['fecha'])->toDateString();
+
+            // 2. REGLA 2
+            $registrosEnFoto = $horariosExistentes->get($empId, collect());
+            if ($registrosEnFoto->count() >= 7) {
+                \Log::info("Regla 2: Empleado {$EmpleadosNombre->apellidos} tiene semana llena. Omitiendo.");
+                continue;
+            }
+
+            // 3. REGLA 3 (Evitar Duplicados)
+            $existeEnFoto = $registrosEnFoto->firstWhere('fecha', $fechaDeseada);
+
+            if (! $existeEnFoto) {
+                // REFUERZO: Doble check real
+                $existeEnBDReal = DB::table('horarios')
+                    ->where('empleado_id', $empId)
+                    ->where('fecha', $fechaDeseada)
+                    ->exists();
+
+                if (! $existeEnBDReal) {
+                    \Log::info("Regla 3: Llenando hueco para el día {$fechaDeseada}");
+
+                    $this->procesarUnDia(
+                        $empId,
+                        $fechaDeseada,
+                        $data['ingreso'],
+                        $data['salida'],
+                        $data['estado'],
+                        $data['descripcion'] ?? '',
+                        $data['feriado'] ?? null,
+                        $data['permiso_td_id'] ?? null
+                    );
+                    $contadorProcesados++;
+                } else {
+                    \Log::warning("⚠️ Intento de duplicado evitado por Doble Check para: {$fechaDeseada}");
+                }
+            }
+        }
+
+        \Log::info('--- FIN PROCESAMIENTO ---', ['insertados' => $contadorProcesados]);
+
+        return redirect()->back()->with('success', "Se han procesado {$contadorProcesados} registros correctamente.");
+    });
+}
 
     private function procesarUnDia(
         $empleadoId,
@@ -758,7 +931,13 @@ class HorarioController extends Controller
         $feriado = null,
         $permiso_td_id = null
     ) {
-        // 🔥 Cache de empleado (evita N queries)
+
+        \Log::info("\n".
+        "🚀 PROCESAR UN DIA  - INICIO DE PROCESO\n".
+        "\n".
+        '');
+
+        // 🔥 Cache de empleado (evita repetir la misma consulta 7 veces por empleado)
         static $empleadosCache = [];
 
         if (! isset($empleadosCache[$empleadoId])) {
@@ -768,20 +947,22 @@ class HorarioController extends Controller
         $empleado = $empleadosCache[$empleadoId];
 
         if (! $empleado) {
-            throw new Exception("Empleado {$empleadoId} no encontrado");
+            \Log::error("❌ ERROR: Empleado {$empleadoId} no encontrado en la base de datos.");
+            throw new \Exception("Empleado {$empleadoId} no encontrado");
         }
 
-        $fechaCarbon = Carbon::parse($fecha, 'America/Lima')->startOfDay();
-
-        // AI no se guarda
+        // AI no se guarda (Regla de negocio)
         if ($estado === 'AI') {
             return null;
         }
 
+        // Ya no usamos parse libre, usamos la fecha que el servidor calculó
+        $fechaCarbon = Carbon::parse($fecha, 'America/Lima')->startOfDay();
         $inicioSemana = $fechaCarbon->copy()->startOfWeek(Carbon::MONDAY);
         $finSemana = $fechaCarbon->copy()->endOfWeek(Carbon::SUNDAY);
 
-        // 🔥 Calcular horas semanales (optimizado)
+        // 🔥 Calcular horas semanales acumuladas (Optimizado)
+        /*
         $horasSemanales = $this->calcularHorasSemanalesAnteriores_Optimizado(
             $empleado->id,
             $empleado->jornada_id,
@@ -789,54 +970,64 @@ class HorarioController extends Controller
             $inicioSemana,
             $finSemana
         );
+        */
 
-        // Sumar horas del día actual
-        if ($estado === 'L') {
+        // Sumar minutos del día actual si es laborable
+        /*
+         if ($estado === 'L') {
             $minutosHoy = $this->calcularMinutosTrabajados($ingreso, $salida, $empleado->jornada_id);
             $horasSemanales += $minutosHoy;
         }
+        */
 
-        // 🔥 USAR DB::table (3× más rápido)
-        DB::table('horarios')->updateOrInsert(
-            [
-                'empleado_id' => $empleadoId,
-                'fecha' => $fechaCarbon->toDateString(),
-            ],
-            [
-                'ingreso' => $ingreso,
-                'salida' => $salida,
-                'descripcion' => $descripcion,
-                'estado' => ($estado === 'L') ? 'L' : 'PE',
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
-        );
+        // --- LÓGICA DE INSERCIÓN ---
 
-        // Obtener el horario recién creado (solo si necesitas el objeto después)
-        $horario = Horario::where('empleado_id', $empleadoId)
-            ->where('fecha', $fechaCarbon->toDateString())
-            ->first();
+        \Log::info('📝 Insertando Horario:', [
+            'empleado' => "{$empleado->apellidos}, {$empleado->nombres}",
+            'fecha_final' => $fechaCarbon->toDateString(),
+            'estado' => $estado,
+            'ingreso' => $ingreso,
+            'salida' => $salida,
+        ]);
 
-        // Gestión de feriados
+        // 🔥 Inserción Directa (Más rápido que updateOrInsert porque ya validamos que no existe)
+        // El estado PE se asigna si no es 'L' (Laborable)
+        $horarioId = DB::table('horarios')->insertGetId([
+            'empleado_id' => $empleadoId,
+            'fecha' => $fechaCarbon->toDateString(),
+            'ingreso' => $ingreso,
+            'salida' => $salida,
+            'descripcion' => $descripcion,
+            'estado' => ($estado === 'L') ? 'L' : 'PE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Traemos el modelo Horario para usar las relaciones (feriados, etc.)
+        $horario = Horario::find($horarioId);
+
+        // Gestión de feriados: Si es C o CA y hay un feriado, sincronizamos
         if (($estado === 'C' || $estado === 'CA') && $feriado) {
+            \Log::info('🚩 Sincronizando Feriado:', ['horario_id' => $horarioId, 'feriado_id' => $feriado]);
             $horario->feriados()->sync([$feriado]);
         } else {
             $horario->feriados()->detach();
         }
 
-        // Consumir TD
+        // Lógica para consumir Tiempo Disponible (TD)
         if ($estado === 'TD') {
+            \Log::info('⏳ Consumiendo TD:', ['empleado' => $empleadoId, 'fecha' => $fecha]);
             $this->consumirTD($empleadoId, $fechaCarbon, $permiso_td_id, $horario);
         }
 
-        // Crear permiso (con verificación de duplicados)
+        // Crear permiso no laboral (vacaciones, descansos, etc.) con verificación
         if (! in_array($estado, ['L', 'TD', 'AI'])) {
+            \Log::info('🎟️ Creando Permiso No Laboral:', ['tipo' => $estado, 'empleado' => $empleadoId]);
             $this->crearPermisoNoLaboralOptimizado($empleadoId, $fechaCarbon, $estado, $feriado);
         }
 
         return $horario;
     }
-
     // ==================== MÉTODOS AUXILIARES OPTIMIZADOS ====================
 
     private function calcularMinutosTrabajados(string $ingreso, string $salida, int $jornadaId): int
@@ -941,6 +1132,26 @@ class HorarioController extends Controller
         string $estado,
         ?int $feriado
     ): void {
+
+        $fechaString = $fecha instanceof Carbon ? $fecha->toDateString() : $fecha;
+
+        // 1. REGLA DE ORO: Antes de crear, verificamos si YA EXISTE
+        // un permiso para este empleado en esta fecha.
+        $existe = DB::table('permisos')
+            ->where('empleado_id', $empleadoId)
+            ->where('fecha', $fechaString)
+            ->exists();
+
+        if ($existe) {
+            \Log::info('🚫 Permiso ya existente omitido para evitar duplicado:', [
+                'empleado' => $empleadoId,
+                'fecha' => $fechaString,
+                'tipo' => $estado,
+            ]);
+
+            return; // Salimos, no creamos nada.
+        }
+
         // 🔥 Cache de tipos de permiso
         static $tiposPermisoCache = [];
 
@@ -1210,7 +1421,7 @@ class HorarioController extends Controller
 
         $feriadoFuturo = Feriado::query() // feriados futuros para COMPENSA ADELANTADA
             ->whereYear('fecha', now()->year)
-            ->whereDate('fecha', '<=', now())
+            ->whereDate('fecha', '>=', now())
             ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
             ->select(['id', 'fecha', 'nombre'])
             ->orderBy('fecha', 'desc')

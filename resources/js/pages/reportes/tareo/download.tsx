@@ -22,6 +22,11 @@ export default function DownloadTareo({ disabled = false, tareos, filters }: {di
 
     const download = async () => {
         try {
+
+             console.log('Primer tareo para Excel:', tareos[0]);
+            console.log('Tiene hept_horas?:', 'hept_horas' in tareos[0]);
+            console.log('hept_horas valor:', tareos[0]?.hept_horas);
+
             setProcessing(true);
             const params = {
                 tareos: JSON.stringify(tareos),

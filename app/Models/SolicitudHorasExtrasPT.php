@@ -42,13 +42,9 @@ class SolicitudHorasExtrasPT extends Model
         parent::boot();
 
         // Cada vez que alguien consulte , verifica si ya se venció
-
-
                  static::retrieved(function ($solicitud) {
                     $solicitud->verificarYaprobarSiVencida();
                 });
-
-
     }
 
     public function verificarYaprobarSiVencida()

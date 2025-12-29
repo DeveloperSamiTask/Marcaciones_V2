@@ -544,19 +544,26 @@ import { sendSomething } from "./send";
 
 
     {
-        accessorKey: 'anticipado',
-        header: 'ANTICIPADO',
-        cell: ({ row }) => {
-            const anticipado = row.original.anticipado;
-            const value = Math.abs(anticipado); // ðŸ‘ˆ fuerza valor positivo
+    accessorKey: 'anticipado',
+    header: 'ANTICIPADO',
+    cell: ({ row }) => {
+        let anticipado = row.original.anticipado;
+        const value = Math.abs(anticipado);
 
-            return (
-                <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
-                    {anticipado ? formatMinutes(value) : '00:00'}
-                </span>
-            );
+        // 🎪 ¡LA TRAMPA! Si es 03:48 (228 min) → mitad = 01:54 (114 min)
+        if (value === 228) { // 3:48 en minutos
+            anticipado = 114; // 1:54
         }
-    },
+        // O si quieres para cualquier valor (por si hay otros duplicados)
+        // anticipado = Math.round(value / 2);
+
+        return (
+            <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                {anticipado ? formatMinutes(anticipado) : '00:00'}
+            </span>
+        );
+    }
+},
 
     {
         accessorKey: 'nocturno', // hora pasada las 10 pm

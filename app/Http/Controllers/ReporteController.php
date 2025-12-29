@@ -18,8 +18,9 @@ use App\Models\Suspension;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Inertia\Response;
+use Inertia\Response; // ← Añade esto
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReporteController extends Controller
@@ -119,6 +120,23 @@ class ReporteController extends Controller
             ->orderBy('apellidos')
             ->get();
 
+        // Después de la línea que obtiene los empleados, agregar:
+        $empleadoIds = $empleados->pluck('id');
+
+        // Obtener solicitudes HE/PT aprobadas para estos empleados en el rango de fechas
+        $solicitudesHEPT = DB::table('solicitudes_horas_extras_pt')
+            ->whereIn('empleado_id', $empleados->pluck('id'))
+            ->where('estado', 1) // Solo aprobadas
+            ->whereBetween('fecha_cumplimiento_93h', [$request->fechaInicio, $request->fechaFin])
+            ->select(
+                'empleado_id',
+                'fecha_cumplimiento_93h',
+                'horas_acumuladas',
+                'aprobado_por'
+            )
+            ->get()
+            ->groupBy('empleado_id');
+
         // Obtener feriados pendientes para cada empleado
         $feriadosPendientes = Horario::whereIn('empleado_id', $empleados->pluck('id'))
             ->with(['empleado', 'feriados'])
@@ -135,66 +153,131 @@ class ReporteController extends Controller
                     ->count();
             });
 
-        $lista = $empleados->map(function ($empleado) use ($feriadosPendientes, $inicio, $fin) {
+        $lista = $empleados->map(function ($empleado) use ($feriadosPendientes, $inicio, $fin, $solicitudesHEPT) {
+
+            $heptEmpleado = $solicitudesHEPT->get($empleado->id, collect());
+
+            // Calcular total de horas extras de PT
+            $totalHept = $heptEmpleado->sum(function ($solicitud) {
+                return $solicitud->horas_acumuladas - 93;
+            });
+
+            // Obtener información de aprobación
+            $infoAprobacion = $heptEmpleado->map(function ($solicitud) {
+                return [
+                    'horas' => $solicitud->horas_acumuladas - 93,
+                    'aprobado_por' => $solicitud->aprobado_por,
+                    'color' => $solicitud->aprobado_por == 'SISTEMA' ? 'blue' : 'green', // Cambiar según especifiques
+                ];
+            });
+
             $fechaCorte = $empleado->fecha_ingreso > $inicio ? $empleado->fecha_ingreso : $inicio;
             $empleadoHorarios = $empleado->horarios->filter(fn ($h) => $h->fecha >= $fechaCorte && $h->fecha <= $fin);
             $empleadoMarcaciones = $empleado->marcaciones->filter(fn ($m) => $m->fecha >= $fechaCorte && $m->fecha <= $fin);
             $estadosCount = $empleadoHorarios->countBy('estado');
             $dias = $fechaCorte->diffInDays($fin) + 1;
 
+            $fechasProcesadas = [];
             $tardanza = 0;
-            $horas = 0;
+            $horas = 0; // Esta es la variable que causaba problemas, ahora unificada
             $horasLaboradas = 0;
             $extra = 0;
             $anticipado = 0;
             $nocturno = 0;
             $extra_25 = 0;
             $extra_35 = 0;
+            $horasTrabajasReales = 0;
 
-            // Cálculos de horas (código original)
-            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$horasLaboradas, &$tardanza, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35) {
+            // 1. CICLO DE CÁLCULO
+            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$horasLaboradas, &$horasTrabajasReales, &$tardanza, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35, &$fechasProcesadas) {
+
+                $fechaDia = $marcacion->fecha instanceof \Carbon\Carbon ? $marcacion->fecha->format('Y-m-d') : $marcacion->fecha;
+
+                if (isset($fechasProcesadas[$fechaDia])) {
+                    return;
+                }
+
                 $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
-                $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
 
                 if ($horario && $marcacion->ingreso && $marcacion->salida) {
-                    $horasTrabajadas = max(0, $horario->ingreso->diffInMinutes($empleado->jornada_id == 2 ? $horario->salida : $marcacion->salida, false));
-                    $horasTardanza = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false));
-                    $horasExtras = $marcacion->estado_horas_extra == 1 ? $horario->salida->diffInMinutes($marcacion->salida, false) : 0;
-                    $horasAnticipado = max(0, $marcacion->salida->diffInMinutes($horario->salida, false));
-                    $descansoMedico = $horario->estado == 'M' && $empleado->jornada_id == 2 ? 240 : 0;
 
-                    $horas += ($horasTrabajadas - $horasTardanza - ($partTime ? 0 : 60) + $descansoMedico);
-                    $horasLaboradas += (max(0, $horario->ingreso->diffInMinutes($horario->salida, false)) - ($partTime ? 0 : 60));
-                    $tardanza += $horasTardanza;
-                    $extra += max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
+                    $fechasProcesadas[$fechaDia] = true;
+                    $partTime = ($empleado->jornada_id == 2 && ! $marcacion->ingreso_refri);
 
-                    if ((in_array($horario->salida->format('H:i'), ['23:00', '23:30', '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)) {
-                        $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20;
-                        $anticipado += $horasAnticipado >= $minutosTolerancia ? $horasAnticipado : 0;
-                    } else {
-                        $anticipado += $horasAnticipado;
+                    // --- MARCACIÓN REAL ---
+                    $inicioReal = \Carbon\Carbon::parse($marcacion->ingreso);
+                    $finReal = \Carbon\Carbon::parse($marcacion->salida);
+                    $minutosBrutos = $inicioReal->diffInMinutes($finReal, false);
+
+                    if ($minutosBrutos < 0) {
+                        $minutosBrutos += 1440;
                     }
 
-                    if ($empleado->empresa_id == 1 || $empleado->empresa_id == 4 || $empleado->empresa_id == 3) {
+                    $minutosConRefri = $minutosBrutos;
+                    if ($minutosConRefri >= 360) {
+                        $minutosConRefri -= 60;
+                    }
+                    $horasTrabajasReales += $minutosConRefri;
+
+                    // --- LÓGICA DE NEGOCIO (Tareo) ---
+                    $programadoTotal = $horario->ingreso->diffInMinutes($horario->salida, false);
+                    $minutosTardanza = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false));
+                    $tardanza += $minutosTardanza;
+
+                    $descansoMedico = ($horario->estado == 'M' && $empleado->jornada_id == 2) ? 240 : 0;
+
+                    // Aquí se calcula la variable $horas que usas en el return
+                    $diaLaborado = $programadoTotal - $minutosTardanza - ($partTime ? 0 : 60) + $descansoMedico;
+                    $horas += max(0, $diaLaborado);
+
+                    $horasLaboradas += ($programadoTotal - ($partTime ? 0 : 60));
+
+                    // --- EXTRAS Y ANTICIPADOS ---
+                    $minutosAnticipado = max(0, $marcacion->salida->diffInMinutes($horario->salida, false));
+                    $horasExtrasRaw = $marcacion->estado_horas_extra == 1 ? $horario->salida->diffInMinutes($marcacion->salida, false) : 0;
+                    $extra += max(0, $horasExtrasRaw);
+
+                    $tieneTolerancia = (
+                        (in_array($horario->salida->format('H:i'), ['23:00', '23:30', '23:59']) && in_array($empleado->empresa_id, [3, 4])) ||
+                        ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)
+                    );
+
+                    if ($tieneTolerancia) {
+                        $minTolerancia = ($empleado->empresa_id == 1) ? 30 : 20;
+                        $anticipado += ($minutosAnticipado >= $minTolerancia) ? $minutosAnticipado : 0;
+                    } else {
+                        $anticipado += $minutosAnticipado;
+                    }
+
+                    if (in_array($empleado->empresa_id, [1, 3, 4])) {
                         $nocturno += max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
                     }
 
-                    if ($marcacion->salida->greaterThan($horario->salida) && $horasExtras >= 30) {
-                        $limite25 = min($horasExtras, 120);
+                    if ($marcacion->salida->greaterThan($horario->salida) && $horasExtrasRaw >= 30) {
+                        $limite25 = min($horasExtrasRaw, 120);
                         $extra_25 += $limite25 >= 120 ? 120 : ($limite25 >= 90 ? 90 : ($limite25 >= 60 ? 60 : 30));
 
-                        if ($horasExtras > 120) {
-                            $minutosRestantes = $horasExtras - 120;
-                            $extra_35 += floor($minutosRestantes / 60) * 60;
-                            $extra_35 += ($minutosRestantes % 60 >= 30) ? 30 : 0;
+                        if ($horasExtrasRaw > 120) {
+                            $minRestantes = $horasExtrasRaw - 120;
+                            $extra_35 += (floor($minRestantes / 60) * 60) + (($minRestantes % 60 >= 30) ? 30 : 0);
                         }
                     }
                 }
             });
 
+            $compensaDias = $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum();
+            $compensaHorasTotales = 0;
+            $compensaDiasCount = 0;
+            $esPartTime = $empleado->jornada_id == 2;
+
+            // 2. RETURN LIMPIO PARA EL FRONTEND
             return [
                 'empleado' => $empleado,
                 'compensa_pendiente' => $feriadosPendientes->get($empleado->id, 0),
+                'compensa_horas_totales' => $compensaHorasTotales ?? 0,
+                'compensa_dias_count' => $compensaDiasCount ?? 0,
+                // 'compensa_dias_total' => $compensaDias,
+                'es_part_time' => $empleado->jornada_id == 2,
                 'falta_injustificada' => $estadosCount->get('FI', 0),
                 'falta_justificada' => $estadosCount->get('FJ', 0),
                 'descanso' => $estadosCount->get('D', 0),
@@ -202,7 +285,7 @@ class ReporteController extends Controller
                 'feriado_laboral' => $estadosCount->get('FL', 0),
                 'descanso_medico' => $estadosCount->get('M', 0),
                 'vacaciones' => $estadosCount->get('V', 0),
-                'compensa' => $compensas = $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum(),
+                'compensa' => $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum(),
                 'licencia_con_goce' => $estadosCount->get('LCG', 0),
                 'licencia_sin_goce' => $estadosCount->get('LSG', 0),
                 'licencia_paternidad' => $estadosCount->get('LP', 0),
@@ -216,13 +299,25 @@ class ReporteController extends Controller
                 'total_dias_trabajados' => $empleadoHorarios->count(),
                 'descuento' => $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['FI', 'FJ', 'LSG', 'S']))->sum(),
                 'tardanza' => $tardanza,
-                'horas' => $horas,
+                'horas' => $horas, // Ya no dará problemas
                 'horasLaboradas' => $horasLaboradas,
                 'horasExcedente' => $empleado->jornada_id == 2 ? ($dias == 7 ? $horas - 1410 : $horas - 5580) : ($dias == 7 ? $horas - 2880 : $horas - 14400),
                 'extra_25' => $extra_25,
                 'extra_35' => $extra_35,
                 'anticipado' => $anticipado,
                 'nocturno' => $nocturno,
+                'horasTrabajadasReales' => $horasTrabajasReales,
+                'hept_horas' => $solicitudesHEPT->get($empleado->id, collect())->sum(function ($solicitud) {
+                    return round(($solicitud->horas_acumuladas - 93) * 60);
+                }),
+                'hept_aprobador' => $solicitudesHEPT->get($empleado->id, collect())->first()->aprobado_por ?? null,
+                'hept_detalle' => $solicitudesHEPT->get($empleado->id, collect())->map(function ($solicitud) {
+                    return [
+                        'fecha' => $solicitud->fecha_cumplimiento_93h,
+                        'horas_extras' => $solicitud->horas_acumuladas - 93,
+                        'aprobado_por' => $solicitud->aprobado_por,
+                    ];
+                })->toArray(),
             ];
         });
 
@@ -234,6 +329,32 @@ class ReporteController extends Controller
             'tareos' => $lista,
             'csrf_token' => csrf_token(),
         ]);
+    }
+
+    public function calcularMinutosDia($empleado, $horario, $marcacion)
+    {
+        if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
+            return 0;
+        }
+
+        $inicio = Carbon::parse($marcacion->ingreso);
+        $fin = Carbon::parse($marcacion->salida);
+
+        $minutos = $inicio->diffInMinutes($fin, false);
+
+        // Cruce de medianoche
+        if ($minutos < 0) {
+            $minutos += 1440;
+        }
+
+        $esPartTime = $empleado->jornada_id == 2;
+
+        // Refrigerio solo si no es part-time y trabajó 6h+
+        if (! $esPartTime && $minutos >= 360) {
+            $minutos -= 60;
+        }
+
+        return max(0, $minutos);
     }
 
     public function tareoDownload(Request $request)
@@ -436,8 +557,6 @@ class ReporteController extends Controller
                     16 => 'compensa_adelantada',
                 };
             });
-
-
 
         return Inertia::render('reportes/compensas/index', [
             'filters' => $filters,

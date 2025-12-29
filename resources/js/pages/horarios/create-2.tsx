@@ -23,6 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Loader2 } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -37,7 +38,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 
 export default function App({ empleados, empresas, url, supervisores }) {
-
 
     const [feriadosData, setFeriadosData] = useState<{
         [employeeId: string]: {
@@ -657,7 +657,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         try {
                             const empleado = empleadosList.find(e => e.id === employeeId);
 
-                            if (empleado && empleado.jornada_id === 2 || empleado.jornada_id === 1)  { // Solo Part Time
+                            if (empleado && empleado.jornada_id === 2 || empleado.jornada_id === 1) { // Solo Part Time
                                 console.log('🔍 Cargando horarios de feriado para PT:', empleado.nombres);
 
                                 const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
@@ -770,6 +770,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
     // ---------------------- VALIDACIONES , descansos , TD , Compensas  , envio al backend ----------------------
     const handleSaveSchedules = async () => {
+        if (isSaving) return;
         // ==================== EVITAR CREAR HORARIOS ON FECHAS PASADAS ====================
         const hoy = new Date();
 
@@ -844,9 +845,9 @@ export default function App({ empleados, empresas, url, supervisores }) {
             );
 
 
-            /* -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------*/
+            // -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------
 
-             if (employee.jornada_id === 1) { // FULL TIME
+            if (employee.jornada_id === 1) { // FULL TIME
 
                 const esSamiTask = employee.empresa_id === 2;
                 const MAX_HORAS = 2880;  // 48 horas en minutos
@@ -858,7 +859,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
                 // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES o Descanso Medico
                 const todosSonVacaciones = Object.values(employeeSchedule).some(day =>
-                    day?.status === 'V' || day?.estado === 'D' || day?.status === 'M'  || day?.status === 'LP' ||  day?.status === 'LM' || day?.status === 'LF' || day?.estado === 'AI'
+                    day?.status === 'V' || day?.estado === 'D' || day?.status === 'M' || day?.status === 'LP' || day?.status === 'LM' || day?.status === 'LF' || day?.estado === 'AI'
                 );
 
                 // 🔥 EXCEPCIÓN: Si todos son V, no validar mínimo de horas
@@ -875,6 +876,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 }
 
                 // 🔥 VALIDACIÓN NORMAL (para NO vacaciones completas)
+
                 if (horasSemanales > MAX_HORAS) {
                     const excedente = horasSemanales - MAX_HORAS;
                     toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
@@ -882,16 +884,17 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     return;
                 }
 
-
-                if (horasSemanales < MIN_HORAS) {
+                /*
+                 if (horasSemanales < MIN_HORAS) {
                     const deficit = MIN_HORAS - horasSemanales;
                     toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | DIFERENCIA: -${formatearHoras(deficit)}`);
                     hasValidationErrors = true;
                     return;
                 }
+                */
+
 
             }
-
 
 
         });
@@ -1217,6 +1220,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             preserveState: true,
             onStart: () => {
                 //  console.log('▶️ Inicio: guardando horarios...');
+                setIsSaving(true);
                 toast.loading('Guardando horarios...', { id: 'guardando-horarios' });
             },
 
@@ -1285,6 +1289,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             onFinish: () => {
                 // quitar loading siempre
                 toast.dismiss('guardando-horarios');
+                setIsSaving(false);
                 console.log('⏹️ Finish');
             },
         });
@@ -1385,7 +1390,7 @@ const cambiarSemana = (nuevaFecha: Date) => {
     */
     // 🔥 Función para cambiar de semana Y limpiar
 
-
+    // ----------------------- ESTADO DE BLOQUEO MIENTRA ENVIA LA PETICION
 
 
     return (
@@ -1527,9 +1532,19 @@ const cambiarSemana = (nuevaFecha: Date) => {
                                 size="lg"
                                 onClick={handleSaveSchedules}
                                 className="min-w-[250px]"
+                                disabled={isSaving} // 🚩 Bloqueo físico del botón
                             >
-                                <Save className="mr-2 h-5 w-5" />
-                                Guardar horarios de la semana
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                        Procesando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="mr-2 h-5 w-5" />
+                                        Guardar horarios de la semana
+                                    </>
+                                )}
                             </Button>
                         </div>
                     </div>

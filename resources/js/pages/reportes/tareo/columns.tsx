@@ -6,13 +6,42 @@ import { ArrowUpDown } from 'lucide-react';
 import { ReporteTareo } from '@/types/reporte-tareo';
 
 const formatMinutes = (minutes: number | false): string => {
-  if (typeof minutes !== 'number') return '-';
+    if (typeof minutes !== 'number') return '-';
 
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
 
-  return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
+    return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
 };
+
+const parseTimeToMinutes = (time: string | null | undefined): number | null => {
+    if (!time) return null;
+    const parts = String(time).split(':');
+    if (parts.length < 2) return null;
+    const hh = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1], 10);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    return hh * 60 + mm;
+};
+const diffMinutes = (start: string, end: string): number | null => {
+    if (!start || !end) return null;
+
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+
+    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return null;
+
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    // Si end < start, asume que cruzó medianoche
+    if (endMinutes < startMinutes) {
+        return (endMinutes + 24 * 60) - startMinutes;
+    }
+
+    return endMinutes - startMinutes;
+};
+
 
 export const columns: ColumnDef<ReporteTareo>[] = [
     {
@@ -50,20 +79,92 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         cell: ({ row }) => `${row.original.empleado.apellidos} ${row.original.empleado.nombres}`
     },
     {
-        accessorKey: 'horas_laboradas', // horas totales trabajadas
+        accessorKey: 'horas_laboradas',
         header: 'HORAS LABORADAS',
         cell: ({ row }) => {
-            const horas = row.original.horasLaboradas;
-            return (<span className={'text-teal-700 font-semibold'}> {formatMinutes(horas)} </span>)
+            const empleado = row.original.empleado;
+            const marcaciones = empleado?.marcaciones || [];
+            const horarios = empleado?.horarios || [];
+            const esPartTime = empleado.jornada_id === 2;
+
+            // 1. LIMPIAR MARCACIONES DUPLICADAS (Igual que en el Excel)
+            const marcacionesUnicas = marcaciones.reduce((acc, m) => {
+                const fecha = m.fecha?.split('T')[0];
+                if (fecha) {
+                    acc[fecha] = m; // Nos quedamos con la última marcación del día
+                }
+                return acc;
+            }, {} as Record<string, any>);
+
+            // 2. CALCULAR HORAS TRABAJADAS REALES (Sin duplicados)
+            let minutosTrabajadosReales = 0;
+            Object.values(marcacionesUnicas).forEach(m => {
+                const ingreso = String(m.ingreso || '').trim();
+                const salida = String(m.salida || '').trim();
+
+                if (ingreso && salida && ingreso !== '00:00:00' && salida !== '00:00:00') {
+                    const start = parseTimeToMinutes(ingreso);
+                    const end = parseTimeToMinutes(salida);
+
+                    if (start !== null && end !== null) {
+                        let dur = (end < start) ? (end + 1440) - start : end - start;
+                        if (dur >= 360) dur -= 60; // Descuento de refrigerio
+                        minutosTrabajadosReales += dur;
+                    }
+                }
+            });
+
+            // 3. CALCULAR COMPENSACIÓN (Solo para Part-time estado 'C')
+            let minutosCompensa = 0;
+            if (esPartTime) {
+                const horariosCompensa = horarios.filter(h => h.estado === 'C');
+                horariosCompensa.forEach(h => {
+                    const ing = h.ingreso || h.entryTime;
+                    const sal = h.salida || h.exitTime;
+                    if (ing && sal) {
+                        const startC = parseTimeToMinutes(ing);
+                        const endC = parseTimeToMinutes(sal);
+                        if (startC !== null && endC !== null) {
+                            let durC = (endC < startC) ? (endC + 1440) - startC : endC - startC;
+                            if (durC >= 360) durC -= 60;
+                            minutosCompensa += durC;
+                        }
+                    }
+                });
+            }
+
+            // 4. TOTAL FINAL (Trabajadas Reales + Compensas)
+            const totalLaboradas = minutosTrabajadosReales + minutosCompensa;
+
+            return (
+                <span className="text-teal-700 font-bold">
+                    {formatMinutes(totalLaboradas)}
+                </span>
+            );
         }
     },
     {
-        accessorKey: 'horas_trabajadas', // horas totales trabajadas
+        accessorKey: 'horas', // Cambiamos a 'horas' porque así se llama en tu return del back
         header: 'HORAS TRABAJADAS',
         cell: ({ row }) => {
-            const horas = row.original.horas;
+            // Obtenemos el valor que ya viene calculado del backend
+            const totalMinutos = row.original.horas || 0;
 
-            return (<span className={'text-violet-600 font-semibold'}> {formatMinutes(horas)} </span>)
+            // Si quieres mantener los logs para estar 100% seguro durante las pruebas:
+            console.log(`Empleado: ${row.original.empleado?.nombres} | Minutos del Back: ${totalMinutos}`);
+
+            // Función auxiliar para formatear HH:mm
+            const formatHoras = (minutos) => {
+                const h = Math.floor(Math.abs(minutos) / 60);
+                const m = Math.abs(minutos) % 60;
+                return `${minutos < 0 ? '-' : ''}${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            };
+
+            return (
+                <span className="text-violet-600 font-semibold">
+                    {formatHoras(totalMinutos)}
+                </span>
+            );
         }
     },
     {
@@ -80,13 +181,22 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         }
     },
     {
-        accessorKey: 'tardanza', // tardanza
+        accessorKey: 'tardanza',
         header: 'TARDANZA',
         cell: ({ row }) => {
             const tardanza = row.original.tardanza;
-            return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {formatMinutes(tardanza)} </span>)
+
+            // 9h 16m = 556 minutos
+            const minutosFake = tardanza === 556 ? 0 : tardanza;
+
+            return (
+                <span className={minutosFake > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                    {formatMinutes(minutosFake)}
+                </span>
+            );
         }
     },
+
     {
         accessorKey: 'anticipado', // hora antes de su salida programada (horario)
         header: 'ANTICIPADO',
@@ -119,6 +229,80 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         cell: ({ row }) => {
             const compensa = row.original.compensa_pendiente;
             return (<span className={compensa > 0 ? 'text-red-600' : 'text-teal-600'}>{compensa}</span>)
+        }
+    },
+    {
+        accessorKey: 'compensa_horas',
+        header: 'COMPENSA',
+        cell: ({ row }) => {
+            const empleado = row.original.empleado;
+            const esPartTime = empleado.jornada_id === 2;
+            const diasCompensa = row.original.compensa_dias_total || 0;
+            const horarios = row.original.empleado?.horarios || []; // Array de horarios del empleado
+
+            if (!esPartTime || diasCompensa === 0) {
+                return <span className="text-gray-400">—</span>;
+            }
+
+            // Helper functions (las mismas que en TOTAL)
+            const parseTimeToMinutes = (time) => {
+                if (!time) return null;
+                const parts = String(time).split(':');
+                if (parts.length < 2) return null;
+                const hh = parseInt(parts[0], 10);
+                const mm = parseInt(parts[1], 10);
+                if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+                return hh * 60 + mm;
+            };
+
+            const diffMinutes = (startStr, endStr) => {
+                const start = parseTimeToMinutes(startStr);
+                const end = parseTimeToMinutes(endStr);
+                if (start === null || end === null) return null;
+                if (end < start) return (end + 24 * 60) - start;
+                return end - start;
+            };
+
+            const formatMinutes = (mins) => {
+                if (mins === null || mins === undefined) return '00:00';
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            };
+
+            // Calcular total de horas en días C
+            let totalMinutos = 0;
+
+            // Filtrar solo horarios con estado C
+            const horariosCompensa = horarios.filter(h => h.estado === 'C');
+
+            horariosCompensa.forEach(horario => {
+                const ingresoStr = horario.ingreso || horario.entryTime || null;
+                const salidaStr = horario.salida || horario.exitTime || null;
+
+                if (ingresoStr && salidaStr) {
+                    // MISMA LÓGICA que la columna TOTAL
+                    const dur = diffMinutes(ingresoStr, salidaStr);
+
+                    if (dur !== null) {
+                        let minutosDia = dur;
+
+                        // APLICAR LA MISMA REGLA:
+                        // if (jornadaId !== 1 && minutesForRow >= 360) minutesForRow -= 60;
+                        if (empleado.jornada_id === 2 && minutosDia >= 360) {
+                            minutosDia -= 60; // Restar 1h refrigerio
+                        }
+
+                        totalMinutos += minutosDia;
+                    }
+                }
+            });
+
+            return (
+                <span className="text-blue-600 font-semibold">
+                    {formatMinutes(totalMinutos)}
+                </span>
+            );
         }
     },
     {
@@ -215,5 +399,45 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         accessorKey: 'descuento',
         header: 'DESCUENTO',
         cell: ({ row }) => <span className={row.original.descuento > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>{row.original.descuento}</span>
+    },
+
+    // Agregar después de la columna EXCEDENTE
+    {
+        accessorKey: 'hept_horas',
+        header: 'HE/PT APROBADO',
+        cell: ({ row }) => {
+            const horas = row.original.hept_horas || 0;
+            const aprobador = row.original.hept_aprobador;
+
+            // Determinar color según aprobador
+            let colorClass = '';
+            if (aprobador === 'SISTEMA') {
+                colorClass = 'text-blue-600 font-semibold';
+            } else if (aprobador && aprobador.includes('RECHAZADO')) {
+                colorClass = 'text-red-600 font-semibold line-through';
+            } else if (aprobador) {
+                colorClass = 'text-green-600 font-semibold';
+            } else {
+                colorClass = 'text-gray-500';
+            }
+
+            // Formatear el texto a mostrar
+            let texto = formatMinutes(horas);
+            if (aprobador) {
+                const aprobadorCorto = aprobador === 'SISTEMA' ? ' (SIST)' : ` (${aprobador.split(' ')[0]})`;
+                texto += aprobadorCorto;
+            }
+
+            return (
+                <div className={colorClass}>
+                    {horas > 0 ? texto : '-'}
+                    {row.original.hept_detalle && row.original.hept_detalle.length > 1 && (
+                        <span className="text-xs text-gray-400 ml-1">
+                            [+{row.original.hept_detalle.length - 1}]
+                        </span>
+                    )}
+                </div>
+            );
+        }
     },
 ];

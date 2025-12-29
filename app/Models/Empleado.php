@@ -46,6 +46,12 @@ class Empleado extends Model
         ];
     }
 
+    // app/Models/Empleado.php
+
+public function subordinados()
+{
+    return $this->hasMany(Empleado::class, 'jefe_id', 'id');
+}
     // En Empleado.php
     public function solicitudesHorasExtrasPT()
     {
