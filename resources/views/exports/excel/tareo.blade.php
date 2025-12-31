@@ -16,7 +16,7 @@
             <th>EMPLEADO</th>
             <th>HORAS LABORADAS</th>
             <th>HORAS TRABAJADAS</th>
-            <th>EXCEDENTE</th>  <!-- ESTA COLUMNA -->
+            <th>EXCEDENTE</th> <!-- ESTA COLUMNA -->
             <th>TARDANZA</th>
             <th>ANTICIPADO</th>
             <th>NOCTURNO</th>
@@ -55,89 +55,25 @@
                 <td>{{ $item->empleado->apellidos }} {{ $item->empleado->nombres }}</td>
 
                 @php
-                    $empleado = $item->empleado;
-                    $marcaciones = $empleado->marcaciones ?? collect();
-
-                    // 1. ELIMINAR DUPLICADOS
-                    $marcacionesUnicas = [];
-                    foreach ($marcaciones as $m) {
-                        $fecha = \Carbon\Carbon::parse($m->fecha)->format('Y-m-d');
-                        $marcacionesUnicas[$fecha] = $m;
-                    }
-
-                    $totalTrabajadoMinutos = 0;
-
-                    // 2. CALCULAR HORAS TRABAJADAS REALES
-                    foreach ($marcacionesUnicas as $m) {
-                        $ingreso = trim($m->ingreso);
-                        $salida = trim($m->salida);
-
-                        if (
-                            $ingreso &&
-                            $salida &&
-                            !in_array($ingreso, ['00:00', '00:00:00']) &&
-                            !in_array($salida, ['00:00', '00:00:00'])
-                        ) {
-                            $start = \Carbon\Carbon::parse($ingreso);
-                            $end = \Carbon\Carbon::parse($salida);
-                            $dur = $start->diffInMinutes($end, false);
-
-                            if ($dur < 0) {
-                                $dur += 1440;
-                            }
-
-                            if ($dur > 0 && $dur < 1440) {
-                                // 3. REGLA DE REFRIGERIO: 60 min si trabajó 6h o más
-                                if ($dur >= 360) {
-                                    $dur -= 60;
-                                }
-                                $totalTrabajadoMinutos += $dur;
-                            }
-                        }
-                    }
-
-                    // 4. CALCULO DE COMPENSAS (Solo para Laboradas)
-                    $minutosCompensa = 0;
-                    $esPartTime = $empleado->jornada_id == 2;
-                    $horarios = $empleado->horarios ?? [];
-
-                    if ($esPartTime) {
-                        foreach ($horarios as $horario) {
-                            if (($horario->estado ?? '') === 'C') {
-                                $ingStr = $horario->ingreso ?? $horario->entryTime;
-                                $salStr = $horario->salida ?? $horario->exitTime;
-
-                                if ($ingStr && $salStr) {
-                                    $cStart = \Carbon\Carbon::parse($ingStr);
-                                    $cEnd = \Carbon\Carbon::parse($salStr);
-                                    $cDur = $cStart->diffInMinutes($cEnd, false);
-                                    if ($cDur < 0) {
-                                        $cDur += 1440;
-                                    }
-                                    if ($cDur >= 360) {
-                                        $cDur -= 60;
-                                    }
-                                    $minutosCompensa += $cDur;
-                                }
-                            }
-                        }
-                    }
-
-                    // Totales finales
-                    $totalLaboradas = $totalTrabajadoMinutos + $minutosCompensa;
-                    $totalTrabajadas = $totalTrabajadoMinutos;
+                    $format = function ($totalMinutos) {
+                        $mins = abs($totalMinutos);
+                        $h = floor($mins / 60);
+                        $m = $mins % 60;
+                        return sprintf('%02d:%02d', $h, $m);
+                    };
                 @endphp
 
-                <td>{{ sprintf('%02d:%02d', floor($totalLaboradas / 60), $totalLaboradas % 60) }}</td>
-                <td>{{ sprintf('%02d:%02d', floor($totalTrabajadas / 60), $totalTrabajadas % 60) }}</td>
+                {{-- 1. META PROGRAMADA --}}
+                <td>{{ $format($item['horasLaboradas'] ?? 0) }}</td>
 
-                <!-- AQUÍ FALTA LA COLUMNA EXCEDENTE -->
+                {{-- 2. LO QUE MARCÓ EL RELOJ (Aquí estaba el lío) --}}
+                <td style="font-weight: bold; color: #7c3aed;">
+                    {{ $format($item['horasTrabajadasReales'] ?? 0) }}
+                </td>
+
+                {{-- 3. EXCEDENTE YA CALCULADO --}}
                 <td>
-                    @if(isset($item->excedente))
-                        {{ sprintf('%02d:%02d', floor($item->excedente / 60), $item->excedente % 60) }}
-                    @else
-                        00:00
-                    @endif
+                    {{ $format($item['horasExcedente'] ?? 0) }}
                 </td>
                 <!-- FIN DE COLUMNA FALTANTE -->
 
@@ -166,16 +102,22 @@
                             echo '<span class="text-gray-400">—</span>';
                         } else {
                             $parseTimeToMinutes = function ($time) {
-                                if (!$time) return null;
+                                if (!$time) {
+                                    return null;
+                                }
                                 $parts = explode(':', $time);
-                                if (count($parts) < 2) return null;
+                                if (count($parts) < 2) {
+                                    return null;
+                                }
                                 return intval($parts[0]) * 60 + intval($parts[1]);
                             };
 
                             $diffMinutes = function ($startStr, $endStr) use ($parseTimeToMinutes) {
                                 $start = $parseTimeToMinutes($startStr);
                                 $end = $parseTimeToMinutes($endStr);
-                                if ($start === null || $end === null) return null;
+                                if ($start === null || $end === null) {
+                                    return null;
+                                }
                                 return $end < $start ? $end + 1440 - $start : $end - $start;
                             };
 

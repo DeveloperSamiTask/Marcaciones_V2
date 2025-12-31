@@ -79,82 +79,32 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         cell: ({ row }) => `${row.original.empleado.apellidos} ${row.original.empleado.nombres}`
     },
     {
-        accessorKey: 'horas_laboradas',
+        accessorKey: 'horasLaboradas', // Debe coincidir con el nombre que pusimos en el return del Controller
         header: 'HORAS LABORADAS',
         cell: ({ row }) => {
-            const empleado = row.original.empleado;
-            const marcaciones = empleado?.marcaciones || [];
-            const horarios = empleado?.horarios || [];
-            const esPartTime = empleado.jornada_id === 2;
+            // Traemos el valor que ya viene calculado en minutos desde el Backend
+            const minutos = row.original.horasLaboradas || 0;
 
-            // 1. LIMPIAR MARCACIONES DUPLICADAS (Igual que en el Excel)
-            const marcacionesUnicas = marcaciones.reduce((acc, m) => {
-                const fecha = m.fecha?.split('T')[0];
-                if (fecha) {
-                    acc[fecha] = m; // Nos quedamos con la última marcación del día
-                }
-                return acc;
-            }, {} as Record<string, any>);
-
-            // 2. CALCULAR HORAS TRABAJADAS REALES (Sin duplicados)
-            let minutosTrabajadosReales = 0;
-            Object.values(marcacionesUnicas).forEach(m => {
-                const ingreso = String(m.ingreso || '').trim();
-                const salida = String(m.salida || '').trim();
-
-                if (ingreso && salida && ingreso !== '00:00:00' && salida !== '00:00:00') {
-                    const start = parseTimeToMinutes(ingreso);
-                    const end = parseTimeToMinutes(salida);
-
-                    if (start !== null && end !== null) {
-                        let dur = (end < start) ? (end + 1440) - start : end - start;
-                        if (dur >= 360) dur -= 60; // Descuento de refrigerio
-                        minutosTrabajadosReales += dur;
-                    }
-                }
-            });
-
-            // 3. CALCULAR COMPENSACIÓN (Solo para Part-time estado 'C')
-            let minutosCompensa = 0;
-            if (esPartTime) {
-                const horariosCompensa = horarios.filter(h => h.estado === 'C');
-                horariosCompensa.forEach(h => {
-                    const ing = h.ingreso || h.entryTime;
-                    const sal = h.salida || h.exitTime;
-                    if (ing && sal) {
-                        const startC = parseTimeToMinutes(ing);
-                        const endC = parseTimeToMinutes(sal);
-                        if (startC !== null && endC !== null) {
-                            let durC = (endC < startC) ? (endC + 1440) - startC : endC - startC;
-                            if (durC >= 360) durC -= 60;
-                            minutosCompensa += durC;
-                        }
-                    }
-                });
-            }
-
-            // 4. TOTAL FINAL (Trabajadas Reales + Compensas)
-            const totalLaboradas = minutosTrabajadosReales + minutosCompensa;
+            // Función interna rápida para formatear HH:mm
+            const h = Math.floor(minutos / 60);
+            const m = minutos % 60;
+            const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 
             return (
                 <span className="text-teal-700 font-bold">
-                    {formatMinutes(totalLaboradas)}
+                    {formatted}
                 </span>
             );
         }
     },
     {
-        accessorKey: 'horas', // Cambiamos a 'horas' porque así se llama en tu return del back
+        accessorKey: 'horas_trabajadas_reales', // Cambiamos el accessor
         header: 'HORAS TRABAJADAS',
         cell: ({ row }) => {
-            // Obtenemos el valor que ya viene calculado del backend
-            const totalMinutos = row.original.horas || 0;
+            // Ahora usamos horasTrabajadasReales que es el campo correcto
+            const totalMinutos = row.original.horasTrabajadasReales || 0;
 
-            // Si quieres mantener los logs para estar 100% seguro durante las pruebas:
-            console.log(`Empleado: ${row.original.empleado?.nombres} | Minutos del Back: ${totalMinutos}`);
-
-            // Función auxiliar para formatear HH:mm
-            const formatHoras = (minutos) => {
+            const formatHoras = (minutos: number) => {
                 const h = Math.floor(Math.abs(minutos) / 60);
                 const m = Math.abs(minutos) % 60;
                 return `${minutos < 0 ? '-' : ''}${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
@@ -168,16 +118,22 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         }
     },
     {
-        accessorKey: 'excedente', // excendente pasando las 23:30 semanales
+        accessorKey: 'horasExcedente',
         header: 'EXCEDENTE',
         cell: ({ row }) => {
-            const excedente = row.original.horasExcedente;
+            // Recibimos el valor ya calculado (ej: 120 minutos)
+            const minutos = row.original.horasExcedente || 0;
+
+            // Formateo rápido HH:mm
+            const h = Math.floor(minutos / 60);
+            const m = minutos % 60;
+            const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
             return (
-                <span className={excedente > 0 ? "text-red-600" : 'text-blue-600'} >
-                    {formatMinutes(excedente > 0 ? excedente : 0)}
+                <span className={minutos > 0 ? "text-green-600 font-bold" : "text-gray-400"}>
+                    {formatted}
                 </span>
             );
-
         }
     },
     {
