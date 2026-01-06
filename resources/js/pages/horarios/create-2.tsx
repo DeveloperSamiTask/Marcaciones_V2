@@ -829,13 +829,11 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 // console.log(`🟢 ${employee.apellidos} - Semana de ingreso → NO validar`);
                 return false;
             }
-
             // ✅ CASO 4: Ingresó en una semana ANTERIOR → SÍ VALIDAR
             // console.log(`✅ ${employee.apellidos} - Ingresó hace ${Math.floor((inicioSemana.getTime() - fechaIngreso.getTime()) / (1000 * 60 * 60 * 24))} días → SÍ validar`);
             return true;
         };
         // ==================== VALIDACIONES DE HORAS SEMANALES ====================
-
         filteredEmployees.forEach(employee => {
             const employeeSchedule = scheduleData[employee.id] || {};
             const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
@@ -844,9 +842,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 excepciones.includes(day?.status) || excepciones.includes(day?.estado)
             );
 
-
             // -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------
-
             if (employee.jornada_id === 1) { // FULL TIME
 
                 const esSamiTask = employee.empresa_id === 2;
@@ -874,16 +870,13 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     // Si pasa, CONTINUAR sin validar mínimo
                     return;
                 }
-
                 // 🔥 VALIDACIÓN NORMAL (para NO vacaciones completas)
-
                 if (horasSemanales > MAX_HORAS) {
                     const excedente = horasSemanales - MAX_HORAS;
                     toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
                     hasValidationErrors = true;
                     return;
                 }
-
                 /*
                  if (horasSemanales < MIN_HORAS) {
                     const deficit = MIN_HORAS - horasSemanales;
@@ -892,19 +885,10 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     return;
                 }
                 */
-
-
             }
-
-
         });
-
-
-
         if (hasValidationErrors) return;
-
         // ==================== CARGAR DATOS DE FERIADOS Y TD ====================
-
         // 🔥 1. Detectar empleados con C/CA
         const empleadosConCompensacion = filteredEmployees.filter(emp => {
             const schedule = scheduleData[emp.id] || {};
@@ -1177,20 +1161,15 @@ export default function App({ empleados, empresas, url, supervisores }) {
             }
         }
 
-
-
-
         if (hasValidationErrors) return;
 
         if (entries.length === 0) {
             toast.error('No hay horarios para guardar. Presiona "Aplicar horario base a todos" primero.');
             return;
         }
-
         // ==================== DEBUG Y ENVÍO ====================
         //console.log('🧾 Enviando al backend:', entries);
         //console.log('📊 Total registros:', entries.length);
-
         const conFeriado = entries.filter(e => e.feriado);
         const conPermisoTD = entries.filter(e => e.permiso_td_id);
 
@@ -1205,7 +1184,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
         // ==================== ENVÍO AL BACKEND ====================
         //console.log("📦 ENTRIES QUE SE ESTÁN ENVIANDO:", JSON.parse(JSON.stringify(entries)));
-
         console.log("📤 ENTRIES ENVIADOS:");
         Object.entries(entries).forEach(([index, entry]) => {
             console.log(
@@ -1213,8 +1191,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 `ingreso: ${entry.ingreso || '—'} | salida: ${entry.salida || '—'}`
             );
         });
-
-
         router.post(route('horarios.store-multiple'), { entries }, {
             preserveScroll: true,
             preserveState: true,
@@ -1381,16 +1357,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
         }
     }, [currentWeekStart]);
 
-    /*
-const cambiarSemana = (nuevaFecha: Date) => {
-        console.log('📅 Cambiando de semana');
-        setScheduleData({}); // Limpiar ANTES de cambiar
-        setCurrentWeekStart(nuevaFecha);
-    };
-    */
-    // 🔥 Función para cambiar de semana Y limpiar
 
-    // ----------------------- ESTADO DE BLOQUEO MIENTRA ENVIA LA PETICION
 
 
     return (
@@ -1398,24 +1365,6 @@ const cambiarSemana = (nuevaFecha: Date) => {
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="min-h-screen bg-gray-50">
                 <Toaster />
-
-                {/* Header
-                                    <div className="bg-white border-b shadow-sm">
-                    <div className="container mx-auto px-4 py-4">
-                        <div className="flex items-center gap-2">
-                            <Calendar className="h-6 w-6 text-blue-600" />
-                            <div>
-                                <h1>Sistema de Gestión de Horarios</h1>
-                                <p className="text-xs text-gray-600">
-                                    {supervisor?.name} | {selectedCompany?.name}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                */}
-
 
                 {/* Main Content */}
                 <div className="container mx-auto px-4 py-6">

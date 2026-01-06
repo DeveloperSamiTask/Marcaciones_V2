@@ -229,7 +229,7 @@ class ReporteController extends Controller
                     // ========================================
                     // 2. CÁLCULOS QUE SÍ DEPENDEN DEL HORARIO PROGRAMADO
                     // ========================================
-                    if ($horario) {
+                    if ($horario && $horario->salida) { // ✅ Validamos que horario Y horario->salida existan
                         $partTime = ($empleado->jornada_id == 2 && ! $marcacion->ingreso_refri);
 
                         // Tiempo programado (Meta del día)
@@ -252,43 +252,50 @@ class ReporteController extends Controller
                         // Horas laboradas (Meta pura)
                         $horasLaboradas += ($horasProgramadas - $refriProgramado);
 
-                        // --- Aquí continuarían tus cálculos de EXTRAS, NOCTURNO, etc. ---
-                    }
+                        // ========================================
+                        // 3. EXTRAS, ANTICIPADOS Y DEMÁS
+                        // ========================================
+                        $horasAnticipado = max(0, $marcacion->salida->diffInMinutes($horario->salida, false));
+                        $extraDia = max(0, $horario->salida->diffInMinutes($marcacion->salida, false)); 
+                        $extra += $extraDia;
 
-                    // ========================================
-                    // 3. EXTRAS, ANTICIPADOS Y DEMÁS (Sin cambios para no romper lógica)
-                    // ========================================
-                    $horasAnticipado = max(0, $marcacion->salida->diffInMinutes($horario->salida, false));
-                    $extraDia = max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
-                    $extra += $extraDia;
-
-                    if (
-                        (in_array($horario->salida->format('H:i'), ['23:00', '23:30', '23:59'])
-                            && in_array($empleado->empresa_id, [3, 4]))
-                        || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)
-                    ) {
-                        $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20;
-                        $anticipado += ($horasAnticipado >= $minutosTolerancia) ? $horasAnticipado : 0;
-                    } else {
-                        $anticipado += $horasAnticipado;
-                    }
-
-                    if (in_array($empleado->empresa_id, [1, 3, 4])) {
-                        $nocturno += max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
-                    }
-
-                    $horasExtrasRaw = $marcacion->estado_horas_extra == 1
-                        ? $horario->salida->diffInMinutes($marcacion->salida, false)
-                        : 0;
-
-                    if ($marcacion->salida->greaterThan($horario->salida) && $horasExtrasRaw >= 30) {
-                        $limite25 = min($horasExtrasRaw, 120);
-                        $extra_25 += $limite25 >= 120 ? 120 : ($limite25 >= 90 ? 90 : ($limite25 >= 60 ? 60 : 30));
-
-                        if ($horasExtrasRaw > 120) {
-                            $minRestantes = $horasExtrasRaw - 120;
-                            $extra_35 += (floor($minRestantes / 60) * 60) + (($minRestantes % 60 >= 30) ? 30 : 0);
+                        if (
+                            (in_array($horario->salida->format('H:i'), ['23:00', '23:30', '23:59'])
+                                && in_array($empleado->empresa_id, [3, 4]))
+                            || ($horario->salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)
+                        ) {
+                            $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20;
+                            $anticipado += ($horasAnticipado >= $minutosTolerancia) ? $horasAnticipado : 0;
+                        } else {
+                            $anticipado += $horasAnticipado;
                         }
+
+                        if (in_array($empleado->empresa_id, [1, 3, 4])) {
+                            $nocturno += max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
+                        }
+
+                        $horasExtrasRaw = $marcacion->estado_horas_extra == 1
+                            ? $horario->salida->diffInMinutes($marcacion->salida, false)
+                            : 0;
+
+                        if ($marcacion->salida->greaterThan($horario->salida) && $horasExtrasRaw >= 30) {
+                            $limite25 = min($horasExtrasRaw, 120);
+                            $extra_25 += $limite25 >= 120 ? 120 : ($limite25 >= 90 ? 90 : ($limite25 >= 60 ? 60 : 30));
+
+                            if ($horasExtrasRaw > 120) {
+                                $minRestantes = $horasExtrasRaw - 120;
+                                $extra_35 += (floor($minRestantes / 60) * 60) + (($minRestantes % 60 >= 30) ? 30 : 0);
+                            }
+                        }
+                    } else {
+                        // ✅ LOG: Casos donde no hay horario o no tiene salida programada
+                        \Log::warning('⚠️ Marcación sin horario programado válido', [
+                            'empleado' => $empleado->apellidos,
+                            'dni' => $empleado->dni,
+                            'fecha' => $fechaDia,
+                            'tiene_horario' => $horario ? 'SI' : 'NO',
+                            'tiene_salida_programada' => ($horario && $horario->salida) ? 'SI' : 'NO',
+                        ]);
                     }
                 }
             });
@@ -368,10 +375,12 @@ class ReporteController extends Controller
 
     public function calcularTotalDia($horario, $marcacion, $empleado)
     {
-        \Log::info("Empleado: {$empleado->apellidos}");
+        \Log::info("👤 Empleado: {$empleado->apellidos}");
 
-        // Validaciones
-        if (! $horario || ! $marcacion || ! $marcacion->ingreso) {
+        // =========================
+        // VALIDACIONES
+        // =========================
+        if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
             \Log::info('❌ Día descartado: datos incompletos', [
                 'fecha' => $horario->fecha ?? null,
             ]);
@@ -379,7 +388,6 @@ class ReporteController extends Controller
             return 0;
         }
 
-        // SOLO LABORAL
         if ($horario->estado !== 'L') {
             \Log::info('⛔ Día NO laboral', [
                 'fecha' => $horario->fecha,
@@ -389,51 +397,95 @@ class ReporteController extends Controller
             return 0;
         }
 
-        // 🔒 HORARIO MANDA
-        $HIP = $horario->ingreso;   // programado
-        $HSP = $horario->salida;    // programado
+        // =========================
+        // HORAS BASE
+        // =========================
+        $HIP = $horario->ingreso; // programado
+        $HSP = $horario->salida;  // programado
 
-        // Base del día
-        $programadas = $HIP->diffInMinutes($HSP, false);
-        if ($programadas < 0) {
-            $programadas += 1440;
+        $HI_real = $marcacion->ingreso;
+        $HS_real = $marcacion->salida;
+
+        // =========================
+        // 🔥 TIEMPO PROGRAMADO (BASE)
+        // =========================
+        // Calculamos el tiempo que DEBIÓ trabajar según su horario
+        $horasTrabajadas = $HIP->diffInMinutes($HSP, false);
+
+        if ($horasTrabajadas < 0) {
+            $horasTrabajadas = 0;
         }
 
-        // ⏰ TARDANZA (solo castigo)
-        $HI_real = $marcacion->ingreso;
+        // =========================
+        // ⏰ TARDANZA
+        // =========================
+        // Si llegó tarde, se resta ese tiempo
         $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
 
-        // 🍽 REFREIGERIO (el de la vista)
-        // 🍽 REFRIGERIO (IGUAL A LA VISTA)
-        // 🍽 REFRI = IGUAL A LA VISTA
-        $inicio = max($marcacion->ingreso, $horario->ingreso);
-        $fin = min($marcacion->salida, $horario->salida);
-
-        $total = $inicio->diffInMinutes($fin, false);
-        if ($total < 0) {
-            return 0;
-        }
-
-        // refri REAL
+        // =========================
+        // 🍽 REFRIGERIO
+        // =========================
         $refri = 0;
-        if ($marcacion->ingreso_refri && $marcacion->salida_refri) {
-            $refri = $marcacion->ingreso_refri
-                ->diffInMinutes($marcacion->salida_refri);
+        $partTime = false;
+
+        if ($empleado->jornada_id === 1) {
+            // 🔵 FULL-TIME → SIEMPRE 60 minutos
+            $refri = 60;
+        } else {
+            // 🟢 PART-TIME
+            if ($marcacion->ingreso_refri && $marcacion->salida_refri) {
+                // Si registró refrigerio, se descuenta
+                $refri = 60; // O usar el tiempo real si lo prefieres
+
+                // Si quieres usar el tiempo REAL del refrigerio:
+                // $refri = $marcacion->ingreso_refri->diffInMinutes($marcacion->salida_refri, false);
+            } else {
+                // Si NO registró refrigerio, NO se descuenta
+                $partTime = true;
+                $refri = 0;
+            }
         }
 
-        $totalDia = max(0, $total - $refri);
+        // =========================
+        // ✅ TOTAL DÍA (FÓRMULA OFICIAL)
+        // =========================
+        $totalDia = $horasTrabajadas - $tardanza - $refri;
+        $totalDia = max(0, $totalDia); // No puede ser negativo
 
-        // ✅ TOTAL FINAL
-        $totalDia = max(0, $programadas - $tardanza - $refri);
+        // =========================
+        // ➕ EXTRA (informativo)
+        // =========================
+        // Tiempo trabajado DESPUÉS de la hora programada de salida
+        $extra = max(0, $HSP->diffInMinutes($HS_real, false));
 
-        \Log::info('📅 TOTAL DÍA (VISTA)', [
+        // =========================
+        // ⏰ SALIDA ANTICIPADA (informativo)
+        // =========================
+        // Si salió ANTES de su hora programada
+        $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
+
+        // =========================
+        // 🧾 LOG FINAL
+        // =========================
+        \Log::info('📅 TOTAL DÍA (REPORTE OFICIAL)', [
             'fecha' => $horario->fecha,
+            'jornada' => $empleado->jornada->nombre ?? 'N/A',
+            'jornada_id' => $empleado->jornada_id,
+            '---PROGRAMADO---' => '---',
             'HIP' => $HIP->format('H:i'),
             'HSP' => $HSP->format('H:i'),
+            'horas_programadas_min' => $horasTrabajadas,
+            '---REAL---' => '---',
             'HI_real' => $HI_real->format('H:i'),
-            'programadas_min' => $programadas,
+            'HS_real' => $HS_real->format('H:i'),
+            '---CÁLCULOS---' => '---',
             'tardanza_min' => $tardanza,
-            'refri_min' => $refri,
+            'refri_descontado_min' => $refri,
+            'es_parttime_sin_refri' => $partTime,
+            '---EXTRAS---' => '---',
+            'extra_min' => $extra,
+            'anticipado_min' => $anticipado,
+            '---RESULTADO---' => '---',
             'TOTAL_DIA_min' => $totalDia,
             'TOTAL_DIA_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
         ]);
@@ -731,7 +783,7 @@ class ReporteController extends Controller
         $feriadosDisponibles = Horario::whereIn('empleado_id', $empleadoIds)
             ->with(['empleado.area', 'empleado.jornada', 'feriados'])
             ->where('estado', 'L')
-            ->whereDate('fecha', '<=', now())
+            // ->whereDate('fecha', '<=', now())
             ->get()
             ->groupBy('empleado_id')
             ->map(function ($horarios) {
