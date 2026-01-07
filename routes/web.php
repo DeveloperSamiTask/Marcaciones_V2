@@ -113,7 +113,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reales/miluska', [MarcacionController::class, 'realMiluska'])->name('reales.miluska'); // ← CORREGIDO
         Route::get('ediciones', [MarcacionController::class, 'edicion'])->name('ediciones');
         Route::post('download', [MarcacionController::class, 'download'])->name('download');
+
         Route::post('{marcacion}/upload', [MarcacionController::class, 'upload'])->name('upload');
+
         Route::post('pull', [MarcacionController::class, 'pull'])->name('pull');
     });
 

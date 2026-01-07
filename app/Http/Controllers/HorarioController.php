@@ -1420,14 +1420,30 @@ class HorarioController extends Controller
             ->whereDate('fecha', '<=', now())
             ->pluck('fecha');
 
-        $feriadoFuturo = Feriado::query() // feriados futuros para COMPENSA ADELANTADA
-            ->whereYear('fecha', now()->year)
-            ->whereDate('fecha', '>=', now())
-            ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
-            ->select(['id', 'fecha', 'nombre'])
-            ->orderBy('fecha', 'desc')
-            ->limit(1)
-            ->get();
+        $anioActual = now()->year;
+        $anioHorario = $horario->fecha->year;
+
+        if ($anioHorario < $anioActual) {
+            // AÑO PASADO: Jalar TODO hasta ese año
+            $feriadoFuturo = Feriado::query()
+                ->whereYear('fecha', $anioHorario)  // Solo del año del horario
+                ->whereDate('fecha', '<=', $horario->fecha)  // Desde la fecha del horario
+                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
+                ->select(['id', 'fecha', 'nombre'])
+                ->orderBy('fecha', 'desc')
+                 ->limit(1)
+                ->get();  // TODOS los feriados de ese año
+        } else {
+            // AÑO ACTUAL: Solo el feriado más próximo
+            $feriadoFuturo = Feriado::query()
+                ->whereYear('fecha', $anioActual)
+                ->whereDate('fecha', '>=', now())  // Desde HOY
+                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
+                ->select(['id', 'fecha', 'nombre'])
+                ->orderBy('fecha', 'asc')
+                ->limit(1)
+                ->get();  // Solo el más cercano
+        }
 
         $feriadoDisponible = Feriado::query() // feriados en los que los empleados tienen estado L, antes de la fecha actual para "COMPENSACION"
             ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))

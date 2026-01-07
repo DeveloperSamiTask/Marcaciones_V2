@@ -1075,11 +1075,14 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 const { entryTime, exitTime, status } = empSchedule[date];
 
                 // Validar horarios laborales
-                if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
+                /*
+                 if (status === 'L' && (entryTime === '00:00' || exitTime === '00:00')) {
                     toast.error(`${employee.nombres}: Día ${date} es LABORAL pero tiene horarios 00:00`);
                     tieneHorariosInvalidos = true;
-                    return; // Solo sale de este forEach interno
+                    return; // Solo sale de este forEach interno TORRES SANTANA
                 }
+                */
+
 
                 let feriadoId = null;
                 let permisoTDId = null;

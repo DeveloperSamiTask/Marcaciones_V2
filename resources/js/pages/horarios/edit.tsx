@@ -166,7 +166,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         salida: horario.salida,
         estado: horario.estado,
         descripcion: horario.descripcion || '',
-         feriado: horario.feriado_id || '',
+        feriado: horario.feriado_id || '',
         extras: '',
     });
 
@@ -246,8 +246,6 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
 
         // Solo si todo salió bien, actualizamos el estado.
         setData('estado', value);
-
-
     };
 
 
