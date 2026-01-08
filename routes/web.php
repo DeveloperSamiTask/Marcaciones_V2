@@ -115,8 +115,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('download', [MarcacionController::class, 'download'])->name('download');
 
         Route::post('{marcacion}/upload', [MarcacionController::class, 'upload'])->name('upload');
-
         Route::post('pull', [MarcacionController::class, 'pull'])->name('pull');
+
+
     });
 
     // Asistencias
@@ -151,7 +152,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('compensas/download', [ReporteController::class, 'compensaDownload'])->name('compensas.download');
 
         Route::get('horas-extra', [ReporteController::class, 'extraIndex'])->name('extras.index');
+        
         Route::post('horas-extra/download', [ReporteController::class, 'extraDownload'])->name('extras.download');
+
+          Route::get('extra-detalle', [ReporteController::class, 'extraDetalle'])->name('extraDetalle');
     });
 
     // Settings

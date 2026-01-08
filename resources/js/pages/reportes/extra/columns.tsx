@@ -4,21 +4,21 @@ import { ColumnDef } from '@tanstack/react-table';
 import { ArrowUpDown, CheckCheck, CircleAlert, ClockAlert } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ReporteExtra } from '@/types/reporte-extra';
-
+import DetalleHorasExtraModal  from './DetalleHorasExtraModal';
 
 const formatMinutes = (minutes: number | false): string => {
-  if (typeof minutes !== 'number') return '-';
+    if (typeof minutes !== 'number') return '-';
 
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
 
-  return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
+    return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
 };
 
 const estadoHorasExtra = {
-    pendientes: { label: 'Horas extra no aprobado', icon : <CircleAlert className='w-4 text-yellow-600'/> },
-    aprobados: { label: 'Horas extra aprobadas', icon : <CheckCheck className='w-4 text-green-600'/> },
-    revision: { label: 'Horas extra pendiente de aprobación', icon : <ClockAlert className='w-4 text-yellow-600'/> },
+    pendientes: { label: 'Horas extra no aprobado', icon: <CircleAlert className='w-4 text-yellow-600' /> },
+    aprobados: { label: 'Horas extra aprobadas', icon: <CheckCheck className='w-4 text-green-600' /> },
+    revision: { label: 'Horas extra pendiente de aprobación', icon: <ClockAlert className='w-4 text-yellow-600' /> },
 } as const;
 
 export const columns: ColumnDef<ReporteExtra>[] = [
@@ -72,19 +72,43 @@ export const columns: ColumnDef<ReporteExtra>[] = [
 
             return (
                 <span className={extra ? 'text-red-600 font-semibold flex gap-2' : 'text-green-600 font-semibold flex gap-2'}>
-                    { extra ? formatMinutes(extra) : '00:00' }
+                    {extra ? formatMinutes(extra) : '00:00'}
                     {extra > 0 ?
                         (<Tooltip>
                             <TooltipTrigger asChild>
-                                    {estadoHorasExtra[estadoExtra].icon}
+                                {estadoHorasExtra[estadoExtra].icon}
                             </TooltipTrigger>
                             <TooltipContent color='red'>
-                                <p>{ estadoHorasExtra[estadoExtra].label }</p>
+                                <p>{estadoHorasExtra[estadoExtra].label}</p>
                             </TooltipContent>
                         </Tooltip>)
-                    : ''}
+                        : ''}
                 </span>
             )
         }
     },
+
+    // Al final de tu array de columnas en columns.tsx
+
+    // Asegúrate de importar router de inertia
+
+
+    // ... dentro de tu definición de columnas
+
+    // columns.tsx
+    {
+        id: 'acciones',
+        header: 'DETALLE',
+        cell: ({ row, table }) => {
+            const meta = table.options.meta as { fechaInicio: string; fechaFin: string };
+
+            return (
+                <DetalleHorasExtraModal
+                    empleadoId={row.original.empleado.id}
+                    fechaInicio={meta?.fechaInicio}
+                    fechaFin={meta?.fechaFin}
+                />
+            );
+        }
+    }
 ];

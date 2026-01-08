@@ -256,7 +256,7 @@ class ReporteController extends Controller
                         // 3. EXTRAS, ANTICIPADOS Y DEMÁS
                         // ========================================
                         $horasAnticipado = max(0, $marcacion->salida->diffInMinutes($horario->salida, false));
-                        $extraDia = max(0, $horario->salida->diffInMinutes($marcacion->salida, false)); 
+                        $extraDia = max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
                         $extra += $extraDia;
 
                         if (
@@ -981,6 +981,68 @@ class ReporteController extends Controller
             'revision' => $revision,
             'aprobados' => $aprobados,
             'csrf_token' => csrf_token(),
+        ]);
+    }
+
+    public function extraDetalle(Request $request)
+    {
+        $request->validate([
+            'empleado_id' => 'required|exists:empleados,id',
+            'fechaInicio' => 'required|date',
+            'fechaFin' => 'required|date',
+        ]);
+
+        $empleado = Empleado::with(['horarios' => function ($q) use ($request) {
+            $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
+        }, 'marcaciones' => function ($q) use ($request) {
+            $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
+        }, 'area']) // Cargamos área de una vez
+            ->findOrFail($request->empleado_id);
+
+        $periodo = \Carbon\CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
+        $detalle = [];
+
+        foreach ($periodo as $fecha) {
+            $fechaStr = $fecha->format('Y-m-d');
+
+            $horario = $empleado->horarios->first(fn ($h) => \Carbon\Carbon::parse($h->fecha)->format('Y-m-d') === $fechaStr);
+            $marcacion = $empleado->marcaciones->first(fn ($m) => \Carbon\Carbon::parse($m->fecha)->format('Y-m-d') === $fechaStr);
+
+            $minutosExtra = 0;
+
+            if ($horario && $marcacion && $marcacion->salida) {
+                $hSalidaProg = \Carbon\Carbon::parse($horario->salida);
+                $mSalidaReal = \Carbon\Carbon::parse($marcacion->salida);
+                $hIngresoProg = \Carbon\Carbon::parse($horario->ingreso);
+
+                // Lógica de Medianoche
+                if ($mSalidaReal->lt($hIngresoProg)) {
+                    $mSalidaReal->addDay();
+                }
+
+                $diff = $hSalidaProg->diffInMinutes($mSalidaReal, false);
+                $minutosExtra = $diff > 0 ? $diff : 0;
+            }
+
+            // 🚨 CAMBIO CLAVE: Solo agregamos al array si hay minutos extra reales
+            if ($minutosExtra > 0) {
+                $detalle[] = [
+                    'fecha' => $fechaStr,
+                    'programada' => $horario ? \Carbon\Carbon::parse($horario->salida)->format('H:i') : 'S/H',
+                    'marcada' => $marcacion->salida ? \Carbon\Carbon::parse($marcacion->salida)->format('H:i') : 'S/M',
+                    'minutos' => $minutosExtra,
+                    'estado_he' => $marcacion->estado_horas_extra,
+                ];
+            }
+        }
+
+        return response()->json([
+            'empleado' => [
+                'nombre' => $empleado->apellidos.' '.$empleado->nombres,
+                'dni' => $empleado->dni,
+                'area' => $empleado->area->nombre ?? 'N/A',
+            ],
+            'detalle' => $detalle, // Ahora este array solo contiene días con HE > 0
         ]);
     }
 

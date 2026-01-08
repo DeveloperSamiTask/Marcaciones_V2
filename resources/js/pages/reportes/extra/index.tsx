@@ -229,7 +229,10 @@ export default function IndexHorasExtra({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={pendientes} />
+                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={pendientes} meta={{
+                                            fechaInicio: filters.fechaInicio,
+                                            fechaFin: filters.fechaFin
+                                        }} />
                                     )}
                                 </TabsContent>
 
