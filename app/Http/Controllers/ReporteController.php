@@ -271,7 +271,14 @@ class ReporteController extends Controller
                         }
 
                         if (in_array($empleado->empresa_id, [1, 3, 4])) {
-                            $nocturno += max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
+                            // Calculamos HSP - 22:00 en minutos
+                            $minutosNocturnos = max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
+
+                            // Redondeamos a horas completas (igual que arriba)
+                            $minutosNocturnos = floor($minutosNocturnos / 60) * 60;
+
+                            // Sumamos al acumulado
+                            $nocturno += $minutosNocturnos;
                         }
 
                         $horasExtrasRaw = $marcacion->estado_horas_extra == 1
@@ -422,35 +429,35 @@ class ReporteController extends Controller
         // Si llegó tarde, se resta ese tiempo
         $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
 
-        // =========================
+        if ($empleado->jornada_id === 1) {
+            $tiempoBrutoReal = $horasTrabajadas; // FT: Mantiene sus horas base
+        } else {
+            $tiempoBrutoReal = $horasTrabajadas - $tardanza; // PT: Pierde minutos por tardanza
+        }
+
         // 🍽 REFRIGERIO
-        // =========================
         $refri = 0;
-        $partTime = false;
 
         if ($empleado->jornada_id === 1) {
-            // 🔵 FULL-TIME → SIEMPRE 60 minutos
-            $refri = 60;
+            // 🔵 REGLA FT (Full-Time):
+            // Se descuenta 1h (60 min) solo si el tiempo laborado supera las 6 horas (360 min)
+            if ($tiempoBrutoReal > 360) {
+                $refri = 60;
+            }
         } else {
-            // 🟢 PART-TIME
-            if ($marcacion->ingreso_refri && $marcacion->salida_refri) {
-                // Si registró refrigerio, se descuenta
-                $refri = 60; // O usar el tiempo real si lo prefieres
+            // 🟢 REGLA PT (Part-Time):
+            // Se descuenta 1h (60 min) SOLO si existen marcas reales de refrigerio
+            // Verificamos que no sean null y que no sean "00:00:00"
+            $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
+                                ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
 
-                // Si quieres usar el tiempo REAL del refrigerio:
-                // $refri = $marcacion->ingreso_refri->diffInMinutes($marcacion->salida_refri, false);
-            } else {
-                // Si NO registró refrigerio, NO se descuenta
-                $partTime = true;
-                $refri = 0;
+            if ($tieneMarcasRefri) {
+                $refri = 60;
             }
         }
 
-        // =========================
-        // ✅ TOTAL DÍA (FÓRMULA OFICIAL)
-        // =========================
-        $totalDia = $horasTrabajadas - $tardanza - $refri;
-        $totalDia = max(0, $totalDia); // No puede ser negativo
+        // ✅ RESULTADO FINAL DEL DÍA
+        $totalDia = max(0, $tiempoBrutoReal - $refri);
 
         // =========================
         // ➕ EXTRA (informativo)
@@ -481,7 +488,7 @@ class ReporteController extends Controller
             '---CÁLCULOS---' => '---',
             'tardanza_min' => $tardanza,
             'refri_descontado_min' => $refri,
-            'es_parttime_sin_refri' => $partTime,
+            // 'es_parttime_sin_refri' => $partTime,
             '---EXTRAS---' => '---',
             'extra_min' => $extra,
             'anticipado_min' => $anticipado,
@@ -780,17 +787,24 @@ class ReporteController extends Controller
             ->unique();
 
         // FERIADOS DISPONIBLES
+        // FERIADOS DISPONIBLES
         $feriadosDisponibles = Horario::whereIn('empleado_id', $empleadoIds)
             ->with(['empleado.area', 'empleado.jornada', 'feriados'])
             ->where('estado', 'L')
-            // ->whereDate('fecha', '<=', now())
+            // Filtramos los horarios según el rango enviado
+            ->when($filters['fechaInicio'] ?? null, fn ($q) => $q->whereDate('fecha', '>=', $filters['fechaInicio']))
+            ->when($filters['fechaFin'] ?? null, fn ($q) => $q->whereDate('fecha', '<=', $filters['fechaFin']))
             ->get()
             ->groupBy('empleado_id')
-            ->map(function ($horarios) {
+            // IMPORTANTE: Aquí añadimos 'use ($filters)' y renombramos el segundo parámetro a '$key'
+            ->map(function ($horarios, $key) use ($filters) {
                 $empleado = $horarios->first()->empleado;
                 $fechasHorarios = $horarios->pluck('fecha');
 
                 $feriados = Feriado::whereIn('fecha', $fechasHorarios)
+                    // Filtramos los feriados para que coincidan con el rango del reporte
+                    ->when($filters['fechaInicio'] ?? null, fn ($q) => $q->whereDate('fecha', '>=', $filters['fechaInicio']))
+                    ->when($filters['fechaFin'] ?? null, fn ($q) => $q->whereDate('fecha', '<=', $filters['fechaFin']))
                     ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleado->id))
                     ->select(['id', 'fecha', 'nombre'])
                     ->get();

@@ -385,124 +385,122 @@ import { sendSomething } from "./send";
         accessorKey: 'horas',
         header: 'TOTAL',
         cell: ({ row, table }) => {
-            // Helper: parse "HH:MM" -> minutes since 00:00
-            const parseTimeToMinutes = (time: string | undefined | null) => {
+            // --- HELPERS ---
+            const parseTimeToMinutes = (time) => {
                 if (!time) return null;
-                // aceptar formatos "09:00", "9:00", "00:00"
                 const parts = String(time).split(':');
                 if (parts.length < 2) return null;
                 const hh = parseInt(parts[0], 10);
                 const mm = parseInt(parts[1], 10);
-                if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
                 return hh * 60 + mm;
             };
 
-            // Helper: calcular diferencia en minutos entre dos tiempos (puede cruzar medianoche)
-            const diffMinutes = (startStr?: string | null, endStr?: string | null) => {
+            const diffMinutes = (startStr, endStr) => {
                 const start = parseTimeToMinutes(startStr);
                 const end = parseTimeToMinutes(endStr);
                 if (start === null || end === null) return null;
-                // si end < start asumimos paso de medianoche -> sumamos 24h
-                if (end < start) {
-                    return (end + 24 * 60) - start;
-                }
+                if (end < start) return (end + 1440) - start;
                 return end - start;
             };
 
-            // Helper: formatear minutos a "HH:MM"
-            const formatMinutes = (mins?: number | null) => {
+            const formatMinutes = (mins) => {
                 if (mins === null || mins === undefined) return '00:00';
                 const h = Math.floor(mins / 60);
                 const m = mins % 60;
                 return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
             };
 
-            // ---- obtener datos de la fila ----
-            const horasFromBackend: number | undefined = row.original.horas; // minutos si viene así
-            const horario = row.original.horario || {}; // objeto horario asociado (puede tener estado, entryTime, exitTime, ingreso/salida)
-            const estado = horario?.estado ?? row.original.estado; // fallback si viene directo
-            const empleado = row.original.empleado;
-            const jornadaId = empleado?.jornada_id;
-            const fecha = row.original.fecha;
+            // --- DATOS ---
+            const horario = row.original.horario || {};
+            const marcacion = row.original.marcacion || {};
+            const jornadaId = row.original.empleado?.jornada_id;
+            const estado = horario?.estado ?? row.original.estado;
 
-            // Buscar posibles campos de ingreso/salida (se adaptan a diferentes nombres)
-            const ingresoStr =
-                horario?.entryTime ??
-                horario?.ingreso ??
-                row.original.ingreso ??
-                horario?.entrada ??
-                null;
+            const hipStr = horario?.ingreso || null;
+            const hspStr = horario?.salida || null;
+            const tieneRefrigerio = !!marcacion?.ingreso_refri;
 
-            const salidaStr =
-                horario?.exitTime ??
-                horario?.salida ??
-                row.original.salida ??
-                horario?.salidaHorario ??
-                null;
+            let minutesForRow = 0;
 
-            // 1) Si estado === 'C' => calculamos desde ingreso/salida del día
-            let minutesForRow: number | null = null;
+            // --- LÓGICA DE CÁLCULO REFACTORIZADA ---
 
-            if (estado === 'C' && jornadaId == 2) {
-                // calculamos duración bruta
-                const dur = diffMinutes(ingresoStr, salidaStr); // en minutos o null
-                if (dur !== null) {
-                    minutesForRow = dur;
-                    // Opcional: restar refrigerio si corresponde
-                    // if (jornadaId === 1 && minutesForRow > 60) minutesForRow -= 60;
-                     if (jornadaId !== 1 && minutesForRow >= 360) minutesForRow -= 60;
+            // Caso 1: ESTADO COMPENSA (C)
+            if (estado === 'C') {
+                // Solo calculamos si es PT (Jornada 2)
+                if (jornadaId === 2) {
+                    const duracionProgramada = diffMinutes(hipStr, hspStr);
+                    if (duracionProgramada !== null) {
+                        minutesForRow = duracionProgramada;
+                        // Regla PT: Si programación >= 6h, descuenta 1h
+                        if (minutesForRow >= 360) {
+                            minutesForRow -= 60;
+                        }
+                    }
                 } else {
-                    // Si faltan tiempos, fallback a horas del backend si existe
-                    minutesForRow = horasFromBackend ?? 0;
+                    // Si es FT (Jornada 1) y estado C, el total es 0
+                    minutesForRow = 0;
                 }
-            } else {
-                // No es C -> usar horas que vengan del backend (en minutos)
-                minutesForRow = typeof horasFromBackend === 'number' ? horasFromBackend : 0;
             }
 
-            // ---- sumar TOTALS: solo en la primera fila calculamos y mostramos ----
+            // Caso 2: ESTADO LABORAL (L)
+            else if (estado === 'L') {
+                const duracionProgramada = diffMinutes(hipStr, hspStr);
+                if (duracionProgramada !== null) {
+                    minutesForRow = duracionProgramada;
+
+                    // Regla PT en Laboral: Solo si marcó refrigerio
+                    if (jornadaId === 2 && tieneRefrigerio && minutesForRow >= 360) {
+                        minutesForRow -= 60;
+                    }
+                    // Regla FT en Laboral: Descuenta siempre si > 6h
+                    else if (jornadaId === 1 && minutesForRow > 360) {
+                        minutesForRow -= 60;
+                    }
+                }
+            }
+
+            // Otros estados
+            else {
+                minutesForRow = typeof row.original.horas === 'number' ? row.original.horas : 0;
+            }
+
+            // --- SUMATORIA TOTAL (Sincronizada con las nuevas reglas) ---
             if (row.index === 0) {
-                // calculamos sumatorio usando las filas actuales de la tabla y la misma lógica por fila
                 setTimeout(() => {
                     const totalMinutes = table.getRowModel().rows.reduce((sum, r) => {
                         const hr = r.original.horario || {};
+                        const m = r.original.marcacion || {};
                         const st = hr?.estado ?? r.original.estado;
-                        // obtener ingreso/salida para esa fila (misma extracción)
-                        const inStr =
-                            hr?.entryTime ??
-                            hr?.ingreso ??
-                            r.original.ingreso ??
-                            null;
-                        const outStr =
-                            hr?.exitTime ??
-                            hr?.salida ??
-                            r.original.salida ??
-                            null;
+                        const jId = r.original.empleado?.jornada_id;
 
                         let mins = 0;
                         if (st === 'C') {
-                            const d = diffMinutes(inStr, outStr);
-                            mins = d !== null ? d : (typeof r.original.horas === 'number' ? r.original.horas : 0);
-                            // opcional: restar refrigerio aquí si quieres
+                            if (jId === 2) {
+                                const d = diffMinutes(hr?.ingreso, hr?.salida);
+                                mins = d !== null ? d : 0;
+                                if (mins >= 360) mins -= 60;
+                            }
+                        } else if (st === 'L') {
+                            const d = diffMinutes(hr?.ingreso, hr?.salida);
+                            mins = d !== null ? d : 0;
+                            if (jId === 2 && !!m?.ingreso_refri && mins >= 360) {
+                                mins -= 60;
+                            } else if (jId === 1 && mins > 360) {
+                                mins -= 60;
+                            }
                         } else {
                             mins = typeof r.original.horas === 'number' ? r.original.horas : 0;
                         }
-
                         return sum + mins;
                     }, 0);
-
-                    console.log('=== TOTAL HORAS DEL DÍA ===');
-                    console.log('Total minutos:', totalMinutes);
-                    console.log('Total horas:', formatMinutes(totalMinutes));
-                    console.log('Número de registros:', table.getRowModel().rows.length);
-                    console.log('========================');
+                    console.log('TOTAL FINAL:', formatMinutes(totalMinutes));
                 }, 0);
             }
 
-            const cssClass = minutesForRow < 480 && estado === 'L' ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold';
+            const cssClass = "text-green-600 font-semibold";
 
             return (
-                <span key={`horas-${row.original.empleado.id}-${fecha}`} className={cssClass}>
+                <span key={`total-${row.original.empleado?.id}-${row.original.fecha}`} className={cssClass}>
                     {formatMinutes(minutesForRow)}
                 </span>
             );
@@ -510,14 +508,43 @@ import { sendSomething } from "./send";
     },
 
     // ELIMINA completamente la columna horas_log
-    {
-        accessorKey: 'tardanza', // tardanza
-        header: 'TARDANZA',
-        cell: ({ row }) => {
-            const tardanza = row.original.tardanza;
-            return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
+   {
+    accessorKey: 'tardanza',
+    header: 'TARDANZA',
+    cell: ({ row }) => {
+        const tardanzaMinutos = row.original.tardanza || 0;
+        const totalMinutos = row.original.horas || 0; // El 'TOTAL' que ya viene calculado
+        const esPartTime = row.original.empleado?.jornada_id === 2 || row.original.jornada === 'PART-TIME';
+
+        // Si no hay tardanza, mostramos 00:00 neutral
+        if (tardanzaMinutos <= 0) {
+            return <span className="text-green-600 font-semibold">00:00</span>;
         }
-    }, {
+
+        // LÓGICA RRHH:
+        // Jornada 2 (PT) -> Mostrar (Total - Tardanza)
+        // Jornada 1 (FT) -> Mostrar Tardanza a secas
+        if (esPartTime) {
+            const resultadoRRHH = totalMinutos - tardanzaMinutos;
+            return (
+                <div className="flex flex-col">
+                    <span className="text-red-600 ">
+                        {formatMinutes(resultadoRRHH)}
+                    </span>
+
+                </div>
+            );
+        }
+
+        // Jornada 1 (FT) o por defecto:
+        return (
+            <span className="text-red-600 font-semibold">
+                {formatMinutes(tardanzaMinutos)}
+            </span>
+        );
+    }
+},
+    {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
         cell: ({ row }) => {
@@ -544,26 +571,26 @@ import { sendSomething } from "./send";
 
 
     {
-    accessorKey: 'anticipado',
-    header: 'ANTICIPADO',
-    cell: ({ row }) => {
-        let anticipado = row.original.anticipado;
-        const value = Math.abs(anticipado);
+        accessorKey: 'anticipado',
+        header: 'ANTICIPADO',
+        cell: ({ row }) => {
+            let anticipado = row.original.anticipado;
+            const value = Math.abs(anticipado);
 
-        // 🎪 ¡LA TRAMPA! Si es 03:48 (228 min) → mitad = 01:54 (114 min)
-        if (value === 228) { // 3:48 en minutos
-            anticipado = 114; // 1:54
+            // 🎪 ¡LA TRAMPA! Si es 03:48 (228 min) → mitad = 01:54 (114 min)
+            if (value === 228) { // 3:48 en minutos
+                anticipado = 114; // 1:54
+            }
+            // O si quieres para cualquier valor (por si hay otros duplicados)
+            // anticipado = Math.round(value / 2);
+
+            return (
+                <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                    {anticipado ? formatMinutes(anticipado) : '00:00'}
+                </span>
+            );
         }
-        // O si quieres para cualquier valor (por si hay otros duplicados)
-        // anticipado = Math.round(value / 2);
-
-        return (
-            <span className={anticipado ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
-                {anticipado ? formatMinutes(anticipado) : '00:00'}
-            </span>
-        );
-    }
-},
+    },
 
     {
         accessorKey: 'nocturno', // hora pasada las 10 pm
