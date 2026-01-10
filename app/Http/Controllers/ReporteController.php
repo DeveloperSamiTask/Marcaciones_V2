@@ -441,9 +441,7 @@ class ReporteController extends Controller
         if ($empleado->jornada_id === 1) {
             // 🔵 REGLA FT (Full-Time):
             // Se descuenta 1h (60 min) solo si el tiempo laborado supera las 6 horas (360 min)
-            if ($tiempoBrutoReal > 360) {
                 $refri = 60;
-            }
         } else {
             // 🟢 REGLA PT (Part-Time):
             // Se descuenta 1h (60 min) SOLO si existen marcas reales de refrigerio

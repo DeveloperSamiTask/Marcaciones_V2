@@ -1399,7 +1399,7 @@ class HorarioController extends Controller
                 // 🔥 CORRECCIÓN REFRIGERIO (Semanal): Se aplica el descuento de 60 minutos
                 // si la duración bruta del turno programado es >= 6 horas (360 min),
                 // independientemente de la Jornada ID, ya que un turno de 15 horas debe incluir descanso.
-                if ($empleado->jornada_id === 1 && $minutosDelDia > 0) {
+                if ($empleado->jornada_id === 1) {
                     // FULL TIME: siempre -1h
 
                     $minutosDelDia -= 60;

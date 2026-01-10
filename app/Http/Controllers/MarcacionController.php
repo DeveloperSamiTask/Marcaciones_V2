@@ -112,9 +112,9 @@ class MarcacionController extends Controller
 
                     if ($empleado->jornada_id == 1) {
                         // Regla FT: Descuenta 1h si el programado es >= 6h
-                        if ($minutosProgramados >= 360) {
+
                             $descuentoRefri = 60;
-                        }
+
                     } else {
                         // Regla PT: Descuenta 1h SOLO si marcó refrigerio (entrada o salida)
                         if ($marcacion->ingreso_refri || $marcacion->salida_refri) {

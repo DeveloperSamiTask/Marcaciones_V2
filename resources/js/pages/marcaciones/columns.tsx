@@ -419,6 +419,8 @@ import { sendSomething } from "./send";
             const hipStr = horario?.ingreso || null;
             const hspStr = horario?.salida || null;
             const tieneRefrigerio = !!marcacion?.ingreso_refri;
+            const tardanzaReal = row.original.tardanza || 0;
+
 
             let minutesForRow = 0;
 
@@ -451,10 +453,14 @@ import { sendSomething } from "./send";
                     // Regla PT en Laboral: Solo si marcó refrigerio
                     if (jornadaId === 2 && tieneRefrigerio && minutesForRow >= 360) {
                         minutesForRow -= 60;
-                    }
-                    // Regla FT en Laboral: Descuenta siempre si > 6h
-                    else if (jornadaId === 1 && minutesForRow > 360) {
+
+                    } else if (jornadaId === 1) {
                         minutesForRow -= 60;
+                    }
+
+                    // 2. REGLA TARDANZA (Solo para PT)
+                    if (jornadaId === 2) {
+                        minutesForRow = Math.max(0, minutesForRow - tardanzaReal);
                     }
                 }
             }
@@ -508,42 +514,14 @@ import { sendSomething } from "./send";
     },
 
     // ELIMINA completamente la columna horas_log
-   {
-    accessorKey: 'tardanza',
-    header: 'TARDANZA',
-    cell: ({ row }) => {
-        const tardanzaMinutos = row.original.tardanza || 0;
-        const totalMinutos = row.original.horas || 0; // El 'TOTAL' que ya viene calculado
-        const esPartTime = row.original.empleado?.jornada_id === 2 || row.original.jornada === 'PART-TIME';
-
-        // Si no hay tardanza, mostramos 00:00 neutral
-        if (tardanzaMinutos <= 0) {
-            return <span className="text-green-600 font-semibold">00:00</span>;
+    {
+        accessorKey: 'tardanza', // tardanza
+        header: 'TARDANZA',
+        cell: ({ row }) => {
+            const tardanza = row.original.tardanza;
+            return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
         }
-
-        // LÓGICA RRHH:
-        // Jornada 2 (PT) -> Mostrar (Total - Tardanza)
-        // Jornada 1 (FT) -> Mostrar Tardanza a secas
-        if (esPartTime) {
-            const resultadoRRHH = totalMinutos - tardanzaMinutos;
-            return (
-                <div className="flex flex-col">
-                    <span className="text-red-600 ">
-                        {formatMinutes(resultadoRRHH)}
-                    </span>
-
-                </div>
-            );
-        }
-
-        // Jornada 1 (FT) o por defecto:
-        return (
-            <span className="text-red-600 font-semibold">
-                {formatMinutes(tardanzaMinutos)}
-            </span>
-        );
-    }
-},
+    },
     {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
