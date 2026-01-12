@@ -48,10 +48,21 @@ class Empleado extends Model
 
     // app/Models/Empleado.php
 
-public function subordinados()
-{
-    return $this->hasMany(Empleado::class, 'jefe_id', 'id');
-}
+    public function horarios(): HasMany
+    {
+        return $this->hasMany(Horario::class);
+    }
+
+    public function marcaciones(): HasMany
+    {
+        return $this->hasMany(Marcacion::class);
+    }
+
+    public function subordinados()
+    {
+        return $this->hasMany(Empleado::class, 'jefe_id', 'id');
+    }
+
     // En Empleado.php
     public function solicitudesHorasExtrasPT()
     {
@@ -76,16 +87,6 @@ public function subordinados()
     public function jefe(): BelongsTo
     {
         return $this->belongsTo(Empleado::class, 'jefe_id', 'id');
-    }
-
-    public function horarios(): HasMany
-    {
-        return $this->hasMany(Horario::class);
-    }
-
-    public function marcaciones(): HasMany
-    {
-        return $this->hasMany(Marcacion::class);
     }
 
     public function suspensiones(): HasMany

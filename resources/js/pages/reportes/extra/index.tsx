@@ -35,6 +35,7 @@ type Filters = {
     fechaInicio?: string;
     modalidad?: number | null;
     fechaFin?: string;
+    area?: number | null; // <--- Agregado
 };
 
 export default function IndexHorasExtra({
@@ -44,12 +45,14 @@ export default function IndexHorasExtra({
     empresas,
     encargados,
     filters,
+    areas, // <--- Recibir desde Laravel
 }: {
     pendientes: ReporteExtra[];
     revision: ReporteExtra[];
     aprobados: ReporteExtra[];
     empresas: Empresa[];
     encargados: Encargado[];
+    areas: any[]; // <--- Definir el tipo según tu modelo
     filters: Filters;
 }) {
     const { auth } = usePage<SharedData>().props;
@@ -66,6 +69,7 @@ export default function IndexHorasExtra({
                 }
                 : undefined,
         modalidad: filters.modalidad || null, //
+        areas: filters.areas || null, //
     };
 
     const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(initialState.empresa);
@@ -79,7 +83,7 @@ export default function IndexHorasExtra({
         { id: 1, nombre: 'FULL TIME (FT)' },
         { id: 2, nombre: 'PART TIME (PT)' }
     ];
-
+    const [selectedArea, setSelectedArea] = useState<string | number | null>(filters.area || null);
 
     const applyFilters = useCallback(() => {
         router.get(
@@ -90,6 +94,7 @@ export default function IndexHorasExtra({
                 fechaInicio: dateRange?.from?.toISOString().split('T')[0],
                 fechaFin: dateRange?.to?.toISOString().split('T')[0],
                 modalidad: selectedModalidad, // <--- Enviamos la modalidad
+                area: selectedArea,
             },
             {
                 preserveState: true,
@@ -97,12 +102,13 @@ export default function IndexHorasExtra({
                 onFinish: () => setIsFiltering(false),
             },
         );
-    }, [selectedEmpresa, selectedEncargado, selectedModalidad, dateRange]); // <--- Agregado a dependencias
+    }, [selectedEmpresa, selectedEncargado, selectedModalidad, dateRange, selectedArea]); // <--- Agregado a dependencias
 
     const handleEmpresaChange = (empresaId: string | number | null) => {
         setSelectedEmpresa(empresaId);
         setSelectedEncargado(null); // Resetear área al cambiar de empresa
         setSelectedEncargado(null);
+        setSelectedArea(null);
     };
     useEffect(() => {
         // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
@@ -112,12 +118,12 @@ export default function IndexHorasExtra({
     }, [empresas, selectedEmpresa, auth.user.name]);
     // carga automatica en tiempo real
     useEffect(() => {
-        if ((selectedEmpresa && dateRange?.to) || selectedEncargado) {
+        if ((selectedEmpresa && dateRange?.to) || selectedEncargado || selectedArea) {
             setIsFiltering(true);
             const timer = setTimeout(applyFilters, 200);
             return () => clearTimeout(timer);
         }
-    }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters]);
+    }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters, selectedArea]);
 
 
     useEffect(() => {
@@ -232,6 +238,15 @@ export default function IndexHorasExtra({
                                 displayValue={(j) => j.nombre}
                                 placeholder="SELECCIONAR MODALIDAD"
                             />
+
+                            <SelectFilter
+                                items={areas}
+                                selected={selectedArea}
+                                onSelect={setSelectedArea}
+                                getValue={(area) => area.id}
+                                displayValue={(area) => area.nombre}
+                                placeholder="SELECCIONAR AREAS"
+                            />
                         </div>
                     </div>
 
@@ -263,7 +278,10 @@ export default function IndexHorasExtra({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={revision} />
+                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={revision} meta={{
+                                            fechaInicio: filters.fechaInicio,
+                                            fechaFin: filters.fechaFin
+                                        }} />
                                     )}
                                 </TabsContent>
 
@@ -273,7 +291,10 @@ export default function IndexHorasExtra({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-horas-extra-adelantadas" columns={columns} data={aprobados} />
+                                        <DataTable key="datatable-reporte-horas-extra-adelantadas" columns={columns} data={aprobados} meta={{
+                                            fechaInicio: filters.fechaInicio,
+                                            fechaFin: filters.fechaFin
+                                        }} />
                                     )}
                                 </TabsContent>
                             </CardContent>

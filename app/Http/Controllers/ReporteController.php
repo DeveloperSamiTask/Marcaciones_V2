@@ -887,9 +887,14 @@ class ReporteController extends Controller
             'fechaInicio' => 'nullable|date',
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
             'modalidad' => 'nullable|integer',
+            'area' => 'nullable|integer|exists:areas,id',
         ]);
 
         $user = $request->user();
+        $areas = Area::where('estado', 1)
+            ->when($request->empresa, fn ($q) => $q->where('empresa_id', $request->empresa))
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'empresa_id']);
 
         // 1. LÓGICA DE EMPRESAS (Se mantiene igual)
         if ($user->name === 'ANGELES TERRONES MILUSKA') {
@@ -918,6 +923,9 @@ class ReporteController extends Controller
             ->when($request->modalidad, function ($q) use ($request) {
                 $q->where('jornada_id', $request->modalidad);
             })
+
+            // Filtro por Area
+            ->when($request->area, fn ($q) => $q->where('area_id', $request->area))
 
             // Filtro de Empresa y restricciones de seguridad
             ->where(function ($q) use ($request, $user) {
@@ -951,13 +959,29 @@ class ReporteController extends Controller
             $extra = 0;
             $estados_extras = [];
 
-            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$extra, &$estados_extras) {
+            $extra_solicitado = 0;   // Para estado_horas_extra = 1
+            $extra_no_solicitado = 0; // Para estado_horas_extra != 1
+
+            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$extra, &$estados_extras, &$extra_solicitado, &$extra_no_solicitado) {
                 $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
                 $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
 
                 if ($horario && $marcacion->ingreso && $marcacion->salida) {
-                    $extra += max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
+
+                    $minutosDiferencia = max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
+                    $extra += $minutosDiferencia;
                     $estados_extras[] = $marcacion->estado_horas_extra;
+
+                    $minutosConRegla = $minutosDiferencia > 30 ? $minutosDiferencia : 0;
+
+                    if ($marcacion->estado_horas_extra == 1) {
+                        $extra_solicitado += $minutosConRegla;
+                    } else {
+                        $extra_no_solicitado += $minutosConRegla;
+                    }
+
+                    $extra += max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
+
                 }
             });
 
@@ -978,6 +1002,9 @@ class ReporteController extends Controller
                     'horas' => 0,
                     'extra' => $extra,
                     'estado' => $estadoFinal,
+
+                    'extra_solicitado' => $extra_solicitado,
+                    'extra_no_solicitado' => $extra_no_solicitado,
                 ];
 
                 if ($estadoFinal === 'pendientes') {
@@ -997,6 +1024,7 @@ class ReporteController extends Controller
             'pendientes' => $pendientes,
             'revision' => $revision,
             'aprobados' => $aprobados,
+            'areas' => $areas,
             'csrf_token' => csrf_token(),
         ]);
     }

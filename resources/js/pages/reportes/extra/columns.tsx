@@ -4,7 +4,9 @@ import { ColumnDef } from '@tanstack/react-table';
 import { ArrowUpDown, CheckCheck, CircleAlert, ClockAlert } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ReporteExtra } from '@/types/reporte-extra';
-import DetalleHorasExtraModal  from './DetalleHorasExtraModal';
+import DetalleHorasExtraModal from './DetalleHorasExtraModal';
+
+
 
 const formatMinutes = (minutes: number | false): string => {
     if (typeof minutes !== 'number') return '-';
@@ -63,7 +65,29 @@ export const columns: ColumnDef<ReporteExtra>[] = [
         },
         cell: ({ row }) => row.original.empleado.jornada.nombre
     },
+
     {
+        accessorKey: "extra_no_solicitado",
+        header: "NO SOLICITADAS",
+        cell: ({ row }) => (
+            <span className="font-medium text-orange-600">
+                {formatMinutes(row.original.extra_no_solicitado)}
+            </span>
+        ),
+    },
+
+    {
+        accessorKey: "extra_solicitado",
+        header: "SOLICITADAS",
+        cell: ({ row }) => (
+            <span className="font-medium text-green-600">
+                {formatMinutes(row.original.extra_solicitado)}
+            </span>
+        ),
+    },
+    /*
+
+     {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
         cell: ({ row }) => {
@@ -87,6 +111,8 @@ export const columns: ColumnDef<ReporteExtra>[] = [
             )
         }
     },
+    */
+
 
     // Al final de tu array de columnas en columns.tsx
 
