@@ -19,8 +19,9 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
-use Inertia\Response; // ← Añade esto
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia; // ← Añade esto
+use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReporteController extends Controller
@@ -441,7 +442,7 @@ class ReporteController extends Controller
         if ($empleado->jornada_id === 1) {
             // 🔵 REGLA FT (Full-Time):
             // Se descuenta 1h (60 min) solo si el tiempo laborado supera las 6 horas (360 min)
-                $refri = 60;
+            $refri = 60;
         } else {
             // 🟢 REGLA PT (Part-Time):
             // Se descuenta 1h (60 min) SOLO si existen marcas reales de refrigerio
@@ -805,12 +806,14 @@ class ReporteController extends Controller
                     ->when($filters['fechaFin'] ?? null, fn ($q) => $q->whereDate('fecha', '<=', $filters['fechaFin']))
                     ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleado->id))
                     ->select(['id', 'fecha', 'nombre'])
+                    ->orderBy('fecha', 'asc')
                     ->get();
 
                 $permisosTD = Permiso::where('empleado_id', $empleado->id)
                     ->whereIn('tipo_id', [24])
                     ->whereIn('estado', [0])
                     ->select(['id', 'fecha', 'tipo_id', 'estado'])
+                    ->orderBy('fecha', 'asc')
                     ->get();
 
                 if ($feriados->isNotEmpty() || $permisosTD->isNotEmpty()) {
@@ -883,54 +886,56 @@ class ReporteController extends Controller
             'encargado' => 'nullable|integer|exists:empleados,id',
             'fechaInicio' => 'nullable|date',
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+            'modalidad' => 'nullable|integer',
         ]);
 
         $user = $request->user();
 
-        // EMPRESAS SEGÚN USUARIO
+        // 1. LÓGICA DE EMPRESAS (Se mantiene igual)
         if ($user->name === 'ANGELES TERRONES MILUSKA') {
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [4, 10, 11])
-                ->get(['id', 'razonsocial']);
+            $empresas = Empresa::where('estado', 1)->whereIn('id', [4, 10, 11])->get(['id', 'razonsocial']);
         } elseif ($user->id === 73) {
-            $empresas = Empresa::where('estado', 1)
-                ->whereIn('id', [1, 5])
-                ->get(['id', 'razonsocial']);
+            $empresas = Empresa::where('estado', 1)->whereIn('id', [1, 5])->get(['id', 'razonsocial']);
         } else {
             $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
         }
 
-        $encargados = User::with('empleado')->where('estado', 1)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', 1)->get()
+            ->sortBy(fn ($e) => $e->empleado->apellidos)->values();
 
-        // EMPLEADOS - FILTRO SIMPLIFICADO
+        // 2. QUERY DE EMPLEADOS FILTRADA
         $empleados = Empleado::query()
-            ->when($user->rol_id == 4 && $user->id !== 73, fn ($q) => $q->where('jefe_id', $user->empleado_id)) // USUARIO 73 NO USA FILTRO DE JEFE
-            ->when($user->name === 'ANGELES TERRONES MILUSKA', function ($q) use ($request) {
-                // MILUSKA SOLO VE EMPRESAS 4, 10, 11
-                if ($request->empresa && in_array($request->empresa, [4, 10, 11])) {
+            // Prioridad 1: Filtro manual del selector de encargado
+            ->when($request->encargado, function ($q) use ($request) {
+                $q->where('jefe_id', $request->encargado);
+            })
+            // Prioridad 2: Si NO hay encargado seleccionado pero es Rol 4, filtrar por sí mismo
+            ->when(! $request->encargado && $user->rol_id == 4 && $user->id !== 73, function ($q) use ($user) {
+                $q->where('jefe_id', $user->empleado_id);
+            })
+
+            // Filtro de Modalidad (FT/PT)
+            ->when($request->modalidad, function ($q) use ($request) {
+                $q->where('jornada_id', $request->modalidad);
+            })
+
+            // Filtro de Empresa y restricciones de seguridad
+            ->where(function ($q) use ($request, $user) {
+                if ($user->name === 'ANGELES TERRONES MILUSKA') {
+                    $ids = [4, 10, 11];
+                    $q->whereIn('empresa_id', $request->empresa && in_array($request->empresa, $ids) ? [$request->empresa] : $ids);
+                } elseif ($user->id === 73) {
+                    $ids = [1, 5];
+                    $q->whereIn('empresa_id', $request->empresa && in_array($request->empresa, $ids) ? [$request->empresa] : $ids);
+                } elseif ($request->empresa) {
                     $q->where('empresa_id', $request->empresa);
-                } else {
-                    $q->whereIn('empresa_id', [4, 10, 11]);
-                }
-            }, function ($q) use ($request, $user) {
-                // OTROS USUARIOS - FILTRO NORMAL
-                if ($request->empresa) {
-                    $q->where('empresa_id', $request->empresa);
-                }
-                // USUARIO 73 SOLO VE EMPRESAS 1 Y 5
-                elseif ($user->id === 73) {
-                    $q->whereIn('empresa_id', [1, 5]);
                 }
             })
             ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id', 'fecha_ingreso')
-            ->with(['area:id,nombre', 'jornada:id,nombre', 'horarios' => function ($q) use ($request) {
-                $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-            }, 'marcaciones' => function ($q) use ($request) {
-                $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-            }])
-            ->when($request->fechaFin, function ($query) use ($request) {
-                $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
-            })
+            ->with(['area:id,nombre', 'jornada:id,nombre',
+                'horarios' => fn ($q) => $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]),
+                'marcaciones' => fn ($q) => $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]),
+            ])
             ->whereNull('fecha_cese')
             ->orderBy('apellidos')
             ->get();

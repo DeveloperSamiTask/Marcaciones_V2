@@ -33,6 +33,7 @@ type Filters = {
     empresa?: number | null;
     encargado?: number | null;
     fechaInicio?: string;
+    modalidad?: number | null;
     fechaFin?: string;
 };
 
@@ -64,12 +65,21 @@ export default function IndexHorasExtra({
                     to: parseISO(filters.fechaFin),
                 }
                 : undefined,
+        modalidad: filters.modalidad || null, //
     };
 
     const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(initialState.empresa);
     const [selectedEncargado, setSelectedEncargado] = useState<string | number | null>(initialState.encargado);
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialState.dateRange);
     const [isFiltering, setIsFiltering] = useState(false);
+
+    //Selecto de modalidad
+    const [selectedModalidad, setSelectedModalidad] = useState<string | number | null>(filters.modalidad || null);
+    const jornadas = [
+        { id: 1, nombre: 'FULL TIME (FT)' },
+        { id: 2, nombre: 'PART TIME (PT)' }
+    ];
+
 
     const applyFilters = useCallback(() => {
         router.get(
@@ -79,6 +89,7 @@ export default function IndexHorasExtra({
                 encargado: selectedEncargado,
                 fechaInicio: dateRange?.from?.toISOString().split('T')[0],
                 fechaFin: dateRange?.to?.toISOString().split('T')[0],
+                modalidad: selectedModalidad, // <--- Enviamos la modalidad
             },
             {
                 preserveState: true,
@@ -86,11 +97,12 @@ export default function IndexHorasExtra({
                 onFinish: () => setIsFiltering(false),
             },
         );
-    }, [selectedEmpresa, selectedEncargado, dateRange]);
+    }, [selectedEmpresa, selectedEncargado, selectedModalidad, dateRange]); // <--- Agregado a dependencias
 
     const handleEmpresaChange = (empresaId: string | number | null) => {
         setSelectedEmpresa(empresaId);
         setSelectedEncargado(null); // Resetear área al cambiar de empresa
+        setSelectedEncargado(null);
     };
     useEffect(() => {
         // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
@@ -211,6 +223,15 @@ export default function IndexHorasExtra({
                                     placeholder="SELECCIONAR ENCARGADO"
                                 />
                             )}
+
+                            <SelectFilter
+                                items={jornadas}
+                                selected={selectedModalidad}
+                                onSelect={setSelectedModalidad}
+                                getValue={(j) => j.id}
+                                displayValue={(j) => j.nombre}
+                                placeholder="SELECCIONAR MODALIDAD"
+                            />
                         </div>
                     </div>
 
