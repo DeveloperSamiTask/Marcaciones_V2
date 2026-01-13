@@ -29,7 +29,7 @@ type Filters = {
     fechaFin?: string;
 };
 
-export default function IndexHorario({ horarios, empresas, filters}: { horarios: Horario[]; empresas: Empresa[]; filters: Filters }) {
+export default function IndexHorario({ horarios, empresas, filters }: { horarios: Horario[]; empresas: Empresa[]; filters: Filters }) {
 
     const { auth } = usePage<SharedData>().props;
 
@@ -66,20 +66,6 @@ export default function IndexHorario({ horarios, empresas, filters}: { horarios:
         );
     }, [selectedEmpresa, dateRange]);
 
-    // Efecto para seleccionar automáticamente la primera empresa disponible para usuarios especiales
-    useEffect(() => {
-        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
-        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
-            setSelectedEmpresa(empresas[0].id);
-        }
-    }, [empresas, selectedEmpresa, auth.user.name]);
-
-    useEffect(() => {
-        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
-        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
-            setSelectedEmpresa(empresas[0].id);
-        }
-    }, [empresas, selectedEmpresa, auth.user.name]);
 
     useEffect(() => {
         if (selectedEmpresa && dateRange?.to) {
@@ -88,6 +74,8 @@ export default function IndexHorario({ horarios, empresas, filters}: { horarios:
             return () => clearTimeout(timer);
         }
     }, [selectedEmpresa, dateRange, applyFilters]);
+
+
 
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
@@ -141,30 +129,20 @@ export default function IndexHorario({ horarios, empresas, filters}: { horarios:
                             </Button>
 
                             {/* Botón 2 (Ejemplo: Ejecutar Verificación, si quieres usar el que discutimos antes) */}
-                            <Button key="ejecutar-verificacion" asChild>
-                                <Link href={route('solicitudes-enviar-acumulada')} prefetch>
-                                    <Zap /> {/* O el ícono que prefieras */}
-                                    <span className="hidden sm:inline">Verificar H.E.</span>
-                                </Link>
-                            </Button>
-
+                            {auth.user.rol_id != 4 && (
+                                <Button key="ejecutar-verificacion" asChild>
+                                    <Link href={route('solicitudes-enviar-acumulada')} prefetch>
+                                        <Zap /> {/* O el ícono que prefieras */}
+                                        <span className="hidden sm:inline">Verificar H.E.</span>
+                                    </Link>
+                                </Button>
+                            )}
                         </div>
 
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center gap-3">
-                        {auth.user.rol_id != 4 && auth.user.id != 73 &&(
-                            <SelectFilter
-                                items={empresas}
-                                selected={selectedEmpresa}
-                                onSelect={setSelectedEmpresa}
-                                getValue={(empresa) => empresa.id}
-                                displayValue={(empresa) => empresa.razonsocial}
-                                placeholder="SELECCIONAR EMPRESA"
-                            />
-                        )}
-
-                        {auth.user.id === 73 && (
+                        {auth.user.rol_id != 4 && (
                             <SelectFilter
                                 items={empresas}
                                 selected={selectedEmpresa}
@@ -185,7 +163,7 @@ export default function IndexHorario({ horarios, empresas, filters}: { horarios:
                             ) : isFiltering ? (
                                 <LoadingSkeleton />
                             ) : (
-                                <DataTable key="datatable-horarios"columns={columns(auth)} data={horarios} />
+                                <DataTable key="datatable-horarios" columns={columns(auth)} data={horarios} />
                             )}
                         </CardContent>
                     </Card>

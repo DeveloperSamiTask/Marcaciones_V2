@@ -18,7 +18,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Illuminate\Support\Facades\Log;
 
 class AsistenciaController extends Controller
 {
@@ -38,23 +37,70 @@ class AsistenciaController extends Controller
         $isJefe = $user->rol_id == 4;
         $isSupervisor = $user->rol_id == 5;
 
-        /** 🔥 ID ESPECIAL – BUSTAMANTE */
-        $BUSTAMANTE_ID = 383;
-
-        /* =========================
-           EMPRESAS
-        ========================= */
         $empresas = $isSupervisor
             ? $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial'])
             : Empresa::where('estado', 1)->get(['id', 'razonsocial']);
 
-        /* =========================
-           ENCARGADOS (DROPDOWN)
-        ========================= */
+        if ($isSupervisor) {
+            $empleadosAsignadosIds = $user->empleadosACargo()
+                ->when($request->empresa, function ($q) use ($request) {
+                    $q->where('supervisor_empleado.empresa_id', $request->empresa);
+                })
+                ->pluck('empleados.id');
+
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->whereHas('empleado', function ($q) use ($empleadosAsignadosIds) {
+                    $q->whereIn('id', $empleadosAsignadosIds);
+                })
+                ->get()
+                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->values();
+        } elseif ($isJefe) {
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->whereHas('empleado', function ($q) use ($user) {
+                    $q->where('jefe_id', $user->empleado_id);
+                })
+                ->get()
+                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->values();
+        } else {
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->get()
+                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->values();
+        }
+
+        $asistenciasQuery = Asistencia::query()
+            ->with(['empleado.area', 'empleado.empresa'])
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->when($request->empresa, function ($q) use ($request) {
+                $q->whereHas('empleado', function ($e) use ($request) {
+                    $e->where('empresa_id', $request->empresa);
+                });
+            });
+
+        // ? NUEVO: Filtro correcto para admin/otros roles
+        if ($request->encargado && ! $isSupervisor && ! $isJefe) {
+            $empleadosACargo = Empleado::where('jefe_id', $request->encargado)
+                ->when($request->empresa, function ($q) use ($request) {
+                    $q->where('empresa_id', $request->empresa);
+                })
+                ->pluck('id');
+
+            $asistenciasQuery->whereIn('empleado_id', $empleadosACargo);
+        }
+
+        if ($request->encargado && ! $isSupervisor) {
+            $asistenciasQuery->where('empleado_id', $request->encargado);
+        }
+
         if ($isSupervisor) {
 
-            // 🔥 PARCHE SOLO PARA BUSTAMANTE
-            if ($user->empleado_id == $BUSTAMANTE_ID) {
+            // ?? PARCHE SOLO PARA BUSTAMANTE
+            if ($user->empleado_id == 383) {
                 $empleadosAsignadosIds = $user->empleadosACargo()
                     ->when($request->empresa, function ($q) use ($request) {
                         $q->where('empleados.empresa_id', $request->empresa);
@@ -77,7 +123,6 @@ class AsistenciaController extends Controller
                 ->get()
                 ->sortBy(fn ($u) => $u->empleado->apellidos)
                 ->values();
-
         } elseif ($isJefe) {
 
             $encargados = User::with('empleado')
@@ -88,86 +133,25 @@ class AsistenciaController extends Controller
                 ->get()
                 ->sortBy(fn ($u) => $u->empleado->apellidos)
                 ->values();
-
         } else {
 
-            // ✅ Admin: Filtrar encargados que tengan empleados en la empresa seleccionada
-            if ($request->empresa) {
-                // Obtener IDs de jefes que tengan empleados activos en esa empresa
-                $jefesConEmpleados = Empleado::where('empresa_id', $request->empresa)
-                    ->whereNull('fecha_cese')
-                    ->whereNotNull('jefe_id')
-                    ->distinct()
-                    ->pluck('jefe_id');
-
-                $encargados = User::with('empleado')
-                    ->where('estado', true)
-                    ->whereHas('empleado', function ($q) use ($jefesConEmpleados) {
-                        $q->whereIn('id', $jefesConEmpleados);
-                    })
-                    ->get()
-                    ->sortBy(fn ($u) => $u->empleado->apellidos)
-                    ->values();
-            } else {
-                // Sin filtro de empresa, mostrar todos
-                $encargados = User::with('empleado')
-                    ->where('estado', true)
-                    ->get()
-                    ->sortBy(fn ($u) => $u->empleado->apellidos)
-                    ->values();
-            }
-        }
-
-        /* =========================
-           ASISTENCIAS
-        ========================= */
-        $asistenciasQuery = Asistencia::query()
-            ->with(['empleado.area', 'empleado.empresa'])
-            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->when($request->empresa, function ($q) use ($request) {
-                $q->whereHas('empleado', function ($e) use ($request) {
-                    $e->where('empresa_id', $request->empresa);
-                });
-            });
-
-        // ✅ Filtro por encargado para ADMIN (NO supervisor, NO jefe)
-        if ($request->encargado && ! $isSupervisor && ! $isJefe) {
-            // Buscar empleados donde jefe_id = encargado seleccionado
-            $empleadosACargo = Empleado::where('jefe_id', $request->encargado)
+            // ? NUEVO: Filtrar encargados por empresa seleccionada
+            $encargados = User::with('empleado')
+                ->where('estado', true)
                 ->when($request->empresa, function ($q) use ($request) {
-                    $q->where('empresa_id', $request->empresa);
+                    $q->whereHas('empleado.empleadosACargo', function ($subQ) use ($request) {
+                        $subQ->where('empresa_id', $request->empresa);
+                    });
                 })
-                ->whereNull('fecha_cese')
-                ->pluck('id')
-                ->toArray();
-
-            // ✅ INCLUIR AL ENCARGADO MISMO (Bustamante + sus empleados)
-            $empleadosParaFiltrar = array_merge([$request->encargado], $empleadosACargo);
-
-            $asistenciasQuery->whereIn('empleado_id', $empleadosParaFiltrar);
+                ->get()
+                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->values();
         }
 
-        // SUPERVISOR
-        if ($isSupervisor) {
-
-            // 🔥 PARCHE SOLO PARA BUSTAMANTE
-            if ($user->empleado_id == $BUSTAMANTE_ID) {
-                $empleadosAsignadosIds = $user->empleadosACargo()
-                    ->when($request->empresa, function ($q) use ($request) {
-                        $q->where('empleados.empresa_id', $request->empresa);
-                    })
-                    ->pluck('empleados.id');
-            } else {
-                $empleadosAsignadosIds = $user->empleadosACargo()->pluck('empleados.id');
-            }
-
-            $asistenciasQuery->whereIn('empleado_id', $empleadosAsignadosIds);
-        }
-
-        // JEFE
         $empresasJefePermitidas = [4, 10, 11];
 
         if ($isJefe && $request->empresa && in_array($request->empresa, $empresasJefePermitidas)) {
+
             $asistenciasQuery
                 ->whereHas('empleado', function ($q) use ($user) {
                     $q->where('jefe_id', $user->empleado_id);
