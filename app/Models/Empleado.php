@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Empleado extends Model
 {
@@ -93,4 +94,14 @@ class Empleado extends Model
     {
         return $this->hasMany(Suspension::class);
     }
+
+    /*
+     public function empleadosACargo(): BelongsToMany
+    {
+        return $this->belongsToMany(Empleado::class, 'supervisor_empleado', 'supervisor_id', 'empleado_id');
+    }
+
+    */
+
+
 }

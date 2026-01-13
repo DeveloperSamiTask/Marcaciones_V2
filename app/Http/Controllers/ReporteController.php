@@ -956,34 +956,58 @@ class ReporteController extends Controller
         $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
             $empleadoMarcaciones = $empleado->marcaciones ?? collect();
             $horas = 0;
-            $extra = 0;
+            $extra = 0; // Total absoluto (se mantiene real)
             $estados_extras = [];
 
-            $extra_solicitado = 0;   // Para estado_horas_extra = 1
-            $extra_no_solicitado = 0; // Para estado_horas_extra != 1
+            $extra_solicitado = 0;
+            $extra_no_solicitado = 0;
 
             $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$extra, &$estados_extras, &$extra_solicitado, &$extra_no_solicitado) {
                 $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
-                $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
 
                 if ($horario && $marcacion->ingreso && $marcacion->salida) {
 
-                    $minutosDiferencia = max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
+                    // En caso sea TD no se considera extra.
+                    if ($horario->ingreso->format('H:i') === '00:00' && $horario->salida->format('H:i') === '00:00') {
+                        return; // Saltamos este día y pasamos al siguiente
+                    }
+
+                    // 1. Preparamos las copias para normalizar
+                    $horaSalidaProg = $horario->salida->copy();
+                    $horaSalidaReal = $marcacion->salida->copy();
+
+                    // --- MANEJO DE HORARIO NOCTURNO ---
+                    // Si la salida programada es menor al ingreso, es del día siguiente
+                    if ($horaSalidaProg->lt($horario->ingreso)) {
+                        $horaSalidaProg->addDay();
+                    }
+
+                    // Si la marcación real de salida es menor al ingreso real, es del día siguiente
+                    if ($horaSalidaReal->lt($marcacion->ingreso)) {
+                        $horaSalidaReal->addDay();
+                    }
+
+                    // CORRECCIÓN CLAVE: Usamos las variables normalizadas ($horaSalidaProg y $horaSalidaReal)
+                    // Esto elimina los saltos de +24:00 horas
+                    $minutosDiferencia = max(0, $horaSalidaProg->diffInMinutes($horaSalidaReal, false));
+
+                    // 1. Acumulamos TODO para el detalle
                     $extra += $minutosDiferencia;
                     $estados_extras[] = $marcacion->estado_horas_extra;
 
-                    $minutosConRegla = $minutosDiferencia > 30 ? $minutosDiferencia : 0;
-
+                    // 3. Aplicamos regla de entrada: Solo si el día tiene más de 30 min
+                    // 2. CAMBIO AQUÍ: Sumamos los minutos brutos sin el filtro de 30 individual
                     if ($marcacion->estado_horas_extra == 1) {
-                        $extra_solicitado += $minutosConRegla;
+                        $extra_solicitado += $minutosDiferencia;
                     } else {
-                        $extra_no_solicitado += $minutosConRegla;
+                        $extra_no_solicitado += $minutosDiferencia;
                     }
-
-                    $extra += max(0, $horario->salida->diffInMinutes($marcacion->salida, false));
-
                 }
             });
+
+            // --- REGLA DE XIOMARA: TRUNCAR DE 30 EN 30 (Sin residuo) ---
+            $extra_solicitado = ($extra_solicitado >= 30) ? floor($extra_solicitado / 30) * 30 : 0;
+            $extra_no_solicitado = ($extra_no_solicitado >= 30) ? floor($extra_no_solicitado / 30) * 30 : 0;
 
             $estadoFinal = null;
             if (! empty($estados_extras)) {
@@ -1000,11 +1024,10 @@ class ReporteController extends Controller
                 $item = [
                     'empleado' => $empleado,
                     'horas' => 0,
-                    'extra' => $extra,
+                    'extra' => $extra, // Se envía el total real acumulado
                     'estado' => $estadoFinal,
-
-                    'extra_solicitado' => $extra_solicitado,
-                    'extra_no_solicitado' => $extra_no_solicitado,
+                    'extra_solicitado' => $extra_solicitado, // Se envía truncado (30, 60, 90...)
+                    'extra_no_solicitado' => $extra_no_solicitado, // Se envía truncado (30, 60, 90...)
                 ];
 
                 if ($estadoFinal === 'pendientes') {
@@ -1041,35 +1064,51 @@ class ReporteController extends Controller
             $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
         }, 'marcaciones' => function ($q) use ($request) {
             $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-        }, 'area']) // Cargamos área de una vez
-            ->findOrFail($request->empleado_id);
+        }, 'area'])->findOrFail($request->empleado_id);
 
         $periodo = \Carbon\CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
         $detalle = [];
 
         foreach ($periodo as $fecha) {
             $fechaStr = $fecha->format('Y-m-d');
-
             $horario = $empleado->horarios->first(fn ($h) => \Carbon\Carbon::parse($h->fecha)->format('Y-m-d') === $fechaStr);
             $marcacion = $empleado->marcaciones->first(fn ($m) => \Carbon\Carbon::parse($m->fecha)->format('Y-m-d') === $fechaStr);
 
             $minutosExtra = 0;
 
             if ($horario && $marcacion && $marcacion->salida) {
+                $hIngresoProg = \Carbon\Carbon::parse($horario->ingreso);
                 $hSalidaProg = \Carbon\Carbon::parse($horario->salida);
                 $mSalidaReal = \Carbon\Carbon::parse($marcacion->salida);
-                $hIngresoProg = \Carbon\Carbon::parse($horario->ingreso);
 
-                // Lógica de Medianoche
+                // --- NORMALIZACIÓN DE MEDIANOCHE ---
+
+                // 1. Si la salida programada es menor al ingreso, es del día siguiente
+                if ($hSalidaProg->lt($hIngresoProg)) {
+                    $hSalidaProg->addDay();
+                }
+
+                // 2. Si la marcación real es menor al ingreso programado, es del día siguiente
                 if ($mSalidaReal->lt($hIngresoProg)) {
                     $mSalidaReal->addDay();
                 }
 
+                // 3. CASO ESPECIAL: Si la salida prog es "00:00" y la real es "00:09"
+                // pero el sistema aún las ve en el mismo día por error de parseo:
+                // Si la diferencia sigue siendo >= 1440 min (24h), restamos un día.
                 $diff = $hSalidaProg->diffInMinutes($mSalidaReal, false);
+
+                // Evitamos el error de las 24 horas
+                if ($diff >= 1440) {
+                    $diff -= 1440;
+                }
+                if ($diff <= -1440) {
+                    $diff += 1440;
+                }
+
                 $minutosExtra = $diff > 0 ? $diff : 0;
             }
 
-            // 🚨 CAMBIO CLAVE: Solo agregamos al array si hay minutos extra reales
             if ($minutosExtra > 0) {
                 $detalle[] = [
                     'fecha' => $fechaStr,
@@ -1087,7 +1126,7 @@ class ReporteController extends Controller
                 'dni' => $empleado->dni,
                 'area' => $empleado->area->nombre ?? 'N/A',
             ],
-            'detalle' => $detalle, // Ahora este array solo contiene días con HE > 0
+            'detalle' => $detalle,
         ]);
     }
 

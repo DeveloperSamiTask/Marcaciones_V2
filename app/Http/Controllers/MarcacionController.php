@@ -126,6 +126,7 @@ class MarcacionController extends Controller
                     // Fórmula: Programado - Descuento Refri - Tardanza
                     $horas = max(0, $minutosProgramados - $descuentoRefri);
 
+
                     // 4. EXTRA y ANTICIPADO
                     if ($m_salida) {
                         // EXTRA: HS - HSP
@@ -183,7 +184,7 @@ class MarcacionController extends Controller
                             // Calculamos los minutos nocturnos según la programación
                             if ($inicioConteo->lt($finConteo)) {
                                 $nocturno = $inicioConteo->diffInMinutes($finConteo);
-                                $nocturno = floor($nocturno / 60) * 60;
+                                $nocturno = floor($nocturno / 30) * 30;
                             } else {
                                 $nocturno = 0;
                             }

@@ -18,10 +18,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
 
 class AsistenciaController extends Controller
 {
-    public function index(Request $request)
+       public function index(Request $request)
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
@@ -54,7 +55,7 @@ class AsistenciaController extends Controller
                     $q->whereIn('id', $empleadosAsignadosIds);
                 })
                 ->get()
-                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         } elseif ($isJefe) {
             $encargados = User::with('empleado')
@@ -63,13 +64,13 @@ class AsistenciaController extends Controller
                     $q->where('jefe_id', $user->empleado_id);
                 })
                 ->get()
-                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         } else {
             $encargados = User::with('empleado')
                 ->where('estado', true)
                 ->get()
-                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         }
 
@@ -121,7 +122,7 @@ class AsistenciaController extends Controller
                     $q->whereIn('id', $empleadosAsignadosIds);
                 })
                 ->get()
-                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         } elseif ($isJefe) {
 
@@ -131,7 +132,7 @@ class AsistenciaController extends Controller
                     $q->where('jefe_id', $user->empleado_id);
                 })
                 ->get()
-                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         } else {
 
@@ -144,7 +145,7 @@ class AsistenciaController extends Controller
                     });
                 })
                 ->get()
-                ->sortBy(fn ($u) => $u->empleado->apellidos)
+                ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         }
 
@@ -164,7 +165,7 @@ class AsistenciaController extends Controller
         $asistencias = $asistenciasQuery
             ->orderBy('fecha', 'desc')
             ->get()
-            ->groupBy(fn ($a) => match ($a->estado) {
+            ->groupBy(fn($a) => match ($a->estado) {
                 0 => 'pendientes',
                 1 => 'aprobados',
                 2 => 'rechazados',
