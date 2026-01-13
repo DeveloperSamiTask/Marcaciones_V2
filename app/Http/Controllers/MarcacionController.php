@@ -66,6 +66,11 @@ class MarcacionController extends Controller
             ->get()
             ->groupBy('empleado_id');
 
+        // Evitamos que se agarren dos marcaciones -> Aplicar a HE , Tareo , etc
+        $marcaciones = $marcaciones->map(function ($grupo) {
+            return $grupo->unique('fecha');
+        });
+
         $lista = $empleados->flatMap(function ($empleado) use ($horarios, $horariosExtra, $marcaciones, $request) {
             $fechas = CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
 
@@ -83,6 +88,28 @@ class MarcacionController extends Controller
                 if ($horario && $marcacion && $marcacion->ingreso) {
                     // Mantengo tu variable partTime por si la usas en otro lado,
                     // pero la lógica de descuento ahora es más precisa abajo.
+
+                    // --- 🚨 VALIDACIÓN TD: EVITAR EXTRAS EN DESCANSO ---
+                    $hip_check = $horario->ingreso->format('H:i');
+                    $hsp_check = $horario->salida->format('H:i');
+
+                    if ($hip_check === '00:00' && $hsp_check === '00:00') {
+                        // Es un día de descanso. Retornamos todo en 0 y terminamos este ciclo.
+                        
+                        return [
+                            'empleado' => $empleado,
+                            'fecha' => $fecha,
+                            'horario' => $horario,
+                            'horariosExtra' => $horarioExtra,
+                            'marcacion' => $marcacion,
+                            'horas' => 0,
+                            'tardanza' => 0,
+                            'extra' => 0,
+                            'anticipado' => 0,
+                            'nocturno' => 0,
+                        ];
+                    }
+
                     $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
 
                     // --- HIP y HSP (Programado) ---
@@ -113,7 +140,7 @@ class MarcacionController extends Controller
                     if ($empleado->jornada_id == 1) {
                         // Regla FT: Descuenta 1h si el programado es >= 6h
 
-                            $descuentoRefri = 60;
+                        $descuentoRefri = 60;
 
                     } else {
                         // Regla PT: Descuenta 1h SOLO si marcó refrigerio (entrada o salida)
@@ -125,7 +152,6 @@ class MarcacionController extends Controller
                     // 3. TOTAL HORAS TRABAJADAS (Refactorizado)
                     // Fórmula: Programado - Descuento Refri - Tardanza
                     $horas = max(0, $minutosProgramados - $descuentoRefri);
-
 
                     // 4. EXTRA y ANTICIPADO
                     if ($m_salida) {
