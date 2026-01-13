@@ -248,35 +248,14 @@ class ReporteController extends Controller
                     if ($horario && $horario->salida) { // ✅ Validamos que horario Y horario->salida existan
                         $partTime = ($empleado->jornada_id == 2 && ! $marcacion->ingreso_refri);
 
-                        // =========================
-                        // 🔥 COPIAS PARA NO MUTAR
-                        // =========================
-                        $h_ingreso = $horario->ingreso->copy();
-                        $h_salida = $horario->salida->copy();
-                        $m_ingreso = $marcacion->ingreso->copy();
-                        $m_salida = $marcacion->salida->copy();
-
-                        // =========================
-                        // 🔥 AJUSTE DE MEDIANOCHE
-                        // =========================
-                        // Si la salida programada es menor que la entrada, cruza medianoche
-                        if ($h_salida->lt($h_ingreso)) {
-                            $h_salida->addDay();
-                        }
-
-                        // Si la salida real es menor que la entrada real, cruza medianoche
-                        if ($m_salida->lt($m_ingreso)) {
-                            $m_salida->addDay();
-                        }
-
                         // Tiempo programado (Meta del día)
-                        $horasProgramadas = $h_ingreso->diffInMinutes($h_salida, false);
+                        $horasProgramadas = $horario->ingreso->diffInMinutes($horario->salida, false);
                         if ($horasProgramadas < 0) {
-                            $horasProgramadas = 0;
+                            $horasProgramadas += 1440;
                         }
 
                         // Tardanza del día
-                        $tardanzaDia = max(0, $h_ingreso->diffInMinutes($m_ingreso, false));
+                        $tardanzaDia = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false));
                         $tardanza += $tardanzaDia;
 
                         // Refri Programado: Si es Part-Time y no marcó refri, no se resta de la meta.
@@ -292,8 +271,24 @@ class ReporteController extends Controller
                         // ========================================
                         // 3. EXTRAS, ANTICIPADOS Y DEMÁS
                         // ========================================
-                        $horasAnticipado = max(0, $m_salida->diffInMinutes($h_salida, false));
-                        $extraDia = max(0, $h_salida->diffInMinutes($m_salida, false));
+
+                        // 🔥 CAMBIO 1: Copias temporales SOLO para anticipado/extra (sin mutar originales)
+                        $h_salida_temp = $horario->salida->copy();
+                        $m_salida_temp = $marcacion->salida->copy();
+
+                        // 🔥 CAMBIO 2: Si la salida real cruza medianoche, ajustamos
+                        if ($m_salida_temp->lt($horario->ingreso)) {
+                            $m_salida_temp->addDay();
+                        }
+
+                        // 🔥 CAMBIO 3: Si la salida programada cruza medianoche, ajustamos
+                        if ($h_salida_temp->lt($horario->ingreso)) {
+                            $h_salida_temp->addDay();
+                        }
+
+                        // 🔥 CAMBIO 4: Usamos las copias ajustadas para calcular anticipado y extra
+                        $horasAnticipado = max(0, $m_salida_temp->diffInMinutes($h_salida_temp, false));
+                        $extraDia = max(0, $h_salida_temp->diffInMinutes($m_salida_temp, false));
                         $extra += $extraDia;
 
                         if (
@@ -319,10 +314,10 @@ class ReporteController extends Controller
                         }
 
                         $horasExtrasRaw = $marcacion->estado_horas_extra == 1
-                            ? $h_salida->diffInMinutes($m_salida, false)
+                            ? $horario->salida->diffInMinutes($marcacion->salida, false)
                             : 0;
 
-                        if ($m_salida->greaterThan($h_salida) && $horasExtrasRaw >= 30) {
+                        if ($marcacion->salida->greaterThan($horario->salida) && $horasExtrasRaw >= 30) {
                             $limite25 = min($horasExtrasRaw, 120);
                             $extra_25 += $limite25 >= 120 ? 120 : ($limite25 >= 90 ? 90 : ($limite25 >= 60 ? 60 : 30));
 
@@ -424,7 +419,9 @@ class ReporteController extends Controller
         // VALIDACIONES
         // =========================
         if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
+
             \Log::info('❌ Día descartado: datos incompletos', [
+
                 'fecha' => $horario->fecha ?? null,
             ]);
 
@@ -438,28 +435,13 @@ class ReporteController extends Controller
 
             return 0;
         }
-
         // =========================
-        // HORAS BASE (con copy para no mutar originales)
+        // HORAS BASE
         // =========================
-        $HIP = $horario->ingreso->copy(); // programado
-        $HSP = $horario->salida->copy();  // programado
-        $HI_real = $marcacion->ingreso->copy();
-        $HS_real = $marcacion->salida->copy();
-
-        // =========================
-        // 🔥 AJUSTE DE MEDIANOCHE
-        // =========================
-        // Si HSP es menor que HIP, significa que cruza medianoche
-        if ($HSP->lt($HIP)) {
-            $HSP->addDay();
-        }
-
-        // Si HS_real es menor que HI_real, significa que cruza medianoche
-        if ($HS_real->lt($HI_real)) {
-            $HS_real->addDay();
-        }
-
+        $HIP = $horario->ingreso; // programad
+        $HSP = $horario->salida;  // programado
+        $HI_real = $marcacion->ingreso;
+        $HS_real = $marcacion->salida;
         // =========================
         // 🔥 TIEMPO PROGRAMADO (BASE)
         // =========================
@@ -468,77 +450,71 @@ class ReporteController extends Controller
         if ($horasTrabajadas < 0) {
             $horasTrabajadas = 0;
         }
-
         // ========================
         // ⏰ TARDANZA
         // =========================
         // Si llegó tarde, se resta ese tiempo
         $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
-
         if ($empleado->jornada_id === 1) {
             $tiempoBrutoReal = $horasTrabajadas; // FT: Mantiene sus horas base
         } else {
             $tiempoBrutoReal = $horasTrabajadas - $tardanza; // PT: Pierde minutos por tardanza
         }
-
         // 🍽 REFRIGERIO
         $refri = 0;
         if ($empleado->jornada_id === 1) {
             // 🔵 REGLA FT (Full-Time):
             // Se descuenta 1h (60 min) solo si el tiempo laborado supera las 6 horas (360 min)
-            if ($horasTrabajadas >= 360) {
-                $refri = 60;
-            }
+            $refri = 60;
         } else {
             // 🟢 REGLA PT (Part-Time):
             // Se descuenta 1h (60 min) SOLO si existen marcas reales de refrigerio
+            // Verificamos que no sean null y que no sean "00:00:00"
             $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
                                 ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
             if ($tieneMarcasRefri) {
                 $refri = 60;
             }
         }
-
         // ✅ RESULTADO FINAL DEL DÍA
         $totalDia = max(0, $tiempoBrutoReal - $refri);
-
         // =========================
         // ➕ EXTRA (informativo)
         // =========================
         // Tiempo trabajado DESPUÉS de la hora programada de salida
         $extra = max(0, $HSP->diffInMinutes($HS_real, false));
-
         // =========================
         // ⏰ SALIDA ANTICIPADA (informativo)
         // ========================
         // Si salió ANTES de su hora programada
         $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
-
         // =========================
         // 🧾 LOG FINAL
         // =========================
         \Log::info('📅 TOTAL DÍA (REPORTE OFICIAL) '.$horario->fecha."\n".
-            json_encode([
-                'fecha' => $horario->fecha,
-                'jornada' => $empleado->jornada->nombre ?? 'N/A',
-                'jornada_id' => $empleado->jornada_id,
-                '---PROGRAMADO---' => '---',
-                'HIP' => $horario->ingreso->format('H:i'),
-                'HSP' => $horario->salida->format('H:i'),
-                'horas_programadas_min' => $horasTrabajadas,
-                '---REAL---' => '---',
-                'HI_real' => $marcacion->ingreso->format('H:i'),
-                'HS_real' => $marcacion->salida->format('H:i'),
-                '---CÁLCULOS---' => '---',
-                'tardanza_min' => $tardanza,
-                'refri_descontado_min' => $refri,
-                '---EXTRAS---' => '---',
-                'extra_min' => $extra,
-                'anticipado_min' => $anticipado,
-                '---RESULTADO---' => '---',
-                'TOTAL_DIA_min' => $totalDia,
-                'TOTAL_DIA_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
-            ], JSON_PRETTY_PRINT)
+
+        json_encode([
+            'fecha' => $horario->fecha,
+            'jornada' => $empleado->jornada->nombre ?? 'N/A',
+            'jornada_id' => $empleado->jornada_id,
+            '---PROGRAMADO---' => '---',
+            'HIP' => $HIP->format('H:i'),
+            'HSP' => $HSP->format('H:i'),
+            'horas_programadas_min' => $horasTrabajadas,
+            '---REAL---' => '---',
+            'HI_real' => $HI_real->format('H:i'),
+            'HS_real' => $HS_real->format('H:i'),
+            '---CÁLCULOS---' => '---',
+            'tardanza_min' => $tardanza,
+            'refri_descontado_min' => $refri,
+            // 'es_parttime_sin_refri' => $partTime,
+            '---EXTRAS---' => '---',
+            'extra_min' => $extra,
+            'anticipado_min' => $anticipado,
+            '---RESULTADO---' => '---',
+            'TOTAL_DIA_min' => $totalDia,
+            'TOTAL_DIA_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
+        ], JSON_PRETTY_PRINT)
         );
 
         return $totalDia;
