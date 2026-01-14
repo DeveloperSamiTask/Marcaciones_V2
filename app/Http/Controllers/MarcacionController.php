@@ -89,13 +89,14 @@ class MarcacionController extends Controller
                     // Mantengo tu variable partTime por si la usas en otro lado,
                     // pero la lógica de descuento ahora es más precisa abajo.
 
-                    // --- 🚨 VALIDACIÓN TD: EVITAR EXTRAS EN DESCANSO ---
-                    $hip_check = $horario->ingreso->format('H:i');
+
+                   // --- 🚨 VALIDACIÓN TD: EVITAR EXTRAS EN DESCANSO ---
+                   $hip_check = $horario->ingreso->format('H:i');
                     $hsp_check = $horario->salida->format('H:i');
 
                     if ($hip_check === '00:00' && $hsp_check === '00:00') {
                         // Es un día de descanso. Retornamos todo en 0 y terminamos este ciclo.
-                        
+
                         return [
                             'empleado' => $empleado,
                             'fecha' => $fecha,
@@ -105,7 +106,7 @@ class MarcacionController extends Controller
                             'horas' => 0,
                             'tardanza' => 0,
                             'extra' => 0,
-                            'anticipado' => 0,
+                             'anticipado' => 0,
                             'nocturno' => 0,
                         ];
                     }

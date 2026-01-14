@@ -302,16 +302,93 @@ class ReporteController extends Controller
                             $anticipado += $horasAnticipado;
                         }
 
-                        if (in_array($empleado->empresa_id, [1, 3, 4])) {
-                            // Calculamos HSP - 22:00 en minutos
-                            $minutosNocturnos = max(0, $horario->salida->copy()->setTime(22, 0)->diffInMinutes($horario->salida, false));
+                        // ------------------------------------------------- Nocturno
+                        // ==========================================
+                        // 4. CÁLCULO DE NOCTURNO (Regla Programación)
+                        // ==========================================
+                       if (in_array($empleado->empresa_id, [1, 3, 4])) {
+    $apellidos = $empleado->apellidos;
 
-                            // Redondeamos a horas completas (igual que arriba)
-                            $minutosNocturnos = floor($minutosNocturnos / 60) * 60;
+    // 🔥 CAMBIO CRÍTICO: Usar la fecha del HORARIO (la fecha del día que estamos procesando)
+    // NO usar $m_ingreso porque esa es la marcación real que puede ser de otro día
+    $fechaRealStr = Carbon::parse($horario->fecha)->format('Y-m-d');
 
-                            // Sumamos al acumulado
-                            $nocturno += $minutosNocturnos;
-                        }
+    $m_ingreso = $marcacion->ingreso->copy();
+    $m_salida = $marcacion->salida ? $marcacion->salida->copy() : null;
+
+    // 🔥 NORMALIZAR: Las marcaciones deben estar en el contexto de la fecha del horario
+    // Si la marcación de ingreso es de madrugada pero el horario es del día anterior
+    if ($m_ingreso->format('Y-m-d') !== $fechaRealStr) {
+        // La marcación real está en otra fecha, la ajustamos al contexto del horario
+        $m_ingreso = Carbon::parse($fechaRealStr . ' ' . $m_ingreso->format('H:i:s'));
+    }
+
+    if ($m_salida && $m_salida->format('Y-m-d') !== $fechaRealStr) {
+        $m_salida = Carbon::parse($fechaRealStr . ' ' . $m_salida->format('H:i:s'));
+    }
+
+    // Ventana basada en la fecha del horario
+    $inicioVentana = Carbon::parse($fechaRealStr . ' 22:00:00');
+    $finVentana = Carbon::parse($fechaRealStr . ' 22:00:00')->addDay()->setTime(6, 0, 0);
+
+    // Salida programada
+    $solo_hora_salida = Carbon::parse($horario->salida)->format('H:i:s');
+    $h_salida_prog = Carbon::parse($fechaRealStr . ' ' . $solo_hora_salida);
+
+    // Si la HSP es de madrugada (00:00 a 09:59), es del día siguiente
+    if ($h_salida_prog->hour < 10) {
+        $h_salida_prog->addDay();
+    }
+
+    // Si la salida real es de madrugada (00:00 a 09:59), es del día siguiente
+    if ($m_salida && $m_salida->hour < 10) {
+        $m_salida->addDay();
+    }
+
+    $minutosCalculados = 0;
+
+    // Validación
+    if (! $m_salida || $m_salida->lte($inicioVentana)) {
+        \Log::info("🌙 SIN NOCTURNO - {$apellidos}", [
+            'fecha_proceso' => $fechaRealStr,
+            'motivo' => 'Salió antes de las 22:00 o sin salida',
+            'salida_real' => $m_salida ? $m_salida->format('Y-m-d H:i') : 'NULA',
+            'salida_programada' => $h_salida_prog->format('Y-m-d H:i'),
+        ]);
+    } else {
+        // Inicio: El punto más tarde entre ingreso real y las 10 PM
+        $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
+
+        // Fin: Usamos la salida PROGRAMADA
+        $finConteo = $h_salida_prog;
+
+        // Tope legal 6 AM
+        if ($finConteo->gt($finVentana)) {
+            $finConteo = $finVentana;
+        }
+
+        if ($inicioConteo->lt($finConteo)) {
+            $minutosBrutos = $inicioConteo->diffInMinutes($finConteo);
+
+            // REDONDEO DE 30 EN 30 (sin residuo)
+            $minutosCalculados = floor($minutosBrutos / 30) * 30;
+            $nocturno += $minutosCalculados;
+
+            \Log::info("🌙 CÁLCULO OK - {$apellidos}", [
+                'fecha_proceso' => $fechaRealStr,
+                'ingreso_real' => $m_ingreso->format('Y-m-d H:i'),
+                'salida_real' => $m_salida->format('Y-m-d H:i'),
+                'salida_prog' => $h_salida_prog->format('Y-m-d H:i'),
+                'inicio_conteo' => $inicioConteo->format('Y-m-d H:i'),
+                'fin_conteo' => $finConteo->format('Y-m-d H:i'),
+                'min_brutos' => $minutosBrutos,
+                'min_final' => $minutosCalculados,
+                'acumulado' => $nocturno,
+            ]);
+        }
+    }
+}
+                        // ------------------------------------------------- Nocturno
 
                         $horasExtrasRaw = $marcacion->estado_horas_extra == 1
                             ? $horario->salida->diffInMinutes($marcacion->salida, false)
@@ -427,8 +504,12 @@ class ReporteController extends Controller
 
             return 0;
         }
-        if ($horario->estado !== 'L') {
-            \Log::info('⛔ Día NO laboral', [
+
+        $HIP_check = $horario->ingreso->format('H:i');
+        $HSP_check = $horario->salida->format('H:i');
+
+        if ($horario->estado !== 'L' && $HIP_check === '00:00' && $HSP_check === '00:00') {
+            \Log::info('⛔ Día de descanso sin programación (TD)', [
                 'fecha' => $horario->fecha,
                 'estado' => $horario->estado,
             ]);
@@ -442,6 +523,7 @@ class ReporteController extends Controller
         $HSP = $horario->salida;  // programado
         $HI_real = $marcacion->ingreso;
         $HS_real = $marcacion->salida;
+        $estado = $horario->estado;
         // =========================
         // 🔥 TIEMPO PROGRAMADO (BASE)
         // =========================
@@ -491,12 +573,13 @@ class ReporteController extends Controller
         // =========================
         // 🧾 LOG FINAL
         // =========================
+        /*
         \Log::info('📅 TOTAL DÍA (REPORTE OFICIAL) '.$horario->fecha."\n".
-
         json_encode([
             'fecha' => $horario->fecha,
             'jornada' => $empleado->jornada->nombre ?? 'N/A',
             'jornada_id' => $empleado->jornada_id,
+            'Estado' => $estado,
             '---PROGRAMADO---' => '---',
             'HIP' => $HIP->format('H:i'),
             'HSP' => $HSP->format('H:i'),
@@ -516,6 +599,7 @@ class ReporteController extends Controller
             'TOTAL_DIA_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
         ], JSON_PRETTY_PRINT)
         );
+        */
 
         return $totalDia;
     }
