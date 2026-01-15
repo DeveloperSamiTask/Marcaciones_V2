@@ -284,47 +284,77 @@ class SuspensionController extends Controller
             DB::transaction(function () use ($suspension, $request) {
                 if ($request->hasFile('sustento')) {
                     $file = $request->file('sustento');
-                    // $path = Storage::put('comprobantes', $file);
-                    $path = $file->store('suspensiones/'.$suspension->id, 'public'); // Almacenar el archivo en la carpeta public del storage
+                    $path = $file->store('suspensiones/'.$suspension->id, 'public');
+
+                    // 1. Actualizamos la amonestación actual
                     $suspension->update(['sustento' => "storage/$path", 'estado' => 1]);
 
                     $anioActual = $suspension->fecha->year;
 
-                    // Obtener todas las amonestaciones del mismo tipo con sustento (incluyendo la actual)
-                    $amonestaciones = Suspension::where('empleado_id', $suspension->empleado_id)
-                        ->whereYear('fecha', $anioActual)
-                        ->whereNull('codigo_asociado') // que no estén ya asociadas a una suspensión
+                    // --- INICIO DE LÓGICA NUEVA: BUSCAR SUSPENSIÓN INCOMPLETA ---
+
+                    // Buscamos si el empleado ya tiene una suspensión de este año y tipo
+                    // que tenga menos de 3 amonestaciones asociadas.
+                    $suspensionIncompleta = Suspension::where('empleado_id', $suspension->empleado_id)
                         ->where('tipo', $suspension->tipo)
-                        ->where('codigo', 'like', 'A%')
-                        ->where('estado', 1)
-                        ->whereNotNull('sustento')
-                        ->orderBy('fecha', 'asc')
-                        ->get();
+                        ->whereYear('fecha', $anioActual)
+                        ->where('codigo', 'like', 'S%') // Que sea una suspensión
+                        ->where(function ($q) use ($anioActual) {
+                            // Verificamos cuántas amonestaciones tienen su código
+                            $q->whereIn('codigo', function ($subquery) use ($anioActual) {
+                                $subquery->select('codigo_asociado')
+                                    ->from('suspensions')
+                                    ->whereYear('fecha', $anioActual)
+                                    ->groupBy('codigo_asociado')
+                                    ->havingRaw('COUNT(*) < 3');
+                            });
+                        })
+                        ->first();
 
-                    // Verificar si completamos 3 amonestaciones
-                    if ($amonestaciones->count() >= 3) {
-                        // Tomar solo las primeras 3 amonestaciones
-                        $tresAmonestaciones = $amonestaciones->take(3);
-                        $terceraSuspension = $tresAmonestaciones->last();
+                    if ($suspensionIncompleta) {
+                        // Si existe una con "hueco", metemos esta amonestación ahí
+                        $suspension->update(['codigo_asociado' => $suspensionIncompleta->codigo]);
+                        Log::info('Amonestación vinculada a suspensión existente: '.$suspensionIncompleta->codigo);
+                    } else {
+                        // --- LÓGICA ORIGINAL (MODIFICADA): SOLO SI NO HAY INCOMPLETAS ---
 
-                        // Crear la suspensión asociada
-                        $suspensionAsociada = Suspension::create([
-                            'empleado_id' => $suspension->empleado_id,
-                            'tipo' => $suspension->tipo,
-                            'fecha' => $terceraSuspension->fecha,
-                            'estado' => 0,
-                        ]);
-                        $suspensionAsociada->update(['codigo' => 'S'.now()->format('dmY').$suspensionAsociada->id]);
+                        $amonestacionesLibres = Suspension::where('empleado_id', $suspension->empleado_id)
+                            ->whereYear('fecha', $anioActual)
+                            ->whereNull('codigo_asociado')
+                            ->where('tipo', $suspension->tipo)
+                            ->where('codigo', 'like', 'A%')
+                            ->where('estado', 1)
+                            ->whereNotNull('sustento')
+                            ->orderBy('fecha', 'asc')
+                            ->get();
 
-                        $amonestacionIds = $amonestaciones->pluck('id')->toArray();
-                        Suspension::whereIn('id', $amonestacionIds)->update(['codigo_asociado' => $suspensionAsociada->codigo]);
+                        if ($amonestacionesLibres->count() >= 3) {
+                            $tresAmonestaciones = $amonestacionesLibres->take(3);
+                            $tercera = $tresAmonestaciones->last();
 
-                        Log::warning('⚠️ 3 amonestaciones detectadas, pero NO se crea suspensión automática');
+                            $suspensionAsociada = Suspension::create([
+                                'user_id' => $request->user()->id,
+                                'empleado_id' => $suspension->empleado_id,
+                                'tipo' => $suspension->tipo,
+                                'fecha' => $tercera->fecha,
+                                'estado' => 0,
+                            ]);
+
+                            $codigoS = 'S'.now()->format('dmY').$suspensionAsociada->id;
+                            $suspensionAsociada->update(['codigo' => $codigoS]);
+
+                            // Vinculamos exactamente esas 3
+                            Suspension::whereIn('id', $tresAmonestaciones->pluck('id'))
+                                ->update(['codigo_asociado' => $codigoS]);
+
+                            Log::info('Nueva suspensión creada: '.$codigoS);
+                        }
                     }
+                    // --- FIN DE LÓGICA NUEVA ---
                 }
             });
 
-            return back()->with('success', 'Sustento subido correctamente');
+            return back()->with('success', 'Sustento subido y procesado correctamente');
 
         } catch (Exception $e) {
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
