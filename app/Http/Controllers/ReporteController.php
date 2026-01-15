@@ -306,88 +306,88 @@ class ReporteController extends Controller
                         // ==========================================
                         // 4. CÁLCULO DE NOCTURNO (Regla Programación)
                         // ==========================================
-                       if (in_array($empleado->empresa_id, [1, 3, 4])) {
-    $apellidos = $empleado->apellidos;
+                        if (in_array($empleado->empresa_id, [1, 3, 4])) {
+                            $apellidos = $empleado->apellidos;
 
-    // 🔥 CAMBIO CRÍTICO: Usar la fecha del HORARIO (la fecha del día que estamos procesando)
-    // NO usar $m_ingreso porque esa es la marcación real que puede ser de otro día
-    $fechaRealStr = Carbon::parse($horario->fecha)->format('Y-m-d');
+                            // 🔥 CAMBIO CRÍTICO: Usar la fecha del HORARIO (la fecha del día que estamos procesando)
+                            // NO usar $m_ingreso porque esa es la marcación real que puede ser de otro día
+                            $fechaRealStr = Carbon::parse($horario->fecha)->format('Y-m-d');
 
-    $m_ingreso = $marcacion->ingreso->copy();
-    $m_salida = $marcacion->salida ? $marcacion->salida->copy() : null;
+                            $m_ingreso = $marcacion->ingreso->copy();
+                            $m_salida = $marcacion->salida ? $marcacion->salida->copy() : null;
 
-    // 🔥 NORMALIZAR: Las marcaciones deben estar en el contexto de la fecha del horario
-    // Si la marcación de ingreso es de madrugada pero el horario es del día anterior
-    if ($m_ingreso->format('Y-m-d') !== $fechaRealStr) {
-        // La marcación real está en otra fecha, la ajustamos al contexto del horario
-        $m_ingreso = Carbon::parse($fechaRealStr . ' ' . $m_ingreso->format('H:i:s'));
-    }
+                            // 🔥 NORMALIZAR: Las marcaciones deben estar en el contexto de la fecha del horario
+                            // Si la marcación de ingreso es de madrugada pero el horario es del día anterior
+                            if ($m_ingreso->format('Y-m-d') !== $fechaRealStr) {
+                                // La marcación real está en otra fecha, la ajustamos al contexto del horario
+                                $m_ingreso = Carbon::parse($fechaRealStr.' '.$m_ingreso->format('H:i:s'));
+                            }
 
-    if ($m_salida && $m_salida->format('Y-m-d') !== $fechaRealStr) {
-        $m_salida = Carbon::parse($fechaRealStr . ' ' . $m_salida->format('H:i:s'));
-    }
+                            if ($m_salida && $m_salida->format('Y-m-d') !== $fechaRealStr) {
+                                $m_salida = Carbon::parse($fechaRealStr.' '.$m_salida->format('H:i:s'));
+                            }
 
-    // Ventana basada en la fecha del horario
-    $inicioVentana = Carbon::parse($fechaRealStr . ' 22:00:00');
-    $finVentana = Carbon::parse($fechaRealStr . ' 22:00:00')->addDay()->setTime(6, 0, 0);
+                            // Ventana basada en la fecha del horario
+                            $inicioVentana = Carbon::parse($fechaRealStr.' 22:00:00');
+                            $finVentana = Carbon::parse($fechaRealStr.' 22:00:00')->addDay()->setTime(6, 0, 0);
 
-    // Salida programada
-    $solo_hora_salida = Carbon::parse($horario->salida)->format('H:i:s');
-    $h_salida_prog = Carbon::parse($fechaRealStr . ' ' . $solo_hora_salida);
+                            // Salida programada
+                            $solo_hora_salida = Carbon::parse($horario->salida)->format('H:i:s');
+                            $h_salida_prog = Carbon::parse($fechaRealStr.' '.$solo_hora_salida);
 
-    // Si la HSP es de madrugada (00:00 a 09:59), es del día siguiente
-    if ($h_salida_prog->hour < 10) {
-        $h_salida_prog->addDay();
-    }
+                            // Si la HSP es de madrugada (00:00 a 09:59), es del día siguiente
+                            if ($h_salida_prog->hour < 10) {
+                                $h_salida_prog->addDay();
+                            }
 
-    // Si la salida real es de madrugada (00:00 a 09:59), es del día siguiente
-    if ($m_salida && $m_salida->hour < 10) {
-        $m_salida->addDay();
-    }
+                            // Si la salida real es de madrugada (00:00 a 09:59), es del día siguiente
+                            if ($m_salida && $m_salida->hour < 10) {
+                                $m_salida->addDay();
+                            }
 
-    $minutosCalculados = 0;
+                            $minutosCalculados = 0;
 
-    // Validación
-    if (! $m_salida || $m_salida->lte($inicioVentana)) {
-        \Log::info("🌙 SIN NOCTURNO - {$apellidos}", [
-            'fecha_proceso' => $fechaRealStr,
-            'motivo' => 'Salió antes de las 22:00 o sin salida',
-            'salida_real' => $m_salida ? $m_salida->format('Y-m-d H:i') : 'NULA',
-            'salida_programada' => $h_salida_prog->format('Y-m-d H:i'),
-        ]);
-    } else {
-        // Inicio: El punto más tarde entre ingreso real y las 10 PM
-        $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
+                            // Validación
+                            if (! $m_salida || $m_salida->lte($inicioVentana)) {
+                                \Log::info("🌙 SIN NOCTURNO - {$apellidos}", [
+                                    'fecha_proceso' => $fechaRealStr,
+                                    'motivo' => 'Salió antes de las 22:00 o sin salida',
+                                    'salida_real' => $m_salida ? $m_salida->format('Y-m-d H:i') : 'NULA',
+                                    'salida_programada' => $h_salida_prog->format('Y-m-d H:i'),
+                                ]);
+                            } else {
+                                // Inicio: El punto más tarde entre ingreso real y las 10 PM
+                                $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
 
-        // Fin: Usamos la salida PROGRAMADA
-        $finConteo = $h_salida_prog;
+                                // Fin: Usamos la salida PROGRAMADA
+                                $finConteo = $h_salida_prog;
 
-        // Tope legal 6 AM
-        if ($finConteo->gt($finVentana)) {
-            $finConteo = $finVentana;
-        }
+                                // Tope legal 6 AM
+                                if ($finConteo->gt($finVentana)) {
+                                    $finConteo = $finVentana;
+                                }
 
-        if ($inicioConteo->lt($finConteo)) {
-            $minutosBrutos = $inicioConteo->diffInMinutes($finConteo);
+                                if ($inicioConteo->lt($finConteo)) {
+                                    $minutosBrutos = $inicioConteo->diffInMinutes($finConteo);
 
-            // REDONDEO DE 30 EN 30 (sin residuo)
-            $minutosCalculados = floor($minutosBrutos / 30) * 30;
-            $nocturno += $minutosCalculados;
+                                    // REDONDEO DE 30 EN 30 (sin residuo)
+                                    $minutosCalculados = floor($minutosBrutos / 30) * 30;
+                                    $nocturno += $minutosCalculados;
 
-            \Log::info("🌙 CÁLCULO OK - {$apellidos}", [
-                'fecha_proceso' => $fechaRealStr,
-                'ingreso_real' => $m_ingreso->format('Y-m-d H:i'),
-                'salida_real' => $m_salida->format('Y-m-d H:i'),
-                'salida_prog' => $h_salida_prog->format('Y-m-d H:i'),
-                'inicio_conteo' => $inicioConteo->format('Y-m-d H:i'),
-                'fin_conteo' => $finConteo->format('Y-m-d H:i'),
-                'min_brutos' => $minutosBrutos,
-                'min_final' => $minutosCalculados,
-                'acumulado' => $nocturno,
-            ]);
-        }
-    }
-}
+                                    \Log::info("🌙 CÁLCULO OK - {$apellidos}", [
+                                        'fecha_proceso' => $fechaRealStr,
+                                        'ingreso_real' => $m_ingreso->format('Y-m-d H:i'),
+                                        'salida_real' => $m_salida->format('Y-m-d H:i'),
+                                        'salida_prog' => $h_salida_prog->format('Y-m-d H:i'),
+                                        'inicio_conteo' => $inicioConteo->format('Y-m-d H:i'),
+                                        'fin_conteo' => $finConteo->format('Y-m-d H:i'),
+                                        'min_brutos' => $minutosBrutos,
+                                        'min_final' => $minutosCalculados,
+                                        'acumulado' => $nocturno,
+                                    ]);
+                                }
+                            }
+                        }
                         // ------------------------------------------------- Nocturno
 
                         $horasExtrasRaw = $marcacion->estado_horas_extra == 1
@@ -489,120 +489,100 @@ class ReporteController extends Controller
         ]);
     }
 
-    public function calcularTotalDia($horario, $marcacion, $empleado)
+
+
+   public function calcularTotalDia($horario, $marcacion, $empleado)
     {
-        \Log::info("👤 Empleado: {$empleado->apellidos}");
-        // =========================
-        // VALIDACIONES
-        // =========================
-        if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
+    \Log::info("👤 Iniciando cálculo para: {$empleado->apellidos}");
 
-            \Log::info('❌ Día descartado: datos incompletos', [
+    // =========================
+    // VALIDACIONES
+    // =========================
+    if (!$horario || !$marcacion || !$marcacion->ingreso || !$marcacion->salida) {
+        \Log::info('❌ Día descartado: datos incompletos', ['fecha' => $horario->fecha ?? 'SIN FECHA']);
+        return 0;
+    }
 
-                'fecha' => $horario->fecha ?? null,
-            ]);
+    $HIP_check = $horario->ingreso->format('H:i');
+    $HSP_check = $horario->salida->format('H:i');
+    $estado = $horario->estado;
 
-            return 0;
-        }
+    // Solo descartamos si es 00:00-00:00 Y NO es un día laboral.
+    if ($estado !== '1.LABORAL' && $HIP_check === '00:00' && $HSP_check === '00:00') {
+        \Log::info('⛔ Día de descanso sin programación', ['fecha' => $horario->fecha]);
+        return 0;
+    }
 
-        $HIP_check = $horario->ingreso->format('H:i');
-        $HSP_check = $horario->salida->format('H:i');
+    // =========================
+    // HORAS BASE (Sincronización de fechas)
+    // =========================
+    $HIP = $horario->ingreso->copy();
+    $HSP = $horario->salida->copy();
+    $HI_real = $marcacion->ingreso->copy();
+    $HS_real = $marcacion->salida->copy();
 
-        if ($horario->estado !== 'L' && $HIP_check === '00:00' && $HSP_check === '00:00') {
-            \Log::info('⛔ Día de descanso sin programación (TD)', [
-                'fecha' => $horario->fecha,
-                'estado' => $horario->estado,
-            ]);
+    // 🔥 CORRECCIÓN MEDIANOCHE: Si la salida es menor al ingreso, es el día siguiente
+    if ($HSP->lt($HIP)) {
+        $HSP->addDay();
+    }
 
-            return 0;
-        }
-        // =========================
-        // HORAS BASE
-        // =========================
-        $HIP = $horario->ingreso; // programad
-        $HSP = $horario->salida;  // programado
-        $HI_real = $marcacion->ingreso;
-        $HS_real = $marcacion->salida;
-        $estado = $horario->estado;
-        // =========================
-        // 🔥 TIEMPO PROGRAMADO (BASE)
-        // =========================
-        // Calculamos el tiempo que DEBIÓ trabajar según su horario
-        $horasTrabajadas = $HIP->diffInMinutes($HSP, false);
-        if ($horasTrabajadas < 0) {
-            $horasTrabajadas = 0;
-        }
-        // ========================
-        // ⏰ TARDANZA
-        // =========================
-        // Si llegó tarde, se resta ese tiempo
-        $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
-        if ($empleado->jornada_id === 1) {
-            $tiempoBrutoReal = $horasTrabajadas; // FT: Mantiene sus horas base
-        } else {
-            $tiempoBrutoReal = $horasTrabajadas - $tardanza; // PT: Pierde minutos por tardanza
-        }
-        // 🍽 REFRIGERIO
-        $refri = 0;
-        if ($empleado->jornada_id === 1) {
-            // 🔵 REGLA FT (Full-Time):
-            // Se descuenta 1h (60 min) solo si el tiempo laborado supera las 6 horas (360 min)
-            $refri = 60;
-        } else {
-            // 🟢 REGLA PT (Part-Time):
-            // Se descuenta 1h (60 min) SOLO si existen marcas reales de refrigerio
-            // Verificamos que no sean null y que no sean "00:00:00"
-            $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
-                                ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
-            if ($tieneMarcasRefri) {
-                $refri = 60;
-            }
-        }
-        // ✅ RESULTADO FINAL DEL DÍA
-        $totalDia = max(0, $tiempoBrutoReal - $refri);
-        // =========================
-        // ➕ EXTRA (informativo)
-        // =========================
-        // Tiempo trabajado DESPUÉS de la hora programada de salida
-        $extra = max(0, $HSP->diffInMinutes($HS_real, false));
-        // =========================
-        // ⏰ SALIDA ANTICIPADA (informativo)
-        // ========================
-        // Si salió ANTES de su hora programada
-        $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
-        // =========================
-        // 🧾 LOG FINAL
-        // =========================
-        /*
-        \Log::info('📅 TOTAL DÍA (REPORTE OFICIAL) '.$horario->fecha."\n".
+    // Si la marcación real de salida es de madrugada, sumamos día para que diff sea positivo
+    if ($HS_real->lt($HI_real)) {
+        $HS_real->addDay();
+    }
+
+    // =========================
+    // CÁLCULOS
+    // =========================
+    $horasTrabajadas = max(0, $HIP->diffInMinutes($HSP, false));
+    $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
+
+    // Jornada 1 = Full Time
+    $tiempoBrutoReal = ($empleado->jornada_id === 1) ? $horasTrabajadas : ($horasTrabajadas - $tardanza);
+
+    // Refrigerio
+    $refri = 0;
+    if ($empleado->jornada_id === 1) {
+        $refri = 60;
+    } else {
+        $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
+                            ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
+        if ($tieneMarcasRefri) { $refri = 60; }
+    }
+
+    $totalDia = max(0, $tiempoBrutoReal - $refri);
+
+    // Datos informativos para el Log
+    $extra = max(0, $HSP->diffInMinutes($HS_real, false));
+    $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
+
+    // =========================
+    // 🧾 LOG FINAL (REPORTE OFICIAL)
+    // =========================
+    \Log::info('📅 TOTAL DÍA: ' . $horario->fecha . " | " . $empleado->apellidos . "\n" .
         json_encode([
             'fecha' => $horario->fecha,
             'jornada' => $empleado->jornada->nombre ?? 'N/A',
-            'jornada_id' => $empleado->jornada_id,
-            'Estado' => $estado,
+            'estado' => $estado,
             '---PROGRAMADO---' => '---',
-            'HIP' => $HIP->format('H:i'),
-            'HSP' => $HSP->format('H:i'),
-            'horas_programadas_min' => $horasTrabajadas,
+            'HIP' => $HIP->format('Y-m-d H:i'),
+            'HSP' => $HSP->format('Y-m-d H:i'),
+            'minutos_base' => $horasTrabajadas,
             '---REAL---' => '---',
             'HI_real' => $HI_real->format('H:i'),
             'HS_real' => $HS_real->format('H:i'),
-            '---CÁLCULOS---' => '---',
-            'tardanza_min' => $tardanza,
-            'refri_descontado_min' => $refri,
-            // 'es_parttime_sin_refri' => $partTime,
-            '---EXTRAS---' => '---',
-            'extra_min' => $extra,
-            'anticipado_min' => $anticipado,
-            '---RESULTADO---' => '---',
-            'TOTAL_DIA_min' => $totalDia,
-            'TOTAL_DIA_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
+            '---RESULTADOS---' => '---',
+            'tardanza' => $tardanza,
+            'refri' => $refri,
+            'extra' => $extra,
+            'anticipado' => $anticipado,
+            'TOTAL_MINUTOS' => $totalDia,
+            'TOTAL_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
         ], JSON_PRETTY_PRINT)
-        );
-        */
+    );
 
-        return $totalDia;
-    }
+    return $totalDia;
+}
 
     private function calcularHorasRealesTrabajadas($marcaciones, $empleado)
     {

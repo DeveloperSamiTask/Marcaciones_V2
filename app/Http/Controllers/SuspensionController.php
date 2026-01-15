@@ -276,20 +276,6 @@ class SuspensionController extends Controller
 
     public function upload(Request $request, Suspension $suspension)
     {
-        /*
-          Log::info('=== UPLOAD DEBUG START ===');
-        Log::info('1. Suspension ID:', [$suspension->id]);
-        Log::info('2. Empleado ID:', [$suspension->empleado_id]);
-        Log::info('3. Es admin?', [$suspension->empleado->es_admin ?? 'no data']);
-        Log::info('4. File received?', [$request->hasFile('sustento')]);
-        Log::info('Relación empleado:', [
-            'empleado' => $suspension->empleado ? 'SÍ' : 'NO',
-            'cargo' => $suspension->empleado->cargo ?? 'NO CARGO',
-            'es_administrador' => $suspension->empleado->cargo === 'ADMINISTRADOR DE TIENDA' ? 'SÍ' : 'NO',
-        ]);
-        */
-
-
         $request->validate([
             'sustento' => 'required|file|mimes:pdf,jpeg,png,jpg|max:2048',
         ]);
@@ -302,8 +288,11 @@ class SuspensionController extends Controller
                     $path = $file->store('suspensiones/'.$suspension->id, 'public'); // Almacenar el archivo en la carpeta public del storage
                     $suspension->update(['sustento' => "storage/$path", 'estado' => 1]);
 
+                    $anioActual = $suspension->fecha->year;
+
                     // Obtener todas las amonestaciones del mismo tipo con sustento (incluyendo la actual)
                     $amonestaciones = Suspension::where('empleado_id', $suspension->empleado_id)
+                        ->whereYear('fecha', $anioActual)
                         ->whereNull('codigo_asociado') // que no estén ya asociadas a una suspensión
                         ->where('tipo', $suspension->tipo)
                         ->where('codigo', 'like', 'A%')
