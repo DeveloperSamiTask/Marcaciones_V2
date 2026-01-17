@@ -19,6 +19,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
@@ -71,13 +72,55 @@ class MarcacionController extends Controller
             return $grupo->unique('fecha');
         });
 
-        $lista = $empleados->flatMap(function ($empleado) use ($horarios, $horariosExtra, $marcaciones, $request) {
+        // --- PASO 1: OBTENER LOS PERMISOS (PARA DETECTAR COMPENSACIONES) ---
+        // Buscamos en la tabla permisos usando los mismos IDs de empleados y el rango de fechas
+        $permisos = \App\Models\Permiso::whereIn('empleado_id', $empleados->pluck('id'))
+            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->where('tipo_id', 4) // <--- Filtramos solo por Compensaciones
+            ->get()
+            ->groupBy('empleado_id');
+
+        \Log::info('Permisos Tipo 4 encontrados: '.$permisos->flatten()->count());
+
+        $lista = $empleados->flatMap(function ($empleado) use ($horarios, $horariosExtra, $marcaciones, $request, $permisos) {
             $fechas = CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
 
-            return collect($fechas)->map(function ($fecha) use ($empleado, $horarios, $horariosExtra, $marcaciones) {
+            return collect($fechas)->map(function ($fecha) use ($empleado, $horarios, $horariosExtra, $marcaciones, $permisos) {
+
+                $fechaStr = $fecha->format('Y-m-d');
                 $horario = $horarios->get($empleado->id)?->firstWhere('fecha', $fecha);
                 $horarioExtra = $horariosExtra->get($empleado->id);
                 $marcacion = $marcaciones->get($empleado->id)?->firstWhere('fecha', $fecha);
+
+                $permisoFila = null;
+                $refriEnOrigen = false;
+
+                if ($permisos->has($empleado->id)) {
+                    $permisoFila = $permisos->get($empleado->id)->first(function ($p) use ($fechaStr) {
+                        return \Carbon\Carbon::parse($p->fecha)->format('Y-m-d') === $fechaStr;
+                    });
+
+                    // SI HAY PERMISO, BUSCAMOS SI EN ESA FECHA DE ORIGEN HUBO REFRIGERIO
+                    if ($permisoFila) {
+                        // Extraemos la fecha del motivo (ej: "09/12/2025")
+                        preg_match('/(\d{2}\/\d{2}\/\d{4})/', $permisoFila->motivo, $matches);
+                        if (isset($matches[1])) {
+                            $fechaOrigen = \Carbon\Carbon::createFromFormat('d/m/Y', $matches[1])->format('Y-m-d');
+
+                            // Buscamos la marcación de esa fecha específica
+                            $marcacionOrigen = \App\Models\Marcacion::where('empleado_id', $empleado->id)
+                                ->whereDate('fecha', $fechaOrigen)
+                                ->first();
+
+                            $refriEnOrigen = $marcacionOrigen && $marcacionOrigen->ingreso_refri ? true : false;
+                        }
+                    }
+                }
+
+                // LOG DE CADA FILA (Opcional, solo para debug)
+                if ($permisoFila) {
+                    \Log::info("Empleado {$empleado->apellidos} tiene permiso el {$fechaStr}: ".$permisoFila->motivo);
+                }
 
                 $tardanza = 0;
                 $horas = 0;
@@ -89,9 +132,8 @@ class MarcacionController extends Controller
                     // Mantengo tu variable partTime por si la usas en otro lado,
                     // pero la lógica de descuento ahora es más precisa abajo.
 
-
-                   // --- 🚨 VALIDACIÓN TD: EVITAR EXTRAS EN DESCANSO ---
-                   $hip_check = $horario->ingreso->format('H:i');
+                    // --- 🚨 VALIDACIÓN TD: EVITAR EXTRAS EN DESCANSO ---
+                    $hip_check = $horario->ingreso->format('H:i');
                     $hsp_check = $horario->salida->format('H:i');
 
                     if ($hip_check === '00:00' && $hsp_check === '00:00') {
@@ -100,13 +142,16 @@ class MarcacionController extends Controller
                         return [
                             'empleado' => $empleado,
                             'fecha' => $fecha,
+                            'fecha_db' => $fechaStr,
                             'horario' => $horario,
                             'horariosExtra' => $horarioExtra,
                             'marcacion' => $marcacion,
+                            'permiso' => $permisoFila,
+                            'refri_en_origen' => $refriEnOrigen,
                             'horas' => 0,
                             'tardanza' => 0,
                             'extra' => 0,
-                             'anticipado' => 0,
+                            'anticipado' => 0,
                             'nocturno' => 0,
                         ];
                     }
@@ -225,6 +270,8 @@ class MarcacionController extends Controller
                     'horario' => $horario,
                     'horariosExtra' => $horarioExtra,
                     'marcacion' => $marcacion,
+                    'permiso' => $permisoFila,
+                    'refri_en_origen' => $refriEnOrigen,
                     'horas' => $horas,
                     'tardanza' => $tardanza,
                     'extra' => $extra,

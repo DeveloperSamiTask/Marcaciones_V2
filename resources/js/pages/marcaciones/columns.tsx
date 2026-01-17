@@ -415,7 +415,7 @@ import { sendSomething } from "./send";
             const marcacion = row.original.marcacion || {};
             const jornadaId = row.original.empleado?.jornada_id;
             const estado = horario?.estado ?? row.original.estado;
-
+            const permiso = row.original.permiso || {};
             const hipStr = horario?.ingreso || null;
             const hspStr = horario?.salida || null;
             const tieneRefrigerio = !!marcacion?.ingreso_refri;
@@ -427,19 +427,23 @@ import { sendSomething } from "./send";
             // --- LÓGICA DE CÁLCULO REFACTORIZADA ---
 
             // Caso 1: ESTADO COMPENSA (C)
+            // Caso 1: ESTADO COMPENSA (C)
             if (estado === 'C') {
-                // Solo calculamos si es PT (Jornada 2)
                 if (jornadaId === 2) {
                     const duracionProgramada = diffMinutes(hipStr, hspStr);
                     if (duracionProgramada !== null) {
                         minutesForRow = duracionProgramada;
-                        // Regla PT: Si programación >= 6h, descuenta 1h
-                        if (minutesForRow >= 360) {
+
+                        // Dato que viene del backend
+                        const marcoRefriEnFeriado = row.original.refri_en_origen || false;
+
+                        // Si marcó hoy O si el backend nos dijo que marcó en el feriado de origen
+                        if ((tieneRefrigerio || marcoRefriEnFeriado)) {
                             minutesForRow -= 60;
+                            console.log("⚖️ DESCUENTO APLICADO: Basado en refri_en_origen");
                         }
                     }
                 } else {
-                    // Si es FT (Jornada 1) y estado C, el total es 0
                     minutesForRow = 0;
                 }
             }
@@ -451,7 +455,7 @@ import { sendSomething } from "./send";
                     minutesForRow = duracionProgramada;
 
                     // Regla PT en Laboral: Solo si marcó refrigerio
-                    if (jornadaId === 2 && tieneRefrigerio && minutesForRow >= 360) {
+                    if (jornadaId === 2 && tieneRefrigerio) {
                         minutesForRow -= 60;
 
                     } else if (jornadaId === 1) {

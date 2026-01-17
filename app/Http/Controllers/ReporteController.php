@@ -489,100 +489,102 @@ class ReporteController extends Controller
         ]);
     }
 
-
-
-   public function calcularTotalDia($horario, $marcacion, $empleado)
+    public function calcularTotalDia($horario, $marcacion, $empleado)
     {
-    \Log::info("👤 Iniciando cálculo para: {$empleado->apellidos}");
+        \Log::info("👤 Iniciando cálculo para: {$empleado->apellidos}");
 
-    // =========================
-    // VALIDACIONES
-    // =========================
-    if (!$horario || !$marcacion || !$marcacion->ingreso || !$marcacion->salida) {
-        \Log::info('❌ Día descartado: datos incompletos', ['fecha' => $horario->fecha ?? 'SIN FECHA']);
-        return 0;
+        // =========================
+        // VALIDACIONES
+        // =========================
+        if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
+            \Log::info('❌ Día descartado: datos incompletos', ['fecha' => $horario->fecha ?? 'SIN FECHA']);
+
+            return 0;
+        }
+
+        $HIP_check = $horario->ingreso->format('H:i');
+        $HSP_check = $horario->salida->format('H:i');
+        $estado = $horario->estado;
+
+        // Solo descartamos si es 00:00-00:00 Y NO es un día laboral.
+        if ($estado !== '1.LABORAL' && $HIP_check === '00:00' && $HSP_check === '00:00') {
+            \Log::info('⛔ Día de descanso sin programación', ['fecha' => $horario->fecha]);
+
+            return 0;
+        }
+
+        // =========================
+        // HORAS BASE (Sincronización de fechas)
+        // =========================
+        $HIP = $horario->ingreso->copy();
+        $HSP = $horario->salida->copy();
+        $HI_real = $marcacion->ingreso->copy();
+        $HS_real = $marcacion->salida->copy();
+
+        // 🔥 CORRECCIÓN MEDIANOCHE: Si la salida es menor al ingreso, es el día siguiente
+        if ($HSP->lt($HIP)) {
+            $HSP->addDay();
+        }
+
+        // Si la marcación real de salida es de madrugada, sumamos día para que diff sea positivo
+        if ($HS_real->lt($HI_real)) {
+            $HS_real->addDay();
+        }
+
+        // =========================
+        // CÁLCULOS
+        // =========================
+        $horasTrabajadas = max(0, $HIP->diffInMinutes($HSP, false));
+        $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
+
+        // Jornada 1 = Full Time
+        $tiempoBrutoReal = ($empleado->jornada_id === 1) ? $horasTrabajadas : ($horasTrabajadas - $tardanza);
+
+        // Refrigerio
+        $refri = 0;
+        if ($empleado->jornada_id === 1) {
+            $refri = 60;
+        } else {
+            $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
+                                ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
+            if ($tieneMarcasRefri) {
+                $refri = 60;
+            }
+        }
+
+        $totalDia = max(0, $tiempoBrutoReal - $refri);
+
+        // Datos informativos para el Log
+        $extra = max(0, $HSP->diffInMinutes($HS_real, false));
+        $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
+
+        // =========================
+        // 🧾 LOG FINAL (REPORTE OFICIAL)
+        // =========================
+        \Log::info('📅 TOTAL DÍA: '.$horario->fecha.' | '.$empleado->apellidos."\n".
+            json_encode([
+                'fecha' => $horario->fecha,
+                'jornada' => $empleado->jornada->nombre ?? 'N/A',
+                'estado' => $estado,
+                '---PROGRAMADO---' => '---',
+                'HIP' => $HIP->format('Y-m-d H:i'),
+                'HSP' => $HSP->format('Y-m-d H:i'),
+                'minutos_base' => $horasTrabajadas,
+                '---REAL---' => '---',
+                'HI_real' => $HI_real->format('H:i'),
+                'HS_real' => $HS_real->format('H:i'),
+                '---RESULTADOS---' => '---',
+                'tardanza' => $tardanza,
+                'refri' => $refri,
+                'extra' => $extra,
+                'anticipado' => $anticipado,
+                'TOTAL_MINUTOS' => $totalDia,
+                'TOTAL_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
+            ], JSON_PRETTY_PRINT)
+        );
+
+        return $totalDia;
     }
-
-    $HIP_check = $horario->ingreso->format('H:i');
-    $HSP_check = $horario->salida->format('H:i');
-    $estado = $horario->estado;
-
-    // Solo descartamos si es 00:00-00:00 Y NO es un día laboral.
-    if ($estado !== '1.LABORAL' && $HIP_check === '00:00' && $HSP_check === '00:00') {
-        \Log::info('⛔ Día de descanso sin programación', ['fecha' => $horario->fecha]);
-        return 0;
-    }
-
-    // =========================
-    // HORAS BASE (Sincronización de fechas)
-    // =========================
-    $HIP = $horario->ingreso->copy();
-    $HSP = $horario->salida->copy();
-    $HI_real = $marcacion->ingreso->copy();
-    $HS_real = $marcacion->salida->copy();
-
-    // 🔥 CORRECCIÓN MEDIANOCHE: Si la salida es menor al ingreso, es el día siguiente
-    if ($HSP->lt($HIP)) {
-        $HSP->addDay();
-    }
-
-    // Si la marcación real de salida es de madrugada, sumamos día para que diff sea positivo
-    if ($HS_real->lt($HI_real)) {
-        $HS_real->addDay();
-    }
-
-    // =========================
-    // CÁLCULOS
-    // =========================
-    $horasTrabajadas = max(0, $HIP->diffInMinutes($HSP, false));
-    $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
-
-    // Jornada 1 = Full Time
-    $tiempoBrutoReal = ($empleado->jornada_id === 1) ? $horasTrabajadas : ($horasTrabajadas - $tardanza);
-
-    // Refrigerio
-    $refri = 0;
-    if ($empleado->jornada_id === 1) {
-        $refri = 60;
-    } else {
-        $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
-                            ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
-        if ($tieneMarcasRefri) { $refri = 60; }
-    }
-
-    $totalDia = max(0, $tiempoBrutoReal - $refri);
-
-    // Datos informativos para el Log
-    $extra = max(0, $HSP->diffInMinutes($HS_real, false));
-    $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
-
-    // =========================
-    // 🧾 LOG FINAL (REPORTE OFICIAL)
-    // =========================
-    \Log::info('📅 TOTAL DÍA: ' . $horario->fecha . " | " . $empleado->apellidos . "\n" .
-        json_encode([
-            'fecha' => $horario->fecha,
-            'jornada' => $empleado->jornada->nombre ?? 'N/A',
-            'estado' => $estado,
-            '---PROGRAMADO---' => '---',
-            'HIP' => $HIP->format('Y-m-d H:i'),
-            'HSP' => $HSP->format('Y-m-d H:i'),
-            'minutos_base' => $horasTrabajadas,
-            '---REAL---' => '---',
-            'HI_real' => $HI_real->format('H:i'),
-            'HS_real' => $HS_real->format('H:i'),
-            '---RESULTADOS---' => '---',
-            'tardanza' => $tardanza,
-            'refri' => $refri,
-            'extra' => $extra,
-            'anticipado' => $anticipado,
-            'TOTAL_MINUTOS' => $totalDia,
-            'TOTAL_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
-        ], JSON_PRETTY_PRINT)
-    );
-
-    return $totalDia;
-}
 
     private function calcularHorasRealesTrabajadas($marcaciones, $empleado)
     {
@@ -781,6 +783,8 @@ class ReporteController extends Controller
                     'REFRIGERIO' => 'refrigerio',
                     'NEGLIGENCIA' => 'negligencia',
                     'FALTA INJUSTIFICADA' => 'faltasInjustificadas',
+                    'INCUMPLIMIENTO' => 'incumplimiento', // <--- Agregado
+                    default => 'otros',
                 };
             });
 
