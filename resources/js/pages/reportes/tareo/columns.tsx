@@ -191,72 +191,15 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         accessorKey: 'compensa_horas',
         header: 'COMPENSA',
         cell: ({ row }) => {
-            const empleado = row.original.empleado;
-            const esPartTime = empleado.jornada_id === 2;
-            const diasCompensa = row.original.compensa_dias_total || 0;
-            const horarios = row.original.empleado?.horarios || []; // Array de horarios del empleado
+            const minutos = row.original.compensa_horas_totales || 0;
+            const esPartTime = row.original.empleado.jornada_id === 2;
 
-            if (!esPartTime || diasCompensa === 0) {
-                return <span className="text-gray-400">—</span>;
-            }
+            if (!esPartTime || minutos === 0) return <span className="text-gray-400">—</span>;
 
-            // Helper functions (las mismas que en TOTAL)
-            const parseTimeToMinutes = (time) => {
-                if (!time) return null;
-                const parts = String(time).split(':');
-                if (parts.length < 2) return null;
-                const hh = parseInt(parts[0], 10);
-                const mm = parseInt(parts[1], 10);
-                if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
-                return hh * 60 + mm;
-            };
-
-            const diffMinutes = (startStr, endStr) => {
-                const start = parseTimeToMinutes(startStr);
-                const end = parseTimeToMinutes(endStr);
-                if (start === null || end === null) return null;
-                if (end < start) return (end + 24 * 60) - start;
-                return end - start;
-            };
-
-            const formatMinutes = (mins) => {
-                if (mins === null || mins === undefined) return '00:00';
-                const h = Math.floor(mins / 60);
-                const m = mins % 60;
-                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            };
-
-            // Calcular total de horas en días C
-            let totalMinutos = 0;
-
-            // Filtrar solo horarios con estado C
-            const horariosCompensa = horarios.filter(h => h.estado === 'C');
-
-            horariosCompensa.forEach(horario => {
-                const ingresoStr = horario.ingreso || horario.entryTime || null;
-                const salidaStr = horario.salida || horario.exitTime || null;
-
-                if (ingresoStr && salidaStr) {
-                    // MISMA LÓGICA que la columna TOTAL
-                    const dur = diffMinutes(ingresoStr, salidaStr);
-
-                    if (dur !== null) {
-                        let minutosDia = dur;
-
-                        // APLICAR LA MISMA REGLA:
-                        // if (jornadaId !== 1 && minutesForRow >= 360) minutesForRow -= 60;
-                        if (empleado.jornada_id === 2 && minutosDia >= 360) {
-                            minutosDia -= 60; // Restar 1h refrigerio
-                        }
-
-                        totalMinutos += minutosDia;
-                    }
-                }
-            });
-
+            // Usamos tu función formatMinutes que ya tienes definida
             return (
-                <span className="text-blue-600 font-semibold">
-                    {formatMinutes(totalMinutos)}
+                <span className="text-blue-600 font-bold">
+                    {formatMinutes(minutos)}
                 </span>
             );
         }

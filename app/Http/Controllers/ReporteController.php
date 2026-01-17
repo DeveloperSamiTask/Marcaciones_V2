@@ -154,7 +154,13 @@ class ReporteController extends Controller
                     ->count();
             });
 
-        $lista = $empleados->map(function ($empleado) use ($feriadosPendientes, $inicio, $fin, $solicitudesHEPT) {
+        $permisosCompensa = \App\Models\Permiso::whereIn('empleado_id', $empleados->pluck('id'))
+            ->whereBetween('fecha', [$inicio, $fin]) // Rango del Tareo
+            ->where('tipo_id', 4)
+            ->get()
+            ->groupBy('empleado_id');
+
+        $lista = $empleados->map(function ($empleado) use ($feriadosPendientes, $inicio, $fin, $solicitudesHEPT, $permisosCompensa) {
 
             $heptEmpleado = $solicitudesHEPT->get($empleado->id, collect());
 
@@ -192,7 +198,61 @@ class ReporteController extends Controller
 
             $horasTrabajadasReales = 0;
 
+            $compensaHorasTotales = 0;
+
             foreach ($empleadoHorarios as $horario) {
+
+                /* ------------------- LOGICA DE COMPENSAS ------------------- */
+
+                if (in_array($horario->estado, ['C', 'CA', 'CHE'])) {
+                    $duracionProg = $horario->ingreso->diffInMinutes($horario->salida, false);
+                    if ($duracionProg < 0) {
+                        $duracionProg += 1440;
+                    }
+
+                    $minutosEsteDia = $duracionProg;
+
+                    // LÓGICA DE REFRIGERIO PARA COMPENSACIÓN
+                    if ($empleado->jornada_id == 2) {
+
+                        // Buscamos si este horario tiene un permiso asociado
+                        $permiso = $permisosCompensa->get($empleado->id)?->firstWhere('fecha', $horario->fecha);
+
+                        $descontarRefri = false;
+
+                        if ($permiso) {
+                            // Extraer fecha origen del motivo: "COMPENSACION del 09/12/2025"
+                            preg_match('/(\d{2}\/\d{2}\/\d{4})/', $permiso->motivo, $matches);
+
+                            if (isset($matches[1])) {
+                                $fechaOrigen = \Carbon\Carbon::createFromFormat('d/m/Y', $matches[1])->format('Y-m-d');
+
+                                // Buscamos la marcación del feriado de origen para ver si marcó refri
+                                $maruOrigen = \App\Models\Marcacion::where('empleado_id', $empleado->id)
+                                    ->whereDate('fecha', $fechaOrigen)
+                                    ->first();
+
+                                if ($maruOrigen && $maruOrigen->ingreso_refri) {
+                                    $descontarRefri = true;
+                                }
+                            }
+                        }
+
+                        // También checar si marcó refri HOY por si acaso
+                        $marcacionHoy = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
+                        if ($marcacionHoy && $marcacionHoy->ingreso_refri) {
+                            $descontarRefri = true;
+                        }
+
+                        if ($descontarRefri) {
+                            $minutosEsteDia -= 60;
+                        }
+                    }
+
+                    $compensaHorasTotales += $minutosEsteDia;
+                }
+
+                // ------------------- ------------------- ------------------- ------------------- ------------------- -------------------
 
                 if ($horario->ingreso->format('H:i') === '00:00' && $horario->salida->format('H:i') === '00:00') {
                     continue; // Si es descanso, ignora este día y pasa al siguiente
@@ -213,7 +273,7 @@ class ReporteController extends Controller
                 );
             }
 
-            // 2. CICLO DE CÁLCULO
+            // 2. ------------------- CICLO DE CÁLCULO -------------------
             $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$horasLaboradas, &$horasTrabajasReales, &$tardanza, &$empleadoHorarios, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35, &$fechasProcesadas) {
 
                 $fechaDia = $marcacion->fecha instanceof \Carbon\Carbon
@@ -374,7 +434,8 @@ class ReporteController extends Controller
                                     $minutosCalculados = floor($minutosBrutos / 30) * 30;
                                     $nocturno += $minutosCalculados;
 
-                                    \Log::info("🌙 CÁLCULO OK - {$apellidos}", [
+                                    /*
+                                         \Log::info("🌙 CÁLCULO OK - {$apellidos}", [
                                         'fecha_proceso' => $fechaRealStr,
                                         'ingreso_real' => $m_ingreso->format('Y-m-d H:i'),
                                         'salida_real' => $m_salida->format('Y-m-d H:i'),
@@ -385,6 +446,9 @@ class ReporteController extends Controller
                                         'min_final' => $minutosCalculados,
                                         'acumulado' => $nocturno,
                                     ]);
+
+                                     */
+
                                 }
                             }
                         }
@@ -405,19 +469,23 @@ class ReporteController extends Controller
                         }
                     } else {
                         // ✅ LOG: Casos donde no hay horario o no tiene salida programada
-                        \Log::warning('⚠️ Marcación sin horario programado válido', [
+                        /*
+                             \Log::warning('⚠️ Marcación sin horario programado válido', [
+
                             'empleado' => $empleado->apellidos,
                             'dni' => $empleado->dni,
                             'fecha' => $fechaDia,
                             'tiene_horario' => $horario ? 'SI' : 'NO',
                             'tiene_salida_programada' => ($horario && $horario->salida) ? 'SI' : 'NO',
                         ]);
+                        */
+
                     }
                 }
             });
 
             $compensaDias = $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum();
-            $compensaHorasTotales = 0;
+
             $compensaDiasCount = 0;
             $esPartTime = $empleado->jornada_id == 2;
 
@@ -425,7 +493,8 @@ class ReporteController extends Controller
             return [
                 'empleado' => $empleado,
                 'compensa_pendiente' => $feriadosPendientes->get($empleado->id, 0),
-                'compensa_horas_totales' => $compensaHorasTotales,
+                'compensa_horas_totales' => $compensaHorasTotales, // <--- MANDAMOS LOS MINUTOS YA CALCULADOS
+                //'compensa_horas_totales' => $compensaHorasTotales,
                 'compensa_dias_count' => $compensaDiasCount,
                 'compensa_dias_total' => $compensaDias,
                 'es_part_time' => $esPartTime,
