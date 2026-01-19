@@ -23,13 +23,14 @@ import { useState, forwardRef, useImperativeHandle, useEffect, useMemo } from 'r
 interface DataTableProps<TValue> {
     columns: ColumnDef<Marcacion, TValue>[];
     data: Marcacion[];
+    filters?: any;
 }
 
 export interface DataTableRef {
     getSelectedData: () => Marcacion[];
 }
 
-export const DataTable = forwardRef<DataTableRef, DataTableProps<TValue>>(({ columns, data }, ref) => {
+export const DataTable = forwardRef<DataTableRef, DataTableProps<TValue>>(({ columns, data,filters }, ref) => {
 
     const [rowSelection, setRowSelection] = useState({});
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -55,6 +56,10 @@ export const DataTable = forwardRef<DataTableRef, DataTableProps<TValue>>(({ col
         onRowSelectionChange: setRowSelection,
         filterFns: {
             fuzzy: fuzzyFilter,
+        },
+        // 3. AQUÍ ES DONDE SUCEDE LA MAGIA: El casillero META
+        meta: {
+            filters: filters,
         },
         state: {
             rowSelection,

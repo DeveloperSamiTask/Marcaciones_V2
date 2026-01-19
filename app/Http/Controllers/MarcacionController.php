@@ -513,6 +513,85 @@ class MarcacionController extends Controller
         }
     }
 
+    public function getHorasExtraDisponibles(Request $request, $empleadoId)
+    {
+        $inicio = $request->query('fechaInicio');
+        $fin = $request->query('fechaFin');
+
+        \Log::emergency('=== FUNCIÓN EJECUTÁNDOSE ===');
+        \Log::emergency('Empleado ID: '.$empleadoId);
+        \Log::emergency('Inicio: '.$inicio);
+        \Log::emergency('Fin: '.$fin);
+
+        $extras = \DB::table('marcacions as m')
+            ->join('horarios as h', function ($join) {
+                $join->on('h.fecha', '=', 'm.fecha')
+                    ->on('h.empleado_id', '=', 'm.empleado_id');
+            })
+            ->where('m.empleado_id', $empleadoId)
+            //->where('h.validado', 1)
+            ->where('m.estado_horas_extra', 1)
+            //->where('m.estado', 1)
+            ->whereNotNull('m.salida')
+            ->when($inicio && $fin, function ($q) use ($inicio, $fin) {
+                return $q->whereBetween('m.fecha', [$inicio, $fin]);
+            })
+            ->select(
+                'm.id',
+                'm.fecha',
+                'h.ingreso as h_ingreso',
+                'h.salida as h_salida',
+                'm.salida as m_salida'
+            )
+            ->get();
+
+        \Log::emergency('Registros obtenidos: '.$extras->count());
+
+        $extrasProcesadas = $extras->map(function ($registro) {
+            $hIngresoProg = \Carbon\Carbon::parse($registro->h_ingreso);
+            $hSalidaProg = \Carbon\Carbon::parse($registro->h_salida);
+            $mSalidaReal = \Carbon\Carbon::parse($registro->m_salida);
+
+            if ($hIngresoProg->format('H:i') === '00:00' && $hSalidaProg->format('H:i') === '00:00') {
+                return null;
+            }
+
+            if ($hSalidaProg->lte($hIngresoProg)) {
+                $hSalidaProg->addDay();
+            }
+
+            if ($mSalidaReal->hour < $hIngresoProg->hour) {
+                $mSalidaReal->addDay();
+            }
+
+            $diff = $hSalidaProg->diffInMinutes($mSalidaReal, false);
+
+            if ($diff >= 1440) {
+                $diff -= 1440;
+            }
+            if ($diff <= -1440) {
+                $diff += 1440;
+            }
+
+            $minutosExtra = $diff > 0 ? $diff : 0;
+            $ajustado = floor($minutosExtra / 30) * 30;
+
+            \Log::emergency("Fecha {$registro->fecha}: diff={$diff}, extra={$minutosExtra}, ajustado={$ajustado}");
+
+            return [
+                'id' => $registro->id,
+                'fecha' => \Carbon\Carbon::parse($registro->fecha)->format('Y-m-d'),
+                'extra' => (int) $ajustado,
+            ];
+        })
+            ->filter(fn ($item) => $item !== null && $item['extra'] >= 30)
+            ->values();
+
+        \Log::emergency('Extras procesadas: '.$extrasProcesadas->count());
+
+        return response()->json($extrasProcesadas);
+    }
+
     public function edicion(Request $request): Response
     {
         $filters = $request->validate([

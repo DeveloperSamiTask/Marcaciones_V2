@@ -195,85 +195,74 @@ import { sendSomething } from "./send";
 
     */
     {
-        accessorKey: 'ingreso', // ingreso de la marcacion
-        header: 'HI',
-        cell: ({ row }) => {
-            const horario = row.original.horario ?? false;
-            const marcacionId = row.original.marcacion?.id || 0;
-            const marcacionHora = row.original.marcacion?.ingreso ? row.original.marcacion?.ingreso?.substring(0, 5) : '';
-            const empleadoId = row.original.empleado.id;
-            const fecha = format(row.original.fecha, 'yyyy-MM-dd');
+    accessorKey: 'ingreso',
+    header: 'HI',
+    cell: ({ row, table }) => {
+        const tableMeta = table.options.meta as any;
+        const marcacionId = row.original.marcacion?.id || 0;
+        const marcacionHora = row.original.marcacion?.ingreso?.substring(0, 5) || '';
+        const empleadoId = row.original.empleado.id;
+        const fecha = format(row.original.fecha, 'yyyy-MM-dd');
+        const hsp = row.original.horario?.ingreso?.substring(0, 5) || '';
+        const fechaInicio = tableMeta?.filters?.fechaInicio;
+        const fechaFin = tableMeta?.filters?.fechaFin;
 
-            // NUEVA LÓGICA CORRECTA
+        const horariosValidado = row.original.horario?.validado ?? 1;
+        const estadoMarcacion = row.original.marcacion?.estado ?? 0;
 
-            const horariosValidado = row.original.horario?.validado ?? 1;
-            const estadoMarcacion = row.original.marcacion?.estado ?? 0;
+        let disabled = true;
+        if (horariosValidado === 0 && estadoMarcacion === 0) {
+            disabled = false;
+        }
 
-            let disabled;
-
-            // Estados 0 (pendiente/rechazado) ? EDICIÓN TOTAL
-            if (horariosValidado === 0 && estadoMarcacion === 0) {
-                disabled = false;
-            }
-
-            // Estados 1 (aprobado) o 2 (generado/bloqueado) ? BLOQUEADO
-            else if (horariosValidado === 1 || horariosValidado === 2 ||
-                estadoMarcacion === 1 || estadoMarcacion === 2) {
-                disabled = true;
-            }
-            // Cualquier otro caso ? BLOQUEADO por defecto
-            else {
-                disabled = true;
-            }
-
-            return row.original.marcacion?.ingreso ? (
-                <EditMarcacion
-                    key={`marcacion-ingreso-${empleadoId}-${fecha}-${marcacionId}`}
-                    disabled={disabled}
-                    marcacionId={marcacionId}
-                    marcacionHora={marcacionHora}
-                    tipo="ingreso"
-                    empleadoId={empleadoId}
-                />
-            ) : (
-                <CreateMarcacion key={`marcacion-ingreso-${fecha}-${empleadoId}`} disabled={disabled} empleadoId={empleadoId} fecha={fecha} tipo="ingreso" />
-            );
-        },
+        return row.original.marcacion?.ingreso ? (
+            <EditMarcacion
+                key={`marcacion-ingreso-${empleadoId}-${fecha}-${marcacionId}`}
+                disabled={disabled}
+                marcacionId={marcacionId}
+                marcacionHora={marcacionHora}
+                tipo="ingreso"
+                hsp={hsp}
+                empleadoId={empleadoId}
+                fechaInicio={fechaInicio}
+                fechaFin={fechaFin}
+                // ❌ NO PASAR horariosExtra - se carga desde el servidor
+            />
+        ) : (
+            <CreateMarcacion
+                key={`marcacion-ingreso-${fecha}-${empleadoId}`}
+                disabled={disabled}
+                empleadoId={empleadoId}
+                fecha={fecha}
+                tipo="ingreso"
+            />
+        );
     },
+},
     {
         accessorKey: 'ingreso_programado', // ingreso del horario
         header: 'HIP',
         cell: ({ row }) => <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.ingreso?.substring(0, 5) || '-'}</span>,
     },
     {
-        accessorKey: 'salida', // salida de la marcacion
+        accessorKey: 'salida',
         header: 'HS',
-        cell: ({ row }) => {
-            const horario = row.original.horario ?? false;
+        cell: ({ row, table }) => {
+            const tableMeta = table.options.meta as any;
             const marcacionId = row.original.marcacion?.id || 0;
-            const marcacionHora = row.original.marcacion?.salida ? row.original.marcacion?.salida?.substring(0, 5) : '';
+            const marcacionHora = row.original.marcacion?.salida?.substring(0, 5) || '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
             const hsp = row.original.horario?.salida?.substring(0, 5) || '';
+            const fechaInicio = tableMeta?.filters?.fechaInicio;
+            const fechaFin = tableMeta?.filters?.fechaFin;
 
             const horariosValidado = row.original.horario?.validado ?? 1;
             const estadoMarcacion = row.original.marcacion?.estado ?? 0;
 
-            let disabled;
-
-            // Estados 0 (pendiente/rechazado) ? EDICIÓN TOTAL
+            let disabled = true;
             if (horariosValidado === 0 && estadoMarcacion === 0) {
                 disabled = false;
-            }
-
-            // Estados 1 (aprobado) o 2 (generado/bloqueado) ? BLOQUEADO
-            else if (horariosValidado === 1 || horariosValidado === 2 ||
-                estadoMarcacion === 1 || estadoMarcacion === 2) {
-                disabled = true;
-            }
-            // Cualquier otro caso ? BLOQUEADO por defecto
-            else {
-                disabled = true;
             }
 
             return row.original.marcacion?.salida ? (
@@ -283,12 +272,20 @@ import { sendSomething } from "./send";
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
                     tipo="salida"
-                    horariosExtra={row.original.horariosExtra}
                     hsp={hsp}
                     empleadoId={empleadoId}
+                    fechaInicio={fechaInicio}
+                    fechaFin={fechaFin}
+                // ❌ NO PASAR horariosExtra - se carga desde el servidor
                 />
             ) : (
-                <CreateMarcacion key={`marcacion-salida-${fecha}-${empleadoId}`} disabled={disabled} empleadoId={empleadoId} fecha={fecha} tipo="salida" />
+                <CreateMarcacion
+                    key={`marcacion-salida-${fecha}-${empleadoId}`}
+                    disabled={disabled}
+                    empleadoId={empleadoId}
+                    fecha={fecha}
+                    tipo="salida"
+                />
             );
         },
     },
