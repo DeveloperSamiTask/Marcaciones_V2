@@ -34,7 +34,11 @@ export const columns: ColumnDef<Marcacion>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => format(row.original.fecha, 'dd/MM/yyyy')
+        cell: ({ row }) => {
+            // Usar split para evitar que el objeto Date le reste horas por la zona horaria de Lima
+            const [year, month, day] = row.original.fecha.split('-');
+            return `${day}/${month}/${year}`;
+        }
     },
     {
         accessorKey: 'hora',

@@ -137,6 +137,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                 </DialogDescription>
 
                 <form className="space-y-6" onSubmit={updateMarcacion}>
+
                     <div className="grid gap-2">
                         <Input
                             id="hora_nueva"
@@ -171,21 +172,6 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
                         />
                         <InputError message={errors.hora_nueva} />
                     </div>
-
-                    {horariosExtra && horariosExtra.length > 0 && horaDescontada && (
-                        <div className="grid gap-2 mt-2">
-                            <label htmlFor="horaDescontada" className="font-semibold">
-                                Diferencia de horas
-                            </label>
-                            <Input
-                                id="horaDescontada"
-                                type="text"
-                                value={horaDescontada}
-                                readOnly
-                                className="mt-1 block w-full"
-                            />
-                        </div>
-                    )}
 
 
                     {horariosExtra && horariosExtra.length > 0 && (

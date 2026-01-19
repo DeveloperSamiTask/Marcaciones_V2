@@ -204,7 +204,10 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                             ) : isFiltering ? (
                                 <LoadingSkeleton />
                             ) : (
-                                <DataTable key="datatable-marcaciones" columns={columns} data={marcaciones} ref={dataTableRef} />
+                                <DataTable key="datatable-marcaciones" columns={columns} data={marcaciones} ref={dataTableRef} filters={{
+                                    fechaInicio: filters.fechaInicio,
+                                    fechaFin: filters.fechaFin
+                                }} />
                             )}
                         </CardContent>
                     </Card>

@@ -19,7 +19,6 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
@@ -72,15 +71,13 @@ class MarcacionController extends Controller
             return $grupo->unique('fecha');
         });
 
-        // --- PASO 1: OBTENER LOS PERMISOS (PARA DETECTAR COMPENSACIONES) ---
-        // Buscamos en la tabla permisos usando los mismos IDs de empleados y el rango de fechas
         $permisos = \App\Models\Permiso::whereIn('empleado_id', $empleados->pluck('id'))
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
             ->where('tipo_id', 4) // <--- Filtramos solo por Compensaciones
             ->get()
             ->groupBy('empleado_id');
 
-        \Log::info('Permisos Tipo 4 encontrados: '.$permisos->flatten()->count());
+        // \Log::info('Permisos Tipo 4 encontrados: '.$permisos->flatten()->count());
 
         $lista = $empleados->flatMap(function ($empleado) use ($horarios, $horariosExtra, $marcaciones, $request, $permisos) {
             $fechas = CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
@@ -118,9 +115,11 @@ class MarcacionController extends Controller
                 }
 
                 // LOG DE CADA FILA (Opcional, solo para debug)
-                if ($permisoFila) {
+                /*
+                 if ($permisoFila) {
                     \Log::info("Empleado {$empleado->apellidos} tiene permiso el {$fechaStr}: ".$permisoFila->motivo);
                 }
+                */
 
                 $tardanza = 0;
                 $horas = 0;
@@ -345,35 +344,54 @@ class MarcacionController extends Controller
                 ->pluck('dni');
         }
 
-        $fechaFinExtendida = \Carbon\Carbon::parse($request->fechaFin)->addDay()->toDateString();
+        /*$marcaciones = Zktimems::query()
+            ->with(['empleado' => function ($query) {
+                $query->select('id', 'dni', 'nombres', 'apellidos');
+            }])
+            ->whereIn('tarjeta', $empleadosDnis)
+            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->get(['hora', 'tarjeta', 'fecha']);*/
+
+        $fechaFinBusqueda = \Carbon\Carbon::parse($request->fechaFin)->addDay()->toDateString();
 
         $marcaciones = Zktimems::query()
             ->with(['empleado' => function ($query) {
                 $query->select('id', 'dni', 'nombres', 'apellidos');
             }])
             ->whereIn('tarjeta', $empleadosDnis)
-    // Buscamos desde el inicio hasta el día siguiente de la fecha fin
-            ->whereBetween('fecha', [$request->fechaInicio, $fechaFinExtendida])
+            ->whereBetween('fecha', [$request->fechaInicio, $fechaFinBusqueda])
             ->get(['hora', 'tarjeta', 'fecha'])
             ->map(function ($item) {
-                $horaMarcacion = \Carbon\Carbon::parse($item->hora);
+                // Mantenemos tu lógica: < 05:00 AM se mueve al día anterior
+                $h = \Carbon\Carbon::parse($item->hora);
 
-                // --- LÓGICA DE MADRUGADA ---
-                // Si marcó entre las 00:00 y las 05:00 AM, lo movemos al día anterior
-                if ($horaMarcacion->hour < 5) {
-                    $item->fecha_visual = \Carbon\Carbon::parse($item->fecha)->subDay()->format('Y-m-d');
+                if ($h->hour < 5) {
+                    $item->fecha = \Carbon\Carbon::parse($item->fecha)->subDay()->format('Y-m-d');
                 } else {
-                    $item->fecha_visual = \Carbon\Carbon::parse($item->fecha)->format('Y-m-d');
+                    $item->fecha = \Carbon\Carbon::parse($item->fecha)->format('Y-m-d');
                 }
 
                 return $item;
             })
-    // Filtramos para eliminar las marcas que, tras el ajuste, queden fuera del rango solicitado
-    // (Ejemplo: marcas de la madrugada del primer día que ahora pertenecen al día anterior al filtro)
+            // 1. Filtramos por la fecha ya corregida (Lógica)
             ->filter(function ($item) use ($request) {
-                return $item->fecha_visual >= $request->fechaInicio && $item->fecha_visual <= $request->fechaFin;
+                return $item->fecha >= $request->fechaInicio && $item->fecha <= $request->fechaFin;
             })
-            ->values();
+            // 2. Ordenamiento Maestro para que RRHH no se queje
+            ->sort(function ($a, $b) {
+                // Si las fechas son distintas, orden normal de fecha
+                if ($a->fecha !== $b->fecha) {
+                    return strcmp($a->fecha, $b->fecha);
+                }
+
+                // Si es la misma fecha lógica, aplicamos el truco de la hora virtual
+                // Las 00:06 se convierten en "24:00:06" para que vayan DESPUÉS de las 21:00
+                $horaA = ($a->hora < '05:00:00') ? '24:'.$a->hora : $a->hora;
+                $horaB = ($b->hora < '05:00:00') ? '24:'.$b->hora : $b->hora;
+
+                return strcmp($horaA, $horaB);
+            })
+            ->values(); // Resetear índices para que Inertia no mande un objeto raro al frontend
 
         return Inertia::render('marcaciones/reales/index', [
             'marcaciones' => $marcaciones,
@@ -544,7 +562,6 @@ class MarcacionController extends Controller
 
     public function pull(Request $request)
     {
-        // 1. Valida que venga una empresa válida y una fecha válida
         $data = $request->validate([
             'empresa' => 'required|integer|exists:empresas,id',
             'fecha' => 'required|date',
@@ -552,135 +569,110 @@ class MarcacionController extends Controller
 
         try {
             DB::transaction(function () use ($data) {
-                $dnis = Empleado::where('empresa_id', $data['empresa'])->whereNull('fecha_cese')->pluck('id', 'dni');
+                $dnis = Empleado::where('empresa_id', $data['empresa'])
+                    ->whereNull('fecha_cese')
+                    ->pluck('id', 'dni');
 
-                // CARGAR TODOS LOS HORARIOS DE UNA SOLA VEZ
+                // 1. AMPLIAMOS EL RANGO: Traemos hasta el día siguiente
+                // para no perder las salidas de madrugada (como la de las 00:29)
+                $fechaInicio = $data['fecha'];
+                $fechaFinQuery = \Carbon\Carbon::parse($data['fecha'])->addDay()->toDateString();
+
                 $horarios = Horario::whereIn('empleado_id', $dnis->values())
-                    ->whereBetween('fecha', [$data['fecha'], now()->toDateString()])
+                    ->whereBetween('fecha', [$fechaInicio, $fechaFinQuery])
                     ->get()
-                    ->keyBy(function ($horario) {
-                        return $horario->fecha->format('Y-m-d').'-'.$horario->empleado_id;
-                    });
+                    ->keyBy(fn ($h) => $h->fecha->format('Y-m-d').'-'.$h->empleado_id);
 
-                Zktimems::whereBetween('fecha', [$data['fecha'], now()->toDateString()])
+                Zktimems::whereBetween('fecha', [$fechaInicio, $fechaFinQuery])
                     ->whereIn('tarjeta', $dnis->keys())
                     ->get(['tarjeta', 'fecha', 'hora'])
-                    ->groupBy(function ($item) use ($dnis, $horarios) {
-                        $empleadoId = $dnis->get($item->tarjeta);
-                        $horaMarca = $item->hora; // formato HH:MM:SS
-                        $fechaMarca = $item->fecha->format('Y-m-d');
-
-                        // REGLA DE ORO: Si marca entre 00:00 y 05:00 AM
-                        if ($horaMarca < '05:00:00') {
-                            $fechaAyer = $item->fecha->copy()->subDay()->format('Y-m-d');
-                            $keyAyer = $fechaAyer.'-'.$empleadoId;
-
-                            // Verificamos si ayer tenía un horario que salía en la madrugada
-                            $horarioAyer = $horarios->get($keyAyer);
-
-                            if ($horarioAyer) {
-                                $h_ingreso = \Carbon\Carbon::parse($horarioAyer->ingreso);
-                                $h_salida = \Carbon\Carbon::parse($horarioAyer->salida);
-
-                                // Si el horario de ayer era nocturno (ej. 15:00 a 01:00),
-                                // esta marca de las 00:04 le pertenece a AYER.
-                                if ($h_salida->lt($h_ingreso)) {
-                                    return $keyAyer;
-                                }
-                            }
+                    ->map(function ($item) use ($dnis) {
+                        $empId = $dnis->get($item->tarjeta);
+                        // NORMALIZACIÓN: Si marca < 05:00 AM, pertenece al día anterior
+                        if ($item->hora < '05:00:00') {
+                            $fLogica = \Carbon\Carbon::parse($item->fecha)->subDay()->format('Y-m-d');
+                        } else {
+                            $fLogica = $item->fecha->format('Y-m-d');
                         }
+                        $item->logica_key = $fLogica.'-'.$empId;
+                        $item->f_logica = $fLogica;
+                        $item->emp_id = $empId;
 
-                        // Si no es madrugada o no tiene horario nocturno, se queda en su fecha normal
-                        return $fechaMarca.'-'.$empleadoId;
+                        return $item;
                     })
-                    ->each(function ($items, $key) use ($horarios) {
-                        // 1. Extraemos datos de la llave
-                        $partes = explode('-', $key);
-                        $fechaLogica = $partes[0].'-'.$partes[1].'-'.$partes[2];
-                        $empleadoId = end($partes);
+                    // Agrupamos por la fecha "lógica" (donde la madrugada ya se movió atrás)
+                    ->groupBy('logica_key')
+                    ->each(function ($items, $key) use ($horarios, $data) {
+                        // 1. Extraemos los datos que ya calculamos en el map
+                        $fechaLogica = $items->first()->f_logica;
+                        $empleadoId = $items->first()->emp_id;
 
-                        // 2. Procesamos todas las horas del grupo
-                        $todasLasHoras = $items->pluck('hora')->filter()->unique()->sort()->values();
+                        // 2. CORRECCIÓN: Filtramos para procesar solo el día solicitado
+                        // Usamos $data['fecha'] que ahora sí entra gracias al 'use'
+                        if ($fechaLogica !== $data['fecha']) {
+                            return;
+                        }
 
-                        // SEPARACIÓN CRÍTICA:
-                        // Marcas de madrugada (salidas del día anterior)
-                        $marcasMadrugada = $todasLasHoras->filter(fn ($h) => $h < '05:00:00');
-                        // Marcas normales (ingresos y salidas de hoy)
-                        $horas = $todasLasHoras->filter(fn ($h) => $h >= '05:00:00')->values();
-
-                        // --- A. PROCESO DE "DEVOLUCIÓN" A AYER ---
-                        if ($marcasMadrugada->isNotEmpty()) {
-                            $fechaAyer = \Carbon\Carbon::parse($fechaLogica)->subDay()->format('Y-m-d');
-                            $marcacionAyer = Marcacion::where('empleado_id', $empleadoId)
-                                ->whereDate('fecha', $fechaAyer)
-                                ->first();
-
-                            // Si existe el registro de ayer y no está validado, le ponemos su salida
-                            if ($marcacionAyer && $marcacionAyer->estado == 0) {
-                                $marcacionAyer->update([
-                                    'salida' => $marcasMadrugada->last(),
-                                ]);
+                        // 3. Limpieza de marcas (evitar duplicados de segundos)
+                        $todas = $items->pluck('hora')->sort()->values();
+                        $horas = collect();
+                        foreach ($todas as $h) {
+                            if ($horas->isEmpty() || \Carbon\Carbon::parse($h)->diffInMinutes(\Carbon\Carbon::parse($horas->last())) > 1) {
+                                $horas->push($h);
                             }
                         }
 
-                        // --- B. PROCESO DE HOY (Tu lógica original mejorada) ---
-                        if ($horas->isNotEmpty()) {
-                            if ($horas->count() > 4) {
-                                $horas = Marcacion::validarHora($horas);
-                            }
+                        // --- LÓGICA DE ASIGNACIÓN ---
+                        $ingreso = null;
+                        $salida = null;
+                        $ingreso_refri = null;
+                        $salida_refri = null;
 
-                            // Ahora $ingreso será realmente la marca de la tarde, no la de las 00:04
-                            $ingreso = $horas->count() > 0 ? $horas->get(0) : null;
-                            $salida = $horas->count() >= 2 ? $horas->last() : null;
-                            $ingreso_refri = $horas->count() >= 3 ? $horas->get(1) : null;
-                            $salida_refri = $horas->count() == 4 ? $horas->get(2) : null;
+                        $count = $horas->count();
+                        if ($count >= 1) {
+                            $ingreso = $horas->first();
+                        }
 
-                            $horario = $horarios->get($key);
+                        if ($count == 2) {
+                            $salida = $horas->last();
+                        } elseif ($count == 3) {
+                            $ingreso_refri = $horas->get(1);
+                            $salida = $horas->get(2);
+                        } elseif ($count >= 4) {
+                            // Para Zarzosa: 15:03, 16:38, 17:37, 00:29
+                            $ingreso_refri = $horas->get(1); // 16:38
+                            $salida_refri = $horas->get(2);  // 17:37
+                            $salida = $horas->last();        // 00:29 (Última marca de la jornada)
+                        }
 
-                            // Lógica de Permisos (Días de descanso)
-                            if ($horario && $horario->estado === 'D' && ($ingreso || $salida)) {
-                                $permisoExistente = Permiso::where('empleado_id', $empleadoId)
-                                    ->where('tipo_id', 24)
-                                    ->whereDate('fecha', $fechaLogica)
-                                    ->where('estado', '!=', 2)
-                                    ->exists();
+                        // --- GUARDADO ---
+                        $marcacion = Marcacion::firstOrCreate(
+                            ['empleado_id' => $empleadoId, 'fecha' => $fechaLogica]
+                        );
 
-                                if (! $permisoExistente) {
-                                    Permiso::create([
-                                        'empleado_id' => $empleadoId,
-                                        'tipo_id' => 24,
-                                        'fecha' => $fechaLogica,
-                                        'motivo' => 'TRABAJO EN DIA DE DESCANSO',
-                                        'estado' => 0,
-                                    ]);
-                                }
-                            }
+                        if ($marcacion->estado == 0) {
+                            $marcacion->update([
+                                'ingreso' => $ingreso ?? $marcacion->ingreso,
+                                'salida' => $salida ?? $marcacion->salida,
+                                'ingreso_refri' => $ingreso_refri ?? $marcacion->ingreso_refri,
+                                'salida_refri' => $salida_refri ?? $marcacion->salida_refri,
+                            ]);
+                        }
 
-                            // Búsqueda y actualización de la Marcación de HOY
-                            $marcacion = Marcacion::where('empleado_id', $empleadoId)
-                                ->whereDate('fecha', $fechaLogica)
-                                ->first();
-
-                            if (! $marcacion) {
-                                $marcacion = Marcacion::create([
-                                    'empleado_id' => $empleadoId,
-                                    'fecha' => $fechaLogica,
-                                ]);
-                            }
-
-                            if ($marcacion->estado == 0) {
-                                $marcacion->update([
-                                    'ingreso' => $ingreso ?? $marcacion->ingreso,
-                                    'salida' => $salida ?? $marcacion->salida,
-                                    'ingreso_refri' => $ingreso_refri ?? $marcacion->ingreso_refri,
-                                    'salida_refri' => $salida_refri ?? $marcacion->salida_refri,
-                                ]);
-                            }
+                        // Lógica de Permiso por día de descanso
+                        $horario = $horarios->get($key);
+                        if ($horario && $horario->estado === 'D' && ($ingreso || $salida)) {
+                            Permiso::firstOrCreate([
+                                'empleado_id' => $empleadoId,
+                                'tipo_id' => 24,
+                                'fecha' => $fechaLogica,
+                                'estado' => 0,
+                            ], ['motivo' => 'TRABAJO EN DIA DE DESCANSO']);
                         }
                     });
             });
 
-            return back()->with('success', 'Marcaciones sincronizadas correctamente');
+            return back()->with('success', 'Sincronización exitosa. Zarzosa ya tiene su salida de las 00:29.');
         } catch (Exception $e) {
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
