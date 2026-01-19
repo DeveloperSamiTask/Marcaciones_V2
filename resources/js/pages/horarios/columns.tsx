@@ -23,7 +23,7 @@ const estadoBadgeVariants = {
     V: { label: '9.VACACIONES', variant: 'info' },
     M: { label: '10.DESCANSO MEDICO', variant: 'warning' },
     SN: { label: '11.SUSPENSIÓN POR NEGLIGENCIA', variant: 'destructive' },
-    ST: { label: '12.SUSP. POR ACUMULACION DE TARDANZAS', variant: 'destructive' },
+    ST: { label: '12.SUSP. POR ACUMULACION DE AMONESTACIONES', variant: 'destructive' },
     SFI: { label: '13.SUSP. POR FALTA INJUSTIFICADA', variant: 'destructive' },
     FI: { label: '14.FALTA INJUSTIFICADA', variant: 'destructive' },
     FJ: { label: '15.FALTA JUSTIFICADA', variant: 'destructive' },

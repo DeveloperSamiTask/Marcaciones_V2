@@ -12,14 +12,15 @@ import { format } from 'date-fns';
 
 type TipoMarcacion = 'ingreso' | 'salida' | 'ingreso_refri' | 'salida_refri';
 
-export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabled, horariosExtra, hsp }:
-    { marcacionId: number, tipo: TipoMarcacion, marcacionHora: string, disabled: boolean, horariosExtra?: Horario[] }) {
+export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabled, horariosExtra, hsp, empleadoId, }:
+    { marcacionId: number, tipo: TipoMarcacion, marcacionHora: string, disabled: boolean, horariosExtra?: Horario[], empleadoId: number, }) {
     const horaInput = useRef<HTMLInputElement>(null);
     const motivoInput = useRef<HTMLTextAreaElement>(null);
     const [open, setOpen] = useState(false);
 
     // CORREGIDO: usa los mismos nombres que en los inputs
     const { data, patch, processing, setData, reset, errors, clearErrors } = useForm<{
+        empleado_id: empleadoId,
         hora_original: string;
         hora_nueva: string;
         tipo: string;
@@ -28,6 +29,7 @@ export default function EditMarcacion({ marcacionId, tipo, marcacionHora, disabl
         hsp: string;
         tiempo_extra: string;
     }>({
+        empleado_id: empleadoId,
         hora_original: marcacionHora,
         hora_nueva: marcacionHora,
         tipo: tipo,

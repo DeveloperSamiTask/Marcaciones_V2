@@ -345,13 +345,35 @@ class MarcacionController extends Controller
                 ->pluck('dni');
         }
 
+        $fechaFinExtendida = \Carbon\Carbon::parse($request->fechaFin)->addDay()->toDateString();
+
         $marcaciones = Zktimems::query()
             ->with(['empleado' => function ($query) {
                 $query->select('id', 'dni', 'nombres', 'apellidos');
             }])
             ->whereIn('tarjeta', $empleadosDnis)
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->get(['hora', 'tarjeta', 'fecha']);
+    // Buscamos desde el inicio hasta el día siguiente de la fecha fin
+            ->whereBetween('fecha', [$request->fechaInicio, $fechaFinExtendida])
+            ->get(['hora', 'tarjeta', 'fecha'])
+            ->map(function ($item) {
+                $horaMarcacion = \Carbon\Carbon::parse($item->hora);
+
+                // --- LÓGICA DE MADRUGADA ---
+                // Si marcó entre las 00:00 y las 05:00 AM, lo movemos al día anterior
+                if ($horaMarcacion->hour < 5) {
+                    $item->fecha_visual = \Carbon\Carbon::parse($item->fecha)->subDay()->format('Y-m-d');
+                } else {
+                    $item->fecha_visual = \Carbon\Carbon::parse($item->fecha)->format('Y-m-d');
+                }
+
+                return $item;
+            })
+    // Filtramos para eliminar las marcas que, tras el ajuste, queden fuera del rango solicitado
+    // (Ejemplo: marcas de la madrugada del primer día que ahora pertenecen al día anterior al filtro)
+            ->filter(function ($item) use ($request) {
+                return $item->fecha_visual >= $request->fechaInicio && $item->fecha_visual <= $request->fechaFin;
+            })
+            ->values();
 
         return Inertia::render('marcaciones/reales/index', [
             'marcaciones' => $marcaciones,

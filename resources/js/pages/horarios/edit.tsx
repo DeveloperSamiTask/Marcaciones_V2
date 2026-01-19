@@ -42,7 +42,7 @@ const estadoOptions = [
     { value: 'V', label: 'VACACIONES' },
     { value: 'M', label: 'DESCANSO MEDICO' },
     { value: 'SN', label: 'SUSPENSIÓN POR NEGLIGENCIA' },
-    { value: 'ST', label: 'SUSP. POR ACUMULACION DE TARDANZAS' },
+    { value: 'ST', label: 'SUSP. POR ACUMULACION DE AMONESTACIONES' },
     { value: 'SFI', label: 'SUSP. POR FALTA INJUSTIFICADA' },
     { value: 'FI', label: 'FALTA INJUSTIFICADA' },
     { value: 'FJ', label: 'FALTA JUSTIFICADA' },
