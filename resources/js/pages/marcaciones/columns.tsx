@@ -194,56 +194,62 @@ export const columns: ColumnDef<Marcacion>[] = [
 import { sendSomething } from "./send";
 
     */
+    //HI
     {
-    accessorKey: 'ingreso',
-    header: 'HI',
-    cell: ({ row, table }) => {
-        const tableMeta = table.options.meta as any;
-        const marcacionId = row.original.marcacion?.id || 0;
-        const marcacionHora = row.original.marcacion?.ingreso?.substring(0, 5) || '';
-        const empleadoId = row.original.empleado.id;
-        const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-        const hsp = row.original.horario?.ingreso?.substring(0, 5) || '';
-        const fechaInicio = tableMeta?.filters?.fechaInicio;
-        const fechaFin = tableMeta?.filters?.fechaFin;
+        accessorKey: 'ingreso',
+        header: 'HI',
+        cell: ({ row, table }) => {
+            const tableMeta = table.options.meta as any;
+            const marcacionId = row.original.marcacion?.id || 0;
+            const marcacionHora = row.original.marcacion?.ingreso?.substring(0, 5) || '';
+            const empleadoId = row.original.empleado.id;
+            const fecha = format(row.original.fecha, 'yyyy-MM-dd');
+            const hsp = row.original.horario?.ingreso?.substring(0, 5) || '';
+            const fechaInicio = tableMeta?.filters?.fechaInicio;
+            const fechaFin = tableMeta?.filters?.fechaFin;
 
-        const horariosValidado = row.original.horario?.validado ?? 1;
-        const estadoMarcacion = row.original.marcacion?.estado ?? 0;
+            const horariosValidado = row.original.horario?.validado ?? 1;
+            const estadoMarcacion = row.original.marcacion?.estado ?? 0;
 
-        let disabled = true;
-        if (horariosValidado === 0 && estadoMarcacion === 0) {
-            disabled = false;
-        }
+            let disabled = true;
+            if (horariosValidado === 0 && estadoMarcacion === 0) {
+                disabled = false;
+            }
 
-        return row.original.marcacion?.ingreso ? (
-            <EditMarcacion
-                key={`marcacion-ingreso-${empleadoId}-${fecha}-${marcacionId}`}
-                disabled={disabled}
-                marcacionId={marcacionId}
-                marcacionHora={marcacionHora}
-                tipo="ingreso"
-                hsp={hsp}
-                empleadoId={empleadoId}
-                fechaInicio={fechaInicio}
-                fechaFin={fechaFin}
+            return row.original.marcacion?.ingreso ? (
+                <EditMarcacion
+                    key={`marcacion-ingreso-${empleadoId}-${fecha}-${marcacionId}`}
+                    disabled={disabled}
+                    marcacionId={marcacionId}
+                    marcacionHora={marcacionHora}
+                    tipo="ingreso"
+                    hsp={hsp}
+                    empleadoId={empleadoId}
+                    fechaInicio={fechaInicio}
+                    fechaFin={fechaFin}
                 // ❌ NO PASAR horariosExtra - se carga desde el servidor
-            />
-        ) : (
-            <CreateMarcacion
-                key={`marcacion-ingreso-${fecha}-${empleadoId}`}
-                disabled={disabled}
-                empleadoId={empleadoId}
-                fecha={fecha}
-                tipo="ingreso"
-            />
-        );
+                />
+            ) : (
+                <CreateMarcacion
+                    key={`marcacion-ingreso-${fecha}-${empleadoId}`}
+                    disabled={disabled}
+                    empleadoId={empleadoId}
+                    fecha={fecha}
+                    tipo="ingreso"
+                />
+            );
+        },
     },
-},
+
+
     {
         accessorKey: 'ingreso_programado', // ingreso del horario
         header: 'HIP',
         cell: ({ row }) => <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.ingreso?.substring(0, 5) || '-'}</span>,
+
     },
+
+    //HS
     {
         accessorKey: 'salida',
         header: 'HS',
@@ -289,6 +295,8 @@ import { sendSomething } from "./send";
             );
         },
     },
+
+
     {
         accessorKey: 'salida_programada', // salida del horario
         header: 'HSP',
@@ -517,6 +525,7 @@ import { sendSomething } from "./send";
     },
 
     // ELIMINA completamente la columna horas_log
+    //Tardanza
     {
         accessorKey: 'tardanza', // tardanza
         header: 'TARDANZA',
@@ -525,6 +534,7 @@ import { sendSomething } from "./send";
             return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
         }
     },
+    //HE
     {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',

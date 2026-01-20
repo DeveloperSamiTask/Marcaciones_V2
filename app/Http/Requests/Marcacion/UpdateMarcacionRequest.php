@@ -22,14 +22,19 @@ class UpdateMarcacionRequest extends FormRequest
     public function rules(): array
     {
         return [
-
-            'hora_original' => 'nullable|date_format:H:i',
+            // Obligatorios para saber qué editar y por qué
             'motivo' => 'required|string|max:255',
-            'tipo' => ['nullable', 'in:ingreso,salida,ingreso_refri,salida_refri'],
+            'tipo' => ['required', 'in:ingreso,salida,ingreso_refri,salida_refri'],
 
-            'hora_nueva' => 'nullable|date_format:H:i',
-            'tiempo_extra' => 'nullable|date_format:H:i',
-            'hsp' => 'nullable|date_format:H:i',
+            // El ID de la bolsa de tiempo que el usuario eligió en el select
+            // Lo validamos para asegurarnos que exista en la tabla marcacions
+            'extraSeleccionada' => 'nullable|exists:marcacions,id',
+
+            // Estos pueden venir del front como referencia, pero el Back manda
+            'hora_original' => 'nullable',
+            'hora_nueva' => 'nullable',
+            'hsp' => 'nullable',
+            'tiempo_extra' => 'nullable',
         ];
     }
 }

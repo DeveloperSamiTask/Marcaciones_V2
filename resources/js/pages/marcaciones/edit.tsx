@@ -46,6 +46,7 @@ export default function EditMarcacion({
         extraSeleccionada?: string;
         hsp: string;
         tiempo_extra: string;
+
     }>({
         empleado_id: empleadoId,
         hora_original: marcacionHora,
@@ -146,13 +147,20 @@ export default function EditMarcacion({
     const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
 
-        console.log("=== ENVIANDO AL BACKEND ===");
-        console.log("hora_original:", data.hora_original);
-        console.log("hora_nueva:", data.hora_nueva);
-        console.log("tiempo_extra:", data.tiempo_extra);
-        console.log("extraSeleccionada:", data.extraSeleccionada);
-        console.log("hsp:", hsp);
-        console.log("tipo:", data.tipo);
+        // console.log("=== ENVIANDO AL BACKEND ===");
+        // console.log("hora_original:", data.hora_original);
+        // console.log("hora_nueva:", data.hora_nueva);
+        // console.log("tiempo_extra:", data.tiempo_extra);
+        // console.log("extraSeleccionada:", data.extraSeleccionada);
+        // console.log("hsp:", hsp);
+        // console.log("tipo:", data.tipo);
+
+        console.log("🚀 ENVIANDO AL BACKEND:", {
+            extraId: data.extraSeleccionada,
+            tiempoARestar: data.tiempo_extra,
+            nuevaHora: data.hora_nueva
+        });
+
 
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
@@ -186,6 +194,8 @@ export default function EditMarcacion({
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     };
 
+
+
     console.log("🎨 RENDERIZANDO - extrasFiltradas.length:", extrasFiltradas.length);
 
     // DEBUG: Inspeccionar TODO lo que entra al componente
@@ -214,7 +224,7 @@ export default function EditMarcacion({
         }, 500);
     }
 
-    console.log("🎨 RENDERIZANDO - extrasFiltradas.length:", extrasFiltradas.length);
+    // console.log("🎨 RENDERIZANDO - extrasFiltradas.length:", extrasFiltradas.length);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -232,6 +242,7 @@ export default function EditMarcacion({
                 <form className="space-y-6" onSubmit={updateMarcacion}>
                     <div className="grid gap-2">
                         <Input
+                            readOnly
                             id="hora_nueva"
                             type="time"
                             name="hora_nueva"
@@ -256,7 +267,8 @@ export default function EditMarcacion({
                         <InputError message={errors.hora_nueva} />
                     </div>
 
-                    {!cargandoExtras && extrasFiltradas.length > 0 && (
+
+                    {!cargandoExtras && listaExtrasBack && listaExtrasBack.length > 0 && (
                         <div className="grid gap-2">
                             <label htmlFor="extraSeleccionada" className="font-semibold">
                                 Selecciona una hora extra disponible:

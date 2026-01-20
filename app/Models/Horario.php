@@ -21,13 +21,14 @@ class Horario extends Model
         'descripcion',
         'estado',
         'validado',
+        'calculo_manual'
     ];
 
     protected function casts(): array
     {
         return [
             'fecha' => 'date',
-            'extra' => 'datetime:H:i',
+            //'extra' => 'datetime:H:i',
             'ingreso' => 'datetime:H:i',
             'salida' => 'datetime:H:i',
         ];
