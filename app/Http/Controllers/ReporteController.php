@@ -364,63 +364,52 @@ class ReporteController extends Controller
 
                         // ------------------------------------------------- Nocturno
                         // ==========================================
-                        // 4. CÁLCULO DE NOCTURNO (Regla Programación)
+                        // 4. CÁLCULO DE NOCTURNO (Unificado y Corregido)
                         // ==========================================
                         if (in_array($empleado->empresa_id, [1, 3, 4])) {
                             $apellidos = $empleado->apellidos;
-
-                            // 🔥 CAMBIO CRÍTICO: Usar la fecha del HORARIO (la fecha del día que estamos procesando)
-                            // NO usar $m_ingreso porque esa es la marcación real que puede ser de otro día
                             $fechaRealStr = Carbon::parse($horario->fecha)->format('Y-m-d');
 
                             $m_ingreso = $marcacion->ingreso->copy();
                             $m_salida = $marcacion->salida ? $marcacion->salida->copy() : null;
 
-                            // 🔥 NORMALIZAR: Las marcaciones deben estar en el contexto de la fecha del horario
-                            // Si la marcación de ingreso es de madrugada pero el horario es del día anterior
+                            // 1. Normalizar Ingreso al contexto del horario
                             if ($m_ingreso->format('Y-m-d') !== $fechaRealStr) {
-                                // La marcación real está en otra fecha, la ajustamos al contexto del horario
                                 $m_ingreso = Carbon::parse($fechaRealStr.' '.$m_ingreso->format('H:i:s'));
                             }
 
-                            if ($m_salida && $m_salida->format('Y-m-d') !== $fechaRealStr) {
-                                $m_salida = Carbon::parse($fechaRealStr.' '.$m_salida->format('H:i:s'));
-                            }
-
-                            // Ventana basada en la fecha del horario
-                            $inicioVentana = Carbon::parse($fechaRealStr.' 22:00:00');
-                            $finVentana = Carbon::parse($fechaRealStr.' 22:00:00')->addDay()->setTime(6, 0, 0);
-
-                            // Salida programada
+                            // 2. Preparar Salida Programada (HSP)
                             $solo_hora_salida = Carbon::parse($horario->salida)->format('H:i:s');
                             $h_salida_prog = Carbon::parse($fechaRealStr.' '.$solo_hora_salida);
-
-                            // Si la HSP es de madrugada (00:00 a 09:59), es del día siguiente
                             if ($h_salida_prog->hour < 10) {
                                 $h_salida_prog->addDay();
                             }
 
-                            // Si la salida real es de madrugada (00:00 a 09:59), es del día siguiente
-                            if ($m_salida && $m_salida->hour < 10) {
-                                $m_salida->addDay();
+                            // 3. Normalizar Salida Real (incluyendo ajustes de día)
+                            if ($m_salida) {
+                                if ($m_salida->format('Y-m-d') !== $fechaRealStr) {
+                                    $m_salida = Carbon::parse($fechaRealStr.' '.$m_salida->format('H:i:s'));
+                                }
+                                if ($m_salida->hour < 10) {
+                                    $m_salida->addDay();
+                                }
                             }
 
-                            $minutosCalculados = 0;
+                            // 4. Definir Ventana Legal (10 PM a 6 AM)
+                            $inicioVentana = Carbon::parse($fechaRealStr.' 22:00:00');
+                            $finVentana = $inicioVentana->copy()->addDay()->setTime(6, 0, 0);
 
-                            // Validación
+                            // 5. Lógica de Cálculo
                             if (! $m_salida || $m_salida->lte($inicioVentana)) {
-                                \Log::info("🌙 SIN NOCTURNO - {$apellidos}", [
-                                    'fecha_proceso' => $fechaRealStr,
-                                    'motivo' => 'Salió antes de las 22:00 o sin salida',
-                                    'salida_real' => $m_salida ? $m_salida->format('Y-m-d H:i') : 'NULA',
-                                    'salida_programada' => $h_salida_prog->format('Y-m-d H:i'),
-                                ]);
+                                // No hay nocturno si no hay salida o si salió antes de las 10 PM
+                                \Log::info("🌙 SIN NOCTURNO - {$apellidos} - Salió antes de las 22:00");
                             } else {
                                 // Inicio: El punto más tarde entre ingreso real y las 10 PM
                                 $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
 
-                                // Fin: Usamos la salida PROGRAMADA
-                                $finConteo = $h_salida_prog;
+                                // FIN (CAMBIO CLAVE): Comparamos la salida REAL (editada) contra la PROGRAMADA
+                                // Así, si editas la salida para compensar, el nocturno sube.
+                                $finConteo = $m_salida->lt($h_salida_prog) ? $m_salida : $h_salida_prog;
 
                                 // Tope legal 6 AM
                                 if ($finConteo->gt($finVentana)) {
@@ -430,29 +419,21 @@ class ReporteController extends Controller
                                 if ($inicioConteo->lt($finConteo)) {
                                     $minutosBrutos = $inicioConteo->diffInMinutes($finConteo);
 
-                                    // REDONDEO DE 30 EN 30 (sin residuo)
+                                    // REDONDEO DE 30 EN 30
                                     $minutosCalculados = floor($minutosBrutos / 30) * 30;
+
+                                    // Sumamos al acumulado del nocturno del tareo
                                     $nocturno += $minutosCalculados;
 
-                                    /*
-                                         \Log::info("🌙 CÁLCULO OK - {$apellidos}", [
-                                        'fecha_proceso' => $fechaRealStr,
-                                        'ingreso_real' => $m_ingreso->format('Y-m-d H:i'),
-                                        'salida_real' => $m_salida->format('Y-m-d H:i'),
-                                        'salida_prog' => $h_salida_prog->format('Y-m-d H:i'),
-                                        'inicio_conteo' => $inicioConteo->format('Y-m-d H:i'),
-                                        'fin_conteo' => $finConteo->format('Y-m-d H:i'),
-                                        'min_brutos' => $minutosBrutos,
-                                        'min_final' => $minutosCalculados,
-                                        'acumulado' => $nocturno,
+                                    \Log::info("🌙 CÁLCULO OK - {$apellidos}", [
+                                        'salida_usada' => $finConteo->format('H:i'),
+                                        'min_nocturnos' => $minutosCalculados,
                                     ]);
-
-                                     */
-
                                 }
                             }
                         }
-                        // ------------------------------------------------- Nocturno
+                        // ------------------------------------------------- Fin Nocturno
+
 
                         $horasExtrasRaw = $marcacion->estado_horas_extra == 1
                             ? $horario->salida->diffInMinutes($marcacion->salida, false)
@@ -494,7 +475,7 @@ class ReporteController extends Controller
                 'empleado' => $empleado,
                 'compensa_pendiente' => $feriadosPendientes->get($empleado->id, 0),
                 'compensa_horas_totales' => $compensaHorasTotales, // <--- MANDAMOS LOS MINUTOS YA CALCULADOS
-                //'compensa_horas_totales' => $compensaHorasTotales,
+                // 'compensa_horas_totales' => $compensaHorasTotales,
                 'compensa_dias_count' => $compensaDiasCount,
                 'compensa_dias_total' => $compensaDias,
                 'es_part_time' => $esPartTime,

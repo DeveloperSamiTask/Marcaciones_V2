@@ -214,7 +214,6 @@ class MarcacionController extends Controller
                     $esManual = (int) ($horario->calculo_manual ?? 0);
 
                     if ($esManual === 0) {
-                        // 2. Si no es manual, calculamos la diferencia real HS - HSP
                         if ($m_salida) {
                             // Calculamos los minutos de diferencia
                             $minutosExtraReales = max(0, $h_salida->diffInMinutes($m_salida, false));
@@ -233,17 +232,20 @@ class MarcacionController extends Controller
                             }
                         } else {
                             // Si no hay salida, el extra es cero
-                            if ($horario) {
+                             if ($horario) {
                                 $horario->extra = '00:00';
                                 $horario->save();
-                            }
+                             }
                         }
-                    } else {
-                        // 4. Si es 1, el index NO toca la base de datos.
-                        // Mantiene lo que puso tu método 'update' (ej: los 10 min de Ascencio)
-                        \Log::info("Horario ID {$horario->id}: Se respetó el descuento manual y se saltó el cálculo automático.");
                     }
-                    // ------------
+                    // 2. Si no es manual, calculamos la diferencia real HS - HSP
+
+                    // } else {
+                    //     // 4. Si es 1, el index NO toca la base de datos.
+                    //     // Mantiene lo que puso tu método 'update' (ej: los 10 min de Ascencio)
+                    //     //  \Log::info("Horario ID {$horario->id}: Se respetó el descuento manual y se saltó el cálculo automático.");
+                    // }
+                    // ------------ agregar extra a la bd
 
                     $anticipado = $horasAnticipado;
 
@@ -281,7 +283,7 @@ class MarcacionController extends Controller
                             $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
 
                             // Fin: SIEMPRE usamos la salida PROGRAMADA (no la real)
-                            $finConteo = $h_salida_prog;
+                            $finConteo = $m_salida->lt($h_salida_prog) ? $m_salida : $h_salida_prog;
 
                             // El fin tampoco puede pasarse de las 6 AM
                             if ($finConteo->gt($finVentana)) {
@@ -504,28 +506,28 @@ class MarcacionController extends Controller
 
         try {
             DB::transaction(function () use ($data, $marcacione) {
-                \Log::info('---------- INICIO DE PROCESO DE DESCUENTO ----------');
-                \Log::info("Marcación Actual ID: {$marcacione->id} | Empleado: {$marcacione->empleado_id}");
+                // \Log::info('---------- INICIO DE PROCESO DE DESCUENTO ----------');
+                // \Log::info("Marcación Actual ID: {$marcacione->id} | Empleado: {$marcacione->empleado_id}");
 
                 // 1. Fuente de horas extra
                 $fuenteExtra = Marcacion::findOrFail($data['extraSeleccionada']);
-                \Log::info("Bolsa Seleccionada (Marcación ID): {$fuenteExtra->id} | Fecha Bolsa: {$fuenteExtra->fecha}");
+                // \Log::info("Bolsa Seleccionada (Marcación ID): {$fuenteExtra->id} | Fecha Bolsa: {$fuenteExtra->fecha}");
 
                 $horarioFuente = Horario::where('fecha', $fuenteExtra->fecha)
                     ->where('empleado_id', $fuenteExtra->empleado_id)
                     ->firstOrFail();
 
-                \Log::info("Registro en Horarios encontrado. ID Horario: {$horarioFuente->id} | Valor 'extra' actual: '{$horarioFuente->extra}'");
+                // \Log::info("Registro en Horarios encontrado. ID Horario: {$horarioFuente->id} | Valor 'extra' actual: '{$horarioFuente->extra}'");
 
                 // 2. Cálculo de minutos
                 $partesExtra = explode(':', $horarioFuente->extra);
                 $minutosReales = ($partesExtra[0] * 60) + $partesExtra[1];
                 $minutosAConsumir = floor($minutosReales / 30) * 30;
 
-                \Log::info("Cálculo: Minutos Reales: {$minutosReales}m | Bloque de 30 a consumir: {$minutosAConsumir}m");
+                // \Log::info("Cálculo: Minutos Reales: {$minutosReales}m | Bloque de 30 a consumir: {$minutosAConsumir}m");
 
                 if ($minutosAConsumir <= 0) {
-                    \Log::error("ERROR: No hay bloques de 30 min. Minutos reales: {$minutosReales}");
+                    // \Log::error("ERROR: No hay bloques de 30 min. Minutos reales: {$minutosReales}");
                     throw new \Exception('La bolsa seleccionada ya no tiene bloques de 30 minutos disponibles.');
                 }
 
@@ -540,7 +542,7 @@ class MarcacionController extends Controller
                     $horaCarbon->addMinutes($minutosAConsumir);
                 }
                 $nuevaHora = $horaCarbon->format('H:i:s');
-                \Log::info("Ajuste de Hora: Tipo: {$data['tipo']} | Original: {$horaOriginalParaLog} -> Nueva: {$nuevaHora}");
+                // \Log::info("Ajuste de Hora: Tipo: {$data['tipo']} | Original: {$horaOriginalParaLog} -> Nueva: {$nuevaHora}");
 
                 // 4. Auditoría
                 MarcacionEdicion::create([
@@ -561,30 +563,43 @@ class MarcacionController extends Controller
                 $mins = $nuevoSaldoMinutos % 60;
                 $nuevoValorExtraString = sprintf('%02d:%02d:00', $horas, $mins);
 
-                \Log::info("Nuevo saldo calculado: {$nuevoSaldoMinutos}m | String resultante: '{$nuevoValorExtraString}'");
+                // ---- Logica para , determinar de donde salen las HE
+                $fechaDestino = \Carbon\Carbon::parse($marcacione->fecha)->format('d/m');
+                $mensajeDestino = "Usado {$minutosAConsumir}m para el {$fechaDestino}";
+
+                DB::table('horarios')
+                    ->where('id', $horarioFuente->id)
+                    ->update([
+                        'extra' => $nuevoValorExtraString,
+                        'destino_compensacion' => $mensajeDestino, // <--- Nueva columna
+                        'calculo_manual' => 1,
+                    ]);
+
+                // ---- Logica para , determinar de donde salen las HE
+                // \Log::info("Nuevo saldo calculado: {$nuevoSaldoMinutos}m | String resultante: '{$nuevoValorExtraString}'");
 
                 // Usamos Query Builder para forzar la escritura y ver el resultado
-                $afectado = DB::table('horarios')
-                    ->where('id', $horarioFuente->id)
-                    ->update(['extra' => $nuevoValorExtraString]);
+                // $afectado = DB::table('horarios')
+                //     ->where('id', $horarioFuente->id)
+                //     ->update(['extra' => $nuevoValorExtraString]);
 
-                \Log::info('Resultado del UPDATE en tabla Horarios: '.($afectado ? 'ÉXITO (1 fila)' : 'FALLO (0 filas afectas)'));
+                // \Log::info('Resultado del UPDATE en tabla Horarios: '.($afectado ? 'ÉXITO (1 fila)' : 'FALLO (0 filas afectas)'));
 
                 // 7. Bloqueo de disponibilidad
                 if ($nuevoSaldoMinutos < 30) {
                     $fuenteExtra->update(['estado_horas_extra' => 1]);
-                    \Log::info('Bolsa agotada (Saldo < 30). Se cambió estado_horas_extra a 0.');
+                    // \Log::info('Bolsa agotada (Saldo < 30). Se cambió estado_horas_extra a 0.');
                 }
 
-                \Log::info('---------- FIN DE PROCESO EXITOSO ----------');
+                // \Log::info('---------- FIN DE PROCESO EXITOSO ----------');
             });
 
             return back()->with('success', 'Marcación corregida y horas extra descontadas correctamente.');
 
         } catch (\Exception $e) {
-            \Log::error('---------- ERROR CRÍTICO ----------');
-            \Log::error('Mensaje: '.$e->getMessage());
-            \Log::error('Archivo: '.$e->getFile().' Línea: '.$e->getLine());
+            // \Log::error('---------- ERROR CRÍTICO ----------');
+            // \Log::error('Mensaje: '.$e->getMessage());
+            // \Log::error('Archivo: '.$e->getFile().' Línea: '.$e->getLine());
 
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }

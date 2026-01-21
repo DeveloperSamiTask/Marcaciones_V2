@@ -10,7 +10,7 @@ import EditMarcacion from './edit';
 import { Checkbox } from '@/components/ui/checkbox';
 import UploadMarcacion from './upload';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-
+import { RefreshCw } from "lucide-react";
 
 const estadoBadgeVariants = {
     L: { label: '1.LABORAL', variant: 'success' },
@@ -534,27 +534,59 @@ import { sendSomething } from "./send";
             return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {tardanza ? formatMinutes(tardanza) : '00:00'} </span>)
         }
     },
-    //HE
+
+    // Extra
     {
-        accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
+        accessorKey: 'extra',
         header: 'EXTRA',
         cell: ({ row }) => {
-            const extra = row.original.extra;
+            const extraBD = row.original.horario?.extra;
             const estadoExtra = row.original.marcacion?.estado_horas_extra as keyof typeof estadoHorasExtra;
+            const destino = row.original.horario?.destino_compensacion;
+
+            // --- LÓGICA DE ICONO DINÁMICO ---
+            // Si hay destino, usamos un icono de "Reciclar/Compensar", si no, el del estado normal
+            const renderIcon = () => {
+                if (destino) {
+                    return <RefreshCw className="w-4 text-blue-500 animate-spin-slow" title="Horas compensadas" />;
+                }
+                return estadoHorasExtra[estadoExtra]?.icon;
+            };
 
             return (
-                <span className={extra ? 'text-red-600 font-semibold flex gap-2' : 'text-green-600 font-semibold flex gap-2'}>
-                    {extra ? formatMinutes(extra) : '00:00'}
-                    {extra > 0 ?
-                        (<Tooltip>
+                <span className={extraBD && extraBD !== '00:00' ? 'text-red-600 font-semibold flex items-center gap-2' : 'text-green-600 font-semibold flex items-center gap-2'}>
+                    {extraBD ? extraBD.substring(0, 5) : '00:00'}
+
+                    {extraBD && extraBD !== '00:00' && (
+                        <Tooltip>
                             <TooltipTrigger asChild>
-                                {estadoHorasExtra[estadoExtra].icon}
+                                <span className="cursor-help">
+                                    {renderIcon()}
+                                </span>
                             </TooltipTrigger>
-                            <TooltipContent color='red'>
-                                <p>{estadoHorasExtra[estadoExtra].label}</p>
+                            <TooltipContent className="bg-slate-900 text-white p-2 text-xs shadow-lg border-l-4 border-blue-500">
+                                <div className="flex flex-col gap-1">
+                                    {/* Título dinámico si es compensación */}
+                                    <p className="font-bold underline decoration-blue-500">
+                                        {destino ? 'SALDO COMPENSADO' : estadoHorasExtra[estadoExtra]?.label}
+                                    </p>
+
+                                    {destino && (
+                                        <p className="text-blue-300 pt-1 italic">
+                                            {destino}
+                                        </p>
+                                    )}
+
+                                    {/* Si es compensado, igual mostramos el estado de aprobación abajo pequeño */}
+                                    {destino && (
+                                        <p className="text-[10px] text-slate-400 mt-1">
+                                            Estado original: {estadoHorasExtra[estadoExtra]?.label}
+                                        </p>
+                                    )}
+                                </div>
                             </TooltipContent>
-                        </Tooltip>)
-                        : ''}
+                        </Tooltip>
+                    )}
                 </span>
             )
         }
