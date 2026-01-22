@@ -92,6 +92,8 @@ class MarcacionController extends Controller
                 $permisoFila = null;
                 $refriEnOrigen = false;
 
+                // ---------------------------- Descuento de refrigerio para PT en compensa
+                // Horario -> permiso -> marcaciones
                 if ($permisos->has($empleado->id)) {
                     $permisoFila = $permisos->get($empleado->id)->first(function ($p) use ($fechaStr) {
                         return \Carbon\Carbon::parse($p->fecha)->format('Y-m-d') === $fechaStr;
@@ -113,13 +115,7 @@ class MarcacionController extends Controller
                         }
                     }
                 }
-
-                // LOG DE CADA FILA (Opcional, solo para debug)
-                /*
-                 if ($permisoFila) {
-                    \Log::info("Empleado {$empleado->apellidos} tiene permiso el {$fechaStr}: ".$permisoFila->motivo);
-                }
-                */
+                // ---------------------------- Descuento de refrigerio para PT
 
                 $tardanza = 0;
                 $horas = 0;
@@ -127,6 +123,7 @@ class MarcacionController extends Controller
                 $anticipado = 0;
                 $nocturno = 0;
 
+                // ---------------------------- Evitar conteno si no hay marcacion y horario
                 if ($horario && $marcacion && $marcacion->ingreso) {
                     // Mantengo tu variable partTime por si la usas en otro lado,
                     // pero la lógica de descuento ahora es más precisa abajo.
@@ -155,6 +152,8 @@ class MarcacionController extends Controller
                         ];
                     }
 
+                    // ---------------------------- fin Evitar conteno si no hay marcacion y horario
+
                     $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
 
                     // --- HIP y HSP (Programado) ---
@@ -173,9 +172,9 @@ class MarcacionController extends Controller
                         $m_salida->addDay();
                     }
 
-                    // --- CÁLCULOS SEGÚN TU TABLA ---
+                    // -------------------------------------------- CÁLCULOS SEGÚN TU TABLA --------------------------------------------
 
-                    // 1. CÁLCULO DE TARDANZA (Necesario antes que las horas para restar correctamente)
+                    // ---------------------------- Tardanza
                     $tardanza = max(0, $h_ingreso->diffInMinutes($m_ingreso, false));
 
                     // 2. LÓGICA DE REFRIGERIO (Reglas FT y PT)
@@ -193,12 +192,29 @@ class MarcacionController extends Controller
                             $descuentoRefri = 60;
                         }
                     }
+                    // ---------------------------- Fin Tardanza
 
-                    // 3. TOTAL HORAS TRABAJADAS (Refactorizado)
+                    // ---------------------------- TOTAL HORAS TRABAJADAS (Refactorizado)
                     // Fórmula: Programado - Descuento Refri - Tardanza
-                    $horas = max(0, $minutosProgramados - $descuentoRefri);
+                    if ($empleado->jornada_id == 1) {
+                        $horas = max(0, $minutosProgramados - $descuentoRefri);
+                    } else {
+                        $horas = max(0, $minutosProgramados - $descuentoRefri - $tardanza);
+                    }
 
-                    // 4. EXTRA y ANTICIPADO
+                    $tardanzaFormato = sprintf('%02d:%02d:00', floor($tardanza / 60), $tardanza % 60);
+                    $totalFormato = sprintf('%02d:%02d:00', floor($horas / 60), $horas % 60);
+
+                    if ($horario) {
+                        $horario->update([
+                            'tardanza' => $tardanzaFormato,
+                            'total' => $totalFormato,
+                            // Aquí NO tocamos calculo_manual porque estas columnas son libres
+                        ]);
+                    }
+                    // ---------------------------- Fin TOTAL HORAS TRABAJADAS (Refactorizado)
+
+                    // 4. ---------------------------- EXTRA y ANTICIPADO
                     if ($m_salida) {
                         // EXTRA: HS - HSP
                         $extra = max(0, $h_salida->diffInMinutes($m_salida, false));
@@ -209,7 +225,7 @@ class MarcacionController extends Controller
                         $horasAnticipado = 0;
                     }
 
-                    // ------------ agregar extra a la bd
+                    // Blindar el extra para que no se actualice siempre
                     // 1. Verificamos el candado (0 = automático, 1 = manual/bloqueado)
                     $esManual = (int) ($horario->calculo_manual ?? 0);
 
@@ -232,20 +248,12 @@ class MarcacionController extends Controller
                             }
                         } else {
                             // Si no hay salida, el extra es cero
-                             if ($horario) {
+                            if ($horario) {
                                 $horario->extra = '00:00';
                                 $horario->save();
-                             }
+                            }
                         }
                     }
-                    // 2. Si no es manual, calculamos la diferencia real HS - HSP
-
-                    // } else {
-                    //     // 4. Si es 1, el index NO toca la base de datos.
-                    //     // Mantiene lo que puso tu método 'update' (ej: los 10 min de Ascencio)
-                    //     //  \Log::info("Horario ID {$horario->id}: Se respetó el descuento manual y se saltó el cálculo automático.");
-                    // }
-                    // ------------ agregar extra a la bd
 
                     $anticipado = $horasAnticipado;
 
@@ -255,9 +263,29 @@ class MarcacionController extends Controller
                         $anticipado = $horasAnticipado >= $minutosTolerancia ? $horasAnticipado : 0;
                     }
 
-                    // 4. Cálculo de Nocturno (Dinámico: lo que realmente trabajó entre 22:00 y 06:00)
-                    // 4. NOCTURNO: Basado en PROGRAMACIÓN (Regla Xiomara)
-                    // 4. NOCTURNO: (Salida Programada - 22:00) + CANDADO DE REALIDAD
+                    if ($horario) {
+                        // Formatear Anticipado
+                        $formatoAnticipado = sprintf('%02d:%02d:00', floor($anticipado / 60), $anticipado % 60);
+
+                        // Formatear Tardanza (usando tu variable $tardanza calculada antes)
+                        // $formatoTardanza = sprintf('%02d:%02d:00', floor($tardanza / 60), $tardanza % 60);
+
+                        // Formatear Total (usando tu variable $horas de la sección de Total Horas Trabajadas)
+                        // $formatoTotal = sprintf('%02d:%02d:00', floor($horas / 60), $horas % 60);
+
+                        // Actualizamos sin restricción de candado
+                        $horario->update([
+                            //'tardanza' => $formatoTardanza,
+                            'anticipado' => $formatoAnticipado,
+                            //'total' => $formatoTotal,
+                        ]);
+                    }
+
+                    // ---------------------------- Fin EXTRA y ANTICIPADO
+
+                    // ---------------------------- NOCTURNO: (Salida Programada - 22:00) + CANDADO DE REALIDAD
+                    //  Cálculo de Nocturno (Dinámico: lo que realmente trabajó entre 22:00 y 06:00)
+                    //  NOCTURNO: Basado en PROGRAMACIÓN (Regla Xiomara)
                     if (in_array($empleado->empresa_id, [1, 3, 4])) {
 
                         // 1. Definimos la ventana legal (10 PM a 6 AM)
@@ -299,6 +327,8 @@ class MarcacionController extends Controller
                             }
                         }
                     }
+
+                    // ---------------------------- fin  NOCTURNO: (Salida Programada - 22:00) + CANDADO DE REALIDAD
                 }
 
                 return [
@@ -575,32 +605,17 @@ class MarcacionController extends Controller
                         'calculo_manual' => 1,
                     ]);
 
-                // ---- Logica para , determinar de donde salen las HE
-                // \Log::info("Nuevo saldo calculado: {$nuevoSaldoMinutos}m | String resultante: '{$nuevoValorExtraString}'");
-
-                // Usamos Query Builder para forzar la escritura y ver el resultado
-                // $afectado = DB::table('horarios')
-                //     ->where('id', $horarioFuente->id)
-                //     ->update(['extra' => $nuevoValorExtraString]);
-
-                // \Log::info('Resultado del UPDATE en tabla Horarios: '.($afectado ? 'ÉXITO (1 fila)' : 'FALLO (0 filas afectas)'));
-
                 // 7. Bloqueo de disponibilidad
                 if ($nuevoSaldoMinutos < 30) {
                     $fuenteExtra->update(['estado_horas_extra' => 1]);
                     // \Log::info('Bolsa agotada (Saldo < 30). Se cambió estado_horas_extra a 0.');
                 }
 
-                // \Log::info('---------- FIN DE PROCESO EXITOSO ----------');
             });
 
             return back()->with('success', 'Marcación corregida y horas extra descontadas correctamente.');
 
         } catch (\Exception $e) {
-            // \Log::error('---------- ERROR CRÍTICO ----------');
-            // \Log::error('Mensaje: '.$e->getMessage());
-            // \Log::error('Archivo: '.$e->getFile().' Línea: '.$e->getLine());
-
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
     }
@@ -628,9 +643,12 @@ class MarcacionController extends Controller
             ->whereNotNull('h.extra')
             ->where('h.extra', '!=', '00:00');
 
-        if ($inicio && $fin) {
+            /*
+              if ($inicio && $fin) {
             $query->whereBetween('m.fecha', [$inicio, $fin]);
         }
+            */
+
 
         $extras = $query->select('m.id', 'm.fecha', 'h.extra as extra_db', 'm.estado_horas_extra')->get();
 

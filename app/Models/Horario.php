@@ -21,7 +21,13 @@ class Horario extends Model
         'descripcion',
         'estado',
         'validado',
-        'calculo_manual'
+        'calculo_manual',
+        'destino_compensacion',
+
+        'nocturno',
+        'anticipado',
+        'tardanza',
+        'total',
     ];
 
     protected function casts(): array

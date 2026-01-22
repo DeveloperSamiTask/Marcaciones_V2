@@ -21,6 +21,9 @@ class Asistencia extends Model
         'concepto',
         'motivo',
         'estado',
+
+
+
     ];
 
     protected function casts(): array
