@@ -18,6 +18,7 @@ import DownloadMarcacion from './download';
 import { DataTable, DataTableRef } from './data-table';
 import PullMarcacion from './pull';
 import { Card, CardContent } from '@/components/ui/card';
+import { RecalcularButton } from './recalcular-button'; // Agregar import
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -161,6 +162,14 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                             getSelectedData={() => dataTableRef.current?.getSelectedData() || []}
                                             filters={initialState} />
                                         <DownloadMarcacion disabled={isFiltering} marcaciones={marcaciones} filters={initialState} />
+                                        {auth.user.rol_id === 1 && (
+                                            <RecalcularButton
+                                                empresa={selectedEmpresa as number}
+                                                fechaInicio={dateRange?.from?.toISOString().split('T')[0]}
+                                                fechaFin={dateRange?.to?.toISOString().split('T')[0]}
+                                                disabled={isFiltering}
+                                            />
+                                        )}
                                     </>
                                 )}
 
@@ -179,6 +188,8 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                 />
                             )}
 
+
+
                             <DateRangeFilter
                                 dateRange={dateRange}
                                 setDateRange={setDateRange}
@@ -195,6 +206,10 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                     placeholder="SELECCIONAR ENCARGADO"
                                 />
                             )}
+
+
+
+
                         </div>
                     </div>
                     <Card>
