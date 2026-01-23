@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Exports\MarcacionExport;
 use App\Http\Requests\Marcacion\StoreMarcacionRequest;
-use App\Http\Requests\Marcacion\UpdateMarcacionRequest;
 use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Horario;
@@ -275,9 +274,9 @@ class MarcacionController extends Controller
 
                         // Actualizamos sin restricción de candado
                         $horario->update([
-                            //'tardanza' => $formatoTardanza,
+                            // 'tardanza' => $formatoTardanza,
                             'anticipado' => $formatoAnticipado,
-                            //'total' => $formatoTotal,
+                            // 'total' => $formatoTotal,
                         ]);
                     }
 
@@ -530,94 +529,127 @@ class MarcacionController extends Controller
         }
     }
 
-    public function update(UpdateMarcacionRequest $request, Marcacion $marcacione)
+    public function update(Request $request, Marcacion $marcacione)
     {
-        $data = $request->validated();
+        // LOG DE ENTRADA INMEDIATA - Si no ves esto, el problema es la Ruta o Middleware
+        \Log::emergency('=== PETICIÓN RECIBIDA ===');
+        \Log::emergency('ID Marcacion en URL: '.$marcacione->id);
+        \Log::emergency('Payload: '.json_encode($request->all()));
+
+        // Usamos all() para saltarnos validaciones que puedan estar rebotando la petición
+        $data = $request->all();
 
         try {
-            DB::transaction(function () use ($data, $marcacione) {
-                // \Log::info('---------- INICIO DE PROCESO DE DESCUENTO ----------');
-                // \Log::info("Marcación Actual ID: {$marcacione->id} | Empleado: {$marcacione->empleado_id}");
+            if (isset($data['modo']) && $data['modo'] === 'compensar') {
+                return $this->updateModoCompensar($data, $marcacione);
+            }
 
-                // 1. Fuente de horas extra
-                $fuenteExtra = Marcacion::findOrFail($data['extraSeleccionada']);
-                // \Log::info("Bolsa Seleccionada (Marcación ID): {$fuenteExtra->id} | Fecha Bolsa: {$fuenteExtra->fecha}");
-
-                $horarioFuente = Horario::where('fecha', $fuenteExtra->fecha)
-                    ->where('empleado_id', $fuenteExtra->empleado_id)
-                    ->firstOrFail();
-
-                // \Log::info("Registro en Horarios encontrado. ID Horario: {$horarioFuente->id} | Valor 'extra' actual: '{$horarioFuente->extra}'");
-
-                // 2. Cálculo de minutos
-                $partesExtra = explode(':', $horarioFuente->extra);
-                $minutosReales = ($partesExtra[0] * 60) + $partesExtra[1];
-                $minutosAConsumir = floor($minutosReales / 30) * 30;
-
-                // \Log::info("Cálculo: Minutos Reales: {$minutosReales}m | Bloque de 30 a consumir: {$minutosAConsumir}m");
-
-                if ($minutosAConsumir <= 0) {
-                    // \Log::error("ERROR: No hay bloques de 30 min. Minutos reales: {$minutosReales}");
-                    throw new \Exception('La bolsa seleccionada ya no tiene bloques de 30 minutos disponibles.');
-                }
-
-                // 3. Cálculo de la Nueva Hora
-                $horaActualString = $marcacione->{$data['tipo']};
-                $horaCarbon = \Carbon\Carbon::parse($horaActualString);
-                $horaOriginalParaLog = $horaCarbon->format('H:i:s');
-
-                if ($data['tipo'] === 'ingreso') {
-                    $horaCarbon->subMinutes($minutosAConsumir);
-                } else {
-                    $horaCarbon->addMinutes($minutosAConsumir);
-                }
-                $nuevaHora = $horaCarbon->format('H:i:s');
-                // \Log::info("Ajuste de Hora: Tipo: {$data['tipo']} | Original: {$horaOriginalParaLog} -> Nueva: {$nuevaHora}");
-
-                // 4. Auditoría
-                MarcacionEdicion::create([
-                    'empleado_id' => $marcacione->empleado_id,
-                    'user_id' => Auth::id(),
-                    'fecha' => $marcacione->fecha,
-                    'hora_original' => $marcacione->{$data['tipo']},
-                    'hora' => $nuevaHora,
-                    'motivo' => $data['motivo'],
-                ]);
-
-                // 5. Actualizar marcación corregida
-                $marcacione->update([$data['tipo'] => $nuevaHora]);
-
-                // 6. DESCUENTO DE LA BOLSA (Aquí está el problema)
-                $nuevoSaldoMinutos = $minutosReales - $minutosAConsumir;
-                $horas = floor($nuevoSaldoMinutos / 60);
-                $mins = $nuevoSaldoMinutos % 60;
-                $nuevoValorExtraString = sprintf('%02d:%02d:00', $horas, $mins);
-
-                // ---- Logica para , determinar de donde salen las HE
-                $fechaDestino = \Carbon\Carbon::parse($marcacione->fecha)->format('d/m');
-                $mensajeDestino = "Usado {$minutosAConsumir}m para el {$fechaDestino}";
-
-                DB::table('horarios')
-                    ->where('id', $horarioFuente->id)
-                    ->update([
-                        'extra' => $nuevoValorExtraString,
-                        'destino_compensacion' => $mensajeDestino, // <--- Nueva columna
-                        'calculo_manual' => 1,
-                    ]);
-
-                // 7. Bloqueo de disponibilidad
-                if ($nuevoSaldoMinutos < 30) {
-                    $fuenteExtra->update(['estado_horas_extra' => 1]);
-                    // \Log::info('Bolsa agotada (Saldo < 30). Se cambió estado_horas_extra a 0.');
-                }
-
-            });
-
-            return back()->with('success', 'Marcación corregida y horas extra descontadas correctamente.');
-
+            return $this->updateModoLibre($data, $marcacione);
         } catch (\Exception $e) {
+            \Log::emergency('EXCEPCIÓN CACHADA: '.$e->getMessage());
+
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
+    }
+
+    private function updateModoCompensar($data, Marcacion $marcacione)
+    {
+        return DB::transaction(function () use ($data, $marcacione) {
+            \Log::emergency('--- INICIO TRANSACTION ---');
+
+            $idBolsa = $data['extraSeleccionada'] ?? null;
+            \Log::emergency('Buscando Horario ID: '.($idBolsa ?? 'NULL'));
+
+            $horarioFuente = Horario::find($idBolsa);
+
+            if (! $horarioFuente) {
+                \Log::emergency("FALLO CRÍTICO: Horario ID $idBolsa no existe en la tabla horarios.");
+                throw new \Exception('Bolsa de horas no encontrada.');
+            }
+
+            // 1. Cálculos
+            $partesExtra = explode(':', $horarioFuente->extra);
+            $minutosReales = (isset($partesExtra[1])) ? ($partesExtra[0] * 60) + $partesExtra[1] : 0;
+            $minutosAConsumir = 30;
+
+            \Log::emergency("Saldo: $minutosReales min. Consumo: $minutosAConsumir min.");
+
+            if ($minutosReales < $minutosAConsumir) {
+                throw new \Exception('Saldo insuficiente en la bolsa.');
+            }
+
+            // 2. Modificar Marcación
+            $campoHora = $data['tipo']; // 'ingreso' o 'salida'
+            $horaCarbon = \Carbon\Carbon::parse($marcacione->$campoHora);
+
+            $data['tipo'] === 'ingreso' ? $horaCarbon->subMinutes($minutosAConsumir) : $horaCarbon->addMinutes($minutosAConsumir);
+            $nuevaHora = $horaCarbon->format('H:i:s');
+
+            // 3. Persistencia (Usamos DB directo para asegurar que nada lo bloquee)
+            \DB::table('marcacions')->where('id', $marcacione->id)->update([
+                $campoHora => $nuevaHora,
+            ]);
+            \Log::emergency("Marcacion {$marcacione->id} actualizada a $nuevaHora");
+
+            // 4. Descuento de bolsa
+            $resto = $minutosReales - $minutosAConsumir;
+            $nuevoExtraStr = sprintf('%02d:%02d:00', floor($resto / 60), $resto % 60);
+
+            \DB::table('horarios')->where('id', $horarioFuente->id)->update([
+                'extra' => $nuevoExtraStr,
+                'calculo_manual' => 1,
+                'destino_compensacion' => 'Compensado día '.$marcacione->fecha,
+            ]);
+            \Log::emergency("Horario {$horarioFuente->id} actualizado saldo a $nuevoExtraStr");
+
+            // 5. Auditoría
+            MarcacionEdicion::create([
+                'empleado_id' => $marcacione->empleado_id,
+                'user_id' => \Auth::id(),
+                'fecha' => $marcacione->fecha,
+                'hora_original' => $data['hora_original'] ?? '00:00',
+                'hora' => $nuevaHora,
+                'motivo' => ($data['motivo'] ?? 'Sin motivo').' (HE)',
+            ]);
+
+            \Log::emergency('--- FIN TRANSACTION OK ---');
+
+            return back()->with('success', 'Actualizado.');
+        });
+    }
+
+
+
+
+
+    private function updateModoLibre($data, Marcacion $marcacione)
+    {
+        return DB::transaction(function () use ($data, $marcacione) {
+            // 1. Auditoría (Igual que el anterior pero con la hora directa del front)
+            MarcacionEdicion::create([
+                'empleado_id' => $marcacione->empleado_id,
+                'user_id' => Auth::id(),
+                'fecha' => $marcacione->fecha,
+                'hora_original' => $marcacione->{$data['tipo']},
+                'hora' => $data['hora_nueva'],
+                'motivo' => $data['motivo'].' (Edición Libre)',
+            ]);
+
+            // 2. Actualizamos la marcación directamente con lo que escribió RRHH
+            $marcacione->update([$data['tipo'] => $data['hora_nueva']]);
+
+            // 3. BLINDAJE: Marcamos el horario de HOY como manual
+            // Esto evita que tu lógica de "Index" intente recalcular este día.
+            DB::table('horarios')
+                ->where('empleado_id', $marcacione->empleado_id)
+                ->where('fecha', $marcacione->fecha)
+                ->update([
+                    'calculo_manual' => 1,
+                    'destino_compensacion' => 'Editado libremente por RRHH',
+                ]);
+
+            return back()->with('success', 'Marcación editada manualmente.');
+        });
     }
 
     public function getHorasExtraDisponibles(Request $request, $empleado)
@@ -625,44 +657,23 @@ class MarcacionController extends Controller
         $inicio = $request->query('fechaInicio');
         $fin = $request->query('fechaFin');
 
-        // Buscamos el nombre del empleado para el log
-        $worker = \DB::table('empleados')->where('id', $empleado)->select('nombres', 'apellidos')->first();
-        $nombreCompleto = $worker ? "{$worker->apellidos} {$worker->nombres}" : 'DESCONOCIDO';
-
-        // \Log::channel('single')->emergency('---------- REVISIÓN DE EXTRAS ----------');
-        // \Log::channel('single')->emergency("EMPLEADO: [ID: $empleado] $nombreCompleto");
-        // \Log::channel('single')->emergency("RANGO: $inicio hasta $fin");
-
+        // 1. Corregimos el SELECT: Necesitamos el ID de HORARIOS (h.id) para poder descontar
         $query = \DB::table('marcacions as m')
             ->join('horarios as h', function ($join) {
                 $join->on('h.fecha', '=', 'm.fecha')
                     ->on('h.empleado_id', '=', 'm.empleado_id');
             })
             ->where('m.empleado_id', $empleado)
-            ->where('m.estado_horas_extra', 1)
+            ->where('m.estado_horas_extra', 1) // 1 = Tiene extras disponibles
             ->whereNotNull('h.extra')
-            ->where('h.extra', '!=', '00:00');
+            ->where('h.extra', '!=', '00:00:00');
 
-            /*
-              if ($inicio && $fin) {
-            $query->whereBetween('m.fecha', [$inicio, $fin]);
-        }
-            */
-
-
-        $extras = $query->select('m.id', 'm.fecha', 'h.extra as extra_db', 'm.estado_horas_extra')->get();
-
-        // \Log::channel('single')->emergency('REGISTROS ENCONTRADOS EN DB: '.$extras->count());
+        // Seleccionamos h.id explícitamente para que el Front mande el ID que el Back usa para descontar
+        $extras = $query->select('h.id', 'm.fecha', 'h.extra as extra_db')->get();
 
         $extrasProcesadas = $extras->map(function ($registro) {
-
-            // \Log::channel('single')->emergency("DATO CRUDO EN DB PARA FECHA {$registro->fecha}: '{$registro->extra_db}'");
-
             $partes = explode(':', (string) $registro->extra_db);
-
             if (count($partes) < 2) {
-                // \Log::channel('single')->emergency('FALLO EXPLODE: El formato no es HH:MM');
-
                 return null;
             }
 
@@ -672,19 +683,14 @@ class MarcacionController extends Controller
             $minutosTotales = ($horas * 60) + $minutos;
             $ajustado = floor($minutosTotales / 30) * 30;
 
-            // \Log::channel('single')->emergency("FECHA: {$registro->fecha} | DB: {$registro->extra_db} | MIN: $minutosTotales | AJUSTADO: $ajustado");
-
             return [
-                'id' => $registro->id,
+                'id' => $registro->id, // <--- Este ahora es el ID de la tabla HORARIOS
                 'fecha' => $registro->fecha,
                 'extra' => (int) $ajustado,
             ];
         })
             ->filter(fn ($item) => $item !== null && $item['extra'] >= 30)
             ->values();
-
-        // \Log::channel('single')->emergency('FINAL ENVIADO AL FRONT: '.$extrasProcesadas->count());
-        // \Log::channel('single')->emergency('----------------------------------------');
 
         return response()->json($extrasProcesadas);
     }

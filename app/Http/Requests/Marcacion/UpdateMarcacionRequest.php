@@ -6,35 +6,49 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateMarcacionRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
-        return [
-            // Obligatorios para saber qué editar y por qué
+        // 1. Reglas comunes que siempre deben estar
+        $rules = [
+            'modo' => 'required|in:libre,compensar', // Vital para saber qué validar
             'motivo' => 'required|string|max:255',
-            'tipo' => ['required', 'in:ingreso,salida,ingreso_refri,salida_refri'],
+            'tipo' => 'required|in:ingreso,salida,ingreso_refri,salida_refri',
+            'hora_nueva' => 'required|date_format:H:i',
+        ];
 
-            // El ID de la bolsa de tiempo que el usuario eligió en el select
-            // Lo validamos para asegurarnos que exista en la tabla marcacions
-            'extraSeleccionada' => 'nullable|exists:marcacions,id',
+        // 2. Reglas específicas para el modo COMPENSAR (La lógica nueva)
+        if ($this->modo === 'compensar') {
+            $rules['extraSeleccionada'] = 'required|exists:horarios,id'; // Cambié a horarios si esa es tu tabla de extras
+            $rules['tiempo_extra'] = 'required|date_format:H:i';
+        }
 
-            // Estos pueden venir del front como referencia, pero el Back manda
-            'hora_original' => 'nullable',
-            'hora_nueva' => 'nullable',
-            'hsp' => 'nullable',
-            'tiempo_extra' => 'nullable',
+        // 3. Reglas específicas para el modo LIBRE (La lógica de RRHH)
+        if ($this->modo === 'libre') {
+            // En modo libre, quizás no necesitas validar 'extraSeleccionada'
+            $rules['extraSeleccionada'] = 'nullable';
+        }
+
+        // 4. Reglas informativas (opcionales)
+        $rules['hora_original'] = 'nullable|date_format:H:i';
+        $rules['hsp'] = 'nullable';
+
+        return $rules;
+    }
+
+    /**
+     * Mensajes personalizados para que RRHH entienda qué olvidó
+     */
+    public function messages()
+    {
+        return [
+            'extraSeleccionada.required' => 'Debes seleccionar una bolsa de horas extras para compensar.',
+            'hora_nueva.required' => 'La hora es obligatoria.',
+            'motivo.required' => 'Debes justificar por qué estás editando esto.',
         ];
     }
 }
