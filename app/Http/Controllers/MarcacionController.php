@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\MarcacionExport;
 use App\Http\Requests\Marcacion\StoreMarcacionRequest;
+use App\Http\Requests\Marcacion\UpdateMarcacionRequest;
 use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Horario;
@@ -21,281 +22,232 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Log;
+
 
 class MarcacionController extends Controller
 {
-    public function index(Request $request)// : Response
-    {
-        $filters = $request->validate([
-            'empresa' => 'nullable|integer|exists:empresas,id',
-            'encargado' => 'nullable|integer|exists:empleados,id',
-            'fechaInicio' => 'nullable|date',
-            'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
-        ]);
+public function index(Request $request)
+{
+    \DB::enableQueryLog();
+    $startTime = microtime(true);
 
-        $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
+    $filters = $request->validate([
+        'empresa' => 'nullable|integer|exists:empresas,id',
+        'encargado' => 'nullable|integer|exists:empleados,id',
+        'fechaInicio' => 'nullable|date',
+        'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+    ]);
 
-        $empleados = Empleado::query()
-            ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id')
-            ->with(['area:id,nombre', 'jornada:id,nombre'])
-            ->where('empresa_id', $request->empresa)
-            ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
-            ->when($request->fechaFin, function ($query) use ($request) {
-                $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
-            })
-            ->whereNull('fecha_cese')
-            ->orderBy('apellidos')
-            ->get();
+    $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+    $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
-        $horarios = Horario::whereIn('empleado_id', $empleados->pluck('id'))
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->get()
-            ->groupBy('empleado_id');
+    $empleados = Empleado::query()
+        ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id')
+        ->with(['area:id,nombre', 'jornada:id,nombre'])
+        ->where('empresa_id', $request->empresa)
+        ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
+        ->when($request->fechaFin, function ($query) use ($request) {
+            $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
+        })
+        ->whereNull('fecha_cese')
+        ->orderBy('apellidos')
+        ->get();
 
-        // horario
-        $horariosExtra = Horario::whereIn('empleado_id', $empleados->pluck('id'))
-            ->whereNotNull('extra')
-            ->get()
-            ->groupBy('empleado_id');
+    $horarios = Horario::whereIn('empleado_id', $empleados->pluck('id'))
+        ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+        ->get()
+        ->groupBy('empleado_id');
 
-        // de aqui sale la hora de salida
-        $marcaciones = Marcacion::whereIn('empleado_id', $empleados->pluck('id'))
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->get()
-            ->groupBy('empleado_id');
+		/*
+		$horariosExtra = Horario::whereIn('empleado_id', $empleados->pluck('id'))
+        ->whereNotNull('extra')
+        ->get()
+        ->groupBy('empleado_id');
+		*/
 
-        // Evitamos que se agarren dos marcaciones -> Aplicar a HE , Tareo , etc
-        $marcaciones = $marcaciones->map(function ($grupo) {
-            return $grupo->unique('fecha');
-        });
 
-        $permisos = \App\Models\Permiso::whereIn('empleado_id', $empleados->pluck('id'))
-            ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->where('tipo_id', 4) // <--- Filtramos solo por Compensaciones
-            ->get()
-            ->groupBy('empleado_id');
+    $marcaciones = Marcacion::whereIn('empleado_id', $empleados->pluck('id'))
+        ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+        ->get()
+        ->groupBy('empleado_id');
 
-        // \Log::info('Permisos Tipo 4 encontrados: '.$permisos->flatten()->count());
+    $marcaciones = $marcaciones->map(function ($grupo) {
+        return $grupo->unique('fecha');
+    });
 
-        $lista = $empleados->flatMap(function ($empleado) use ($horarios, $horariosExtra, $marcaciones, $request, $permisos) {
-            $fechas = CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
+    $permisos = \App\Models\Permiso::whereIn('empleado_id', $empleados->pluck('id'))
+        ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+        ->where('tipo_id', 4)
+        ->get()
+        ->groupBy('empleado_id');
 
-            return collect($fechas)->map(function ($fecha) use ($empleado, $horarios, $horariosExtra, $marcaciones, $permisos) {
+    // 1. CAMBIO VITAL: Filtramos por fecha para evitar "Memory exhausted"
+    // No traemos toda la historia, solo lo que necesitamos comparar (el rango actual)
+    $todasLasMarcaciones = Marcacion::whereIn('empleado_id', $empleados->pluck('id'))
+        ->whereBetween('fecha', [
+            \Carbon\Carbon::parse($request->fechaInicio)->subMonths(2), // Un mes atrás por si las compensaciones son antiguas
+            $request->fechaFin
+        ])
+        ->get()
+        ->groupBy('empleado_id');
 
-                $fechaStr = $fecha->format('Y-m-d');
-                $horario = $horarios->get($empleado->id)?->firstWhere('fecha', $fecha);
-                $horarioExtra = $horariosExtra->get($empleado->id);
-                $marcacion = $marcaciones->get($empleado->id)?->firstWhere('fecha', $fecha);
+    $lista = $empleados->flatMap(function ($empleado) use ($horarios /*$horariosExtra*/, $marcaciones, $request, $permisos, $todasLasMarcaciones) {
+        $fechas = \Carbon\CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
 
-                $permisoFila = null;
-                $refriEnOrigen = false;
+        return collect($fechas)->map(function ($fecha) use ($empleado, $horarios /*$horariosExtra*/, $marcaciones, $permisos, $todasLasMarcaciones) {
 
-                if ($permisos->has($empleado->id)) {
-                    $permisoFila = $permisos->get($empleado->id)->first(function ($p) use ($fechaStr) {
-                        return \Carbon\Carbon::parse($p->fecha)->format('Y-m-d') === $fechaStr;
-                    });
+            $fechaStr = $fecha->format('Y-m-d');
+            $horario = $horarios->get($empleado->id)?->firstWhere('fecha', $fecha);
+           // $horarioExtra = $horariosExtra->get($empleado->id);
+            $marcacion = $marcaciones->get($empleado->id)?->firstWhere('fecha', $fecha);
 
-                    // SI HAY PERMISO, BUSCAMOS SI EN ESA FECHA DE ORIGEN HUBO REFRIGERIO
-                    if ($permisoFila) {
-                        // Extraemos la fecha del motivo (ej: "09/12/2025")
-                        preg_match('/(\d{2}\/\d{2}\/\d{4})/', $permisoFila->motivo, $matches);
-                        if (isset($matches[1])) {
-                            $fechaOrigen = \Carbon\Carbon::createFromFormat('d/m/Y', $matches[1])->format('Y-m-d');
+            $permisoFila = null;
+            $refriEnOrigen = false;
 
-                            // Buscamos la marcación de esa fecha específica
-                            $marcacionOrigen = \App\Models\Marcacion::where('empleado_id', $empleado->id)
-                                ->whereDate('fecha', $fechaOrigen)
-                                ->first();
+            if ($permisos->has($empleado->id)) {
+                $permisoFila = $permisos->get($empleado->id)->first(function ($p) use ($fechaStr) {
+                    return \Carbon\Carbon::parse($p->fecha)->format('Y-m-d') === $fechaStr;
+                });
 
-                            $refriEnOrigen = $marcacionOrigen && $marcacionOrigen->ingreso_refri ? true : false;
-                        }
+                if ($permisoFila) {
+                    preg_match('/(\d{2}\/\d{2}\/\d{4})/', $permisoFila->motivo, $matches);
+                    if (isset($matches[1])) {
+                        $fechaOrigen = \Carbon\Carbon::createFromFormat('d/m/Y', $matches[1])->format('Y-m-d');
+
+                        // 2. BUSQUEDA EN MEMORIA: Usamos la colección filtrada en el punto 1
+                        $marcacionOrigen = $todasLasMarcaciones->get($empleado->id)?->first(function ($m) use ($fechaOrigen) {
+                            $fechaM = ($m->fecha instanceof \Carbon\Carbon) ? $m->fecha : \Carbon\Carbon::parse($m->fecha);
+                            return $fechaM->format('Y-m-d') === $fechaOrigen;
+                        });
+
+                        $refriEnOrigen = $marcacionOrigen && $marcacionOrigen->ingreso_refri ? true : false;
                     }
                 }
+            }
 
-                // LOG DE CADA FILA (Opcional, solo para debug)
-                /*
-                 if ($permisoFila) {
-                    \Log::info("Empleado {$empleado->apellidos} tiene permiso el {$fechaStr}: ".$permisoFila->motivo);
+            $tardanza = 0;
+            $horas = 0;
+            $extra = 0;
+            $anticipado = 0;
+            $nocturno = 0;
+
+            if ($horario && $marcacion && $marcacion->ingreso) {
+                $hip_check = $horario->ingreso->format('H:i');
+                $hsp_check = $horario->salida->format('H:i');
+
+                if ($hip_check === '00:00' && $hsp_check === '00:00') {
+                    return [
+                        'empleado' => $empleado,
+                        'fecha' => $fecha,
+                        'fecha_db' => $fechaStr,
+                        'horario' => $horario,
+                        //'horariosExtra' => $horarioExtra,
+                        'marcacion' => $marcacion,
+                        'permiso' => $permisoFila,
+                        'refri_en_origen' => $refriEnOrigen,
+                        'horas' => 0,
+                        'tardanza' => 0,
+                        'extra' => 0,
+                        'anticipado' => 0,
+                        'nocturno' => 0,
+                    ];
                 }
-                */
 
-                $tardanza = 0;
-                $horas = 0;
-                $extra = 0;
-                $anticipado = 0;
-                $nocturno = 0;
+                $h_ingreso = $horario->ingreso->copy();
+                $h_salida = $horario->salida->copy();
+                if ($h_salida->lt($h_ingreso)) { $h_salida->addDay(); }
 
-                if ($horario && $marcacion && $marcacion->ingreso) {
-                    // Mantengo tu variable partTime por si la usas en otro lado,
-                    // pero la lógica de descuento ahora es más precisa abajo.
+                $m_ingreso = $marcacion->ingreso->copy();
+                $m_salida = $marcacion->salida ? $marcacion->salida->copy() : null;
+                if ($m_salida && $m_salida->lt($m_ingreso)) { $m_salida->addDay(); }
 
-                    // --- 🚨 VALIDACIÓN TD: EVITAR EXTRAS EN DESCANSO ---
-                    $hip_check = $horario->ingreso->format('H:i');
-                    $hsp_check = $horario->salida->format('H:i');
+                $tardanza = max(0, $h_ingreso->diffInMinutes($m_ingreso, false));
+                $minutosProgramados = $h_ingreso->diffInMinutes($h_salida, false);
+                $descuentoRefri = 0;
 
-                    if ($hip_check === '00:00' && $hsp_check === '00:00') {
-                        // Es un día de descanso. Retornamos todo en 0 y terminamos este ciclo.
-
-                        return [
-                            'empleado' => $empleado,
-                            'fecha' => $fecha,
-                            'fecha_db' => $fechaStr,
-                            'horario' => $horario,
-                            'horariosExtra' => $horarioExtra,
-                            'marcacion' => $marcacion,
-                            'permiso' => $permisoFila,
-                            'refri_en_origen' => $refriEnOrigen,
-                            'horas' => 0,
-                            'tardanza' => 0,
-                            'extra' => 0,
-                            'anticipado' => 0,
-                            'nocturno' => 0,
-                        ];
-                    }
-
-                    $partTime = $empleado->jornada_id == 2 && ! $marcacion->ingreso_refri;
-
-                    // --- HIP y HSP (Programado) ---
-                    $h_ingreso = $horario->ingreso->copy();
-                    $h_salida = $horario->salida->copy();
-
-                    // Regla: Sumar 24h si cruza medianoche
-                    if ($h_salida->lt($h_ingreso)) {
-                        $h_salida->addDay();
-                    }
-
-                    // --- HI y HS (Real) ---
-                    $m_ingreso = $marcacion->ingreso->copy();
-                    $m_salida = $marcacion->salida ? $marcacion->salida->copy() : null;
-                    if ($m_salida && $m_salida->lt($m_ingreso)) {
-                        $m_salida->addDay();
-                    }
-
-                    // --- CÁLCULOS SEGÚN TU TABLA ---
-
-                    // 1. CÁLCULO DE TARDANZA (Necesario antes que las horas para restar correctamente)
-                    $tardanza = max(0, $h_ingreso->diffInMinutes($m_ingreso, false));
-
-                    // 2. LÓGICA DE REFRIGERIO (Reglas FT y PT)
-                    $minutosProgramados = $h_ingreso->diffInMinutes($h_salida, false);
-                    $descuentoRefri = 0;
-
-                    if ($empleado->jornada_id == 1) {
-                        // Regla FT: Descuenta 1h si el programado es >= 6h
-
+                if ($empleado->jornada_id == 1) {
+                    $descuentoRefri = 60;
+                } else {
+                    if ($marcacion->ingreso_refri || $marcacion->salida_refri) {
                         $descuentoRefri = 60;
-
-                    } else {
-                        // Regla PT: Descuenta 1h SOLO si marcó refrigerio (entrada o salida)
-                        if ($marcacion->ingreso_refri || $marcacion->salida_refri) {
-                            $descuentoRefri = 60;
-                        }
-                    }
-
-                    // 3. TOTAL HORAS TRABAJADAS (Refactorizado)
-                    // Fórmula: Programado - Descuento Refri - Tardanza
-                    if ($empleado->jornada_id == 1) {
-                        $horas = max(0, $minutosProgramados - $descuentoRefri);
-                    } else {
-                        $horas = max(0, $minutosProgramados - $descuentoRefri - $tardanza);
-                    }
-
-                    // 4. EXTRA y ANTICIPADO
-                    if ($m_salida) {
-                        // EXTRA: HS - HSP
-                        $extra = max(0, $h_salida->diffInMinutes($m_salida, false));
-                        // ANTICIPADO: HSP - HS
-                        $horasAnticipado = max(0, $m_salida->diffInMinutes($h_salida, false));
-                    } else {
-                        $extra = 0;
-                        $horasAnticipado = 0;
-                    }
-
-                    $anticipado = $horasAnticipado;
-
-                    // Tolerancia anticipado
-                    if ((in_array($h_salida->format('H:i'), ['23:00', '23:30', '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($h_salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)) {
-                        $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20;
-                        $anticipado = $horasAnticipado >= $minutosTolerancia ? $horasAnticipado : 0;
-                    }
-
-                    // 4. Cálculo de Nocturno (Dinámico: lo que realmente trabajó entre 22:00 y 06:00)
-                    // 4. NOCTURNO: Basado en PROGRAMACIÓN (Regla Xiomara)
-                    // 4. NOCTURNO: (Salida Programada - 22:00) + CANDADO DE REALIDAD
-                    if (in_array($empleado->empresa_id, [1, 3, 4])) {
-
-                        // 1. Definimos la ventana legal (10 PM a 6 AM)
-                        $inicioVentana = $m_ingreso->copy()->setTime(22, 0, 0);
-                        $finVentana = $m_ingreso->copy()->addDay()->setTime(6, 0, 0);
-
-                        // 2. Preparamos la Salida Programada (HSP)
-                        $solo_hora_salida = Carbon::parse($horario->salida)->format('H:i:s');
-                        $h_salida_prog = Carbon::parse($m_ingreso->format('Y-m-d').' '.$solo_hora_salida);
-
-                        // Si la HSP es de madrugada, le sumamos el día
-                        if ($h_salida_prog->hour < 10) {
-                            $h_salida_prog->addDay();
-                        }
-
-                        // --- VALIDACIÓN: Solo calculamos si hay salida real y está después de las 10 PM ---
-                        if (! $m_salida || $m_salida->lte($inicioVentana)) {
-                            $nocturno = 0;
-                        } else {
-                            // --- CAMBIO PRINCIPAL: Usamos SOLO la hora programada, no la real ---
-
-                            // Inicio: El punto más tarde entre su entrada real y las 10:00 PM
-                            $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
-
-                            // Fin: SIEMPRE usamos la salida PROGRAMADA (no la real)
-                            $finConteo = $h_salida_prog;
-
-                            // El fin tampoco puede pasarse de las 6 AM
-                            if ($finConteo->gt($finVentana)) {
-                                $finConteo = $finVentana;
-                            }
-
-                            // Calculamos los minutos nocturnos según la programación
-                            if ($inicioConteo->lt($finConteo)) {
-                                $nocturno = $inicioConteo->diffInMinutes($finConteo);
-                                $nocturno = floor($nocturno / 30) * 30;
-                            } else {
-                                $nocturno = 0;
-                            }
-                        }
                     }
                 }
 
-                return [
-                    'empleado' => $empleado,
-                    'fecha' => $fecha,
-                    'horario' => $horario,
-                    'horariosExtra' => $horarioExtra,
-                    'marcacion' => $marcacion,
-                    'permiso' => $permisoFila,
-                    'refri_en_origen' => $refriEnOrigen,
-                    'horas' => $horas,
-                    'tardanza' => $tardanza,
-                    'extra' => $extra,
-                    'anticipado' => $anticipado,
-                    'nocturno' => $nocturno,
-                ];
-            });
+                $horas = max(0, $minutosProgramados - $descuentoRefri);
+
+                if ($m_salida) {
+                    $extra = max(0, $h_salida->diffInMinutes($m_salida, false));
+                    $horasAnticipado = max(0, $m_salida->diffInMinutes($h_salida, false));
+                } else {
+                    $extra = 0;
+                    $horasAnticipado = 0;
+                }
+
+                $anticipado = $horasAnticipado;
+
+                if ((in_array($h_salida->format('H:i'), ['23:00', '23:30', '23:59']) && ($empleado->empresa_id == 4 || $empleado->empresa_id == 3)) || ($h_salida->format('H:i') == '18:30' && $empleado->empresa_id == 1)) {
+                    $minutosTolerancia = $empleado->empresa_id == 1 ? 30 : 20;
+                    $anticipado = $horasAnticipado >= $minutosTolerancia ? $horasAnticipado : 0;
+                }
+
+                if (in_array($empleado->empresa_id, [1, 3, 4])) {
+                    $inicioVentana = $m_ingreso->copy()->setTime(22, 0, 0);
+                    $finVentana = $m_ingreso->copy()->addDay()->setTime(6, 0, 0);
+                    $solo_hora_salida = \Carbon\Carbon::parse($horario->salida)->format('H:i:s');
+                    $h_salida_prog = \Carbon\Carbon::parse($m_ingreso->format('Y-m-d').' '.$solo_hora_salida);
+                    if ($h_salida_prog->hour < 10) { $h_salida_prog->addDay(); }
+
+                    if (! $m_salida || $m_salida->lte($inicioVentana)) {
+                        $nocturno = 0;
+                    } else {
+                        $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
+                        $finConteo = $h_salida_prog;
+                        if ($finConteo->gt($finVentana)) { $finConteo = $finVentana; }
+
+                        if ($inicioConteo->lt($finConteo)) {
+                            $nocturno = $inicioConteo->diffInMinutes($finConteo);
+                            $nocturno = floor($nocturno / 30) * 30;
+                        } else {
+                            $nocturno = 0;
+                        }
+                    }
+                }
+            }
+
+            return [
+                'empleado' => $empleado,
+                'fecha' => $fecha,
+                'horario' => $horario,
+               // 'horariosExtra' => $horarioExtra,
+                'marcacion' => $marcacion,
+                'permiso' => $permisoFila,
+                'refri_en_origen' => $refriEnOrigen,
+                'horas' => $horas,
+                'tardanza' => $tardanza,
+                'extra' => $extra,
+                'anticipado' => $anticipado,
+                'nocturno' => $nocturno,
+            ];
         });
+    });
 
-        return Inertia::render('marcaciones/index', [
-            'marcaciones' => $lista,
-            'empresas' => $empresas,
-            'encargados' => $encargados,
-            'filters' => $filters,
-            'csrf_token' => csrf_token(),
+	   $queries = \DB::getQueryLog();
+        \Log::info('Queries lentas:', [
+            'total_queries' => count($queries),
+            'tiempo_total' => microtime(true) - $startTime,
+            'queries' => $queries,
         ]);
-    }
+    return Inertia::render('marcaciones/index', [
+        'marcaciones' => $lista,
+        'empresas' => $empresas,
+        'encargados' => $encargados,
+        'filters' => $filters,
+        'csrf_token' => csrf_token(),
+    ]);
+}
 
 
-
-
-    
     public function real(Request $request)
     {
         $filters = $request->validate([
@@ -308,7 +260,7 @@ class MarcacionController extends Controller
         $user = $request->user();
         $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
-        // PASO 1: FILTRAR EMPRESAS SEGÚN USUARIO
+        // PASO 1: FILTRAR EMPRESAS SEGÃšN USUARIO
         if ($user->name === 'ANGELES TERRONES MILUSKA') {
             $empresas = Empresa::where('estado', 1)
                 ->whereIn('id', [4, 10, 11])
@@ -351,7 +303,7 @@ class MarcacionController extends Controller
                 ->pluck('dni');
         }
 
-        /*$marcaciones = Zktimems::query()
+		/*$marcaciones = Zktimems::query()
             ->with(['empleado' => function ($query) {
                 $query->select('id', 'dni', 'nombres', 'apellidos');
             }])
@@ -359,125 +311,160 @@ class MarcacionController extends Controller
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
             ->get(['hora', 'tarjeta', 'fecha']);*/
 
-        $fechaFinBusqueda = \Carbon\Carbon::parse($request->fechaFin)->addDay()->toDateString();
+		$fechaFinBusqueda = \Carbon\Carbon::parse($request->fechaFin)->addDay()->toDateString();
 
-        $marcaciones = Zktimems::query()
-            ->with(['empleado' => function ($query) {
-                $query->select('id', 'dni', 'nombres', 'apellidos');
-            }])
-            ->whereIn('tarjeta', $empleadosDnis)
-            ->whereBetween('fecha', [$request->fechaInicio, $fechaFinBusqueda])
-            ->get(['hora', 'tarjeta', 'fecha'])
-            ->map(function ($item) {
-                // Mantenemos tu lógica: < 05:00 AM se mueve al día anterior
-                $h = \Carbon\Carbon::parse($item->hora);
+$marcaciones = Zktimems::query()
+    ->with(['empleado' => function ($query) {
+        $query->select('id', 'dni', 'nombres', 'apellidos');
+    }])
+    ->whereIn('tarjeta', $empleadosDnis)
+    ->whereBetween('fecha', [$request->fechaInicio, $fechaFinBusqueda])
+    ->get(['hora', 'tarjeta', 'fecha'])
+    ->map(function ($item) {
+        // Mantenemos tu lÃ³gica: < 05:00 AM se mueve al dÃ­a anterior
+        $h = \Carbon\Carbon::parse($item->hora);
 
-                if ($h->hour < 5) {
-                    $item->fecha = \Carbon\Carbon::parse($item->fecha)->subDay()->format('Y-m-d');
-                } else {
-                    $item->fecha = \Carbon\Carbon::parse($item->fecha)->format('Y-m-d');
-                }
+        if ($h->hour < 5) {
+            $item->fecha = \Carbon\Carbon::parse($item->fecha)->subDay()->format('Y-m-d');
+        } else {
+            $item->fecha = \Carbon\Carbon::parse($item->fecha)->format('Y-m-d');
+        }
+        return $item;
+    })
+    // 1. Filtramos por la fecha ya corregida (LÃ³gica)
+    ->filter(function ($item) use ($request) {
+        return $item->fecha >= $request->fechaInicio && $item->fecha <= $request->fechaFin;
+    })
+    // 2. Ordenamiento Maestro para que RRHH no se queje
+    ->sort(function ($a, $b) {
+        // Si las fechas son distintas, orden normal de fecha
+        if ($a->fecha !== $b->fecha) {
+            return strcmp($a->fecha, $b->fecha);
+        }
 
-                return $item;
-            })
-            // 1. Filtramos por la fecha ya corregida (Lógica)
-            ->filter(function ($item) use ($request) {
-                return $item->fecha >= $request->fechaInicio && $item->fecha <= $request->fechaFin;
-            })
-            // 2. Ordenamiento Maestro para que RRHH no se queje
-            ->sort(function ($a, $b) {
-                // Si las fechas son distintas, orden normal de fecha
-                if ($a->fecha !== $b->fecha) {
-                    return strcmp($a->fecha, $b->fecha);
-                }
+        // Si es la misma fecha lÃ³gica, aplicamos el truco de la hora virtual
+        // Las 00:06 se convierten en "24:00:06" para que vayan DESPUÃ‰S de las 21:00
+        $horaA = ($a->hora < '05:00:00') ? '24:' . $a->hora : $a->hora;
+        $horaB = ($b->hora < '05:00:00') ? '24:' . $b->hora : $b->hora;
 
-                // Si es la misma fecha lógica, aplicamos el truco de la hora virtual
-                // Las 00:06 se convierten en "24:00:06" para que vayan DESPUÉS de las 21:00
-                $horaA = ($a->hora < '05:00:00') ? '24:'.$a->hora : $a->hora;
-                $horaB = ($b->hora < '05:00:00') ? '24:'.$b->hora : $b->hora;
+        return strcmp($horaA, $horaB);
+    })
+    ->values(); // Resetear Ã­ndices para que Inertia no mande un objeto raro al frontend
 
-                return strcmp($horaA, $horaB);
-            })
-            ->values(); // Resetear índices para que Inertia no mande un objeto raro al frontend
-
-        return Inertia::render('marcaciones/reales/index', [
-            'marcaciones' => $marcaciones,
-            'empresas' => $empresas,
-            'encargados' => $encargados,
-            'filters' => $filters,
-            'csrf_token' => csrf_token(),
-        ]);
-    }
+return Inertia::render('marcaciones/reales/index', [
+    'marcaciones' => $marcaciones,
+    'empresas' => $empresas,
+    'encargados' => $encargados,
+    'filters' => $filters,
+    'csrf_token' => csrf_token(),
+]);
+}
 
     /* Enviar las marcaciones a asistencias */
-    public function store(StoreMarcacionRequest $request)
-    {
-        $data = $request->validated();
-        try {
-            DB::transaction(function () use ($data) {
-                $marcacion = Marcacion::updateOrCreate(
-                    [
-                        'empleado_id' => $data['empleado_id'],
-                        'fecha' => $data['fecha'], // Asegura formato YYYY-MM-DD
-                    ],
-                    [
-                        $data['tipo'] => $data['hora'],
-                    ]
-                );
+  public function store(StoreMarcacionRequest $request)
+{
+    $data = $request->validated();
+    try {
+        DB::transaction(function () use ($data) {
+            $marcacion = Marcacion::updateOrCreate(
+                [
+                    'empleado_id' => $data['empleado_id'],
+                    'fecha' => $data['fecha'],
+                ],
+                [
+                    $data['tipo'] => $data['hora'],
+                ]
+            );
 
-                MarcacionEdicion::create([
-                    'empleado_id' => $marcacion->empleado_id,
-                    'user_id' => Auth::user()->id,
-                    'fecha' => $marcacion->fecha,
-                    'hora_original' => $marcacion->{$data['tipo']},
-                    'hora' => $data['hora'],
-                    'motivo' => $data['motivo'],
-                ]);
-                $horarios = Horario::where('empleado_id', $marcacion->empleado_id)->whereNotNull('extra')->get();
-                if ($horarios->count() > 0) { // validar si hay horas extra registradas
-                    $horarioExtra = Horario::where('fecha', $marcacion->fecha)->where('empleado_id', $marcacion->empleado_id)->first();
-                    $marcacionExtra = $horarioExtra->salida->diffInMinutes($marcacion->salida);
+            MarcacionEdicion::create([
+                'empleado_id' => $marcacion->empleado_id,
+                'user_id' => Auth::user()->id,
+                'fecha' => $marcacion->fecha,
+                'hora_original' => $marcacion->{$data['tipo']},
+                'hora' => $data['hora'],
+                'motivo' => $data['motivo'],
+            ]);
 
-                    foreach ($horarios as $horario) {
-                        // Verificar si tenemos suficiente  tiempo en el registro actual para restar
-                        if ($horario->extra) {
-                            $extraTime = $horario->extra;
+            $horarios = Horario::where('empleado_id', $marcacion->empleado_id)
+                ->whereNotNull('extra')
+                ->get();
 
-                            if (Carbon::today()->diffInMinutes($horario->extra) > $marcacionExtra) {
-                                // Si el valor de 'extra' es mayor que lo que resta, simplemente resta
-                                $horario->extra = $extraTime->subMinutes($marcacionExtra);
-                                $horario->save();
-                                break; // Ya no necesitamos seguir iterando, porque hemos restado todo
-                            } else {
-                                // Si el valor de 'extra' es menor que lo que resta, ponlo a null
-                                $marcacionExtra -= Carbon::today()->diffInMinutes($horario->extra); // Restamos lo que queda
-                                $horario->extra = null; // Ponemos 'extra' en null
-                                $horario->save();
-                            }
+            if ($horarios->count() > 0) {
+                $horarioExtra = Horario::where('fecha', $marcacion->fecha)
+                    ->where('empleado_id', $marcacion->empleado_id)
+                    ->first();
+
+                if (!$horarioExtra || !$horarioExtra->salida || !$marcacion->salida) {
+                    return;
+                }
+
+                // ?? FIX: Usar solo formato de fecha Y-m-d
+                $fechaSolo = Carbon::parse($marcacion->fecha)->format('Y-m-d');
+
+                // Extraer solo la hora
+                $horaSalidaProgramada = is_string($horarioExtra->salida)
+                    ? $horarioExtra->salida
+                    : $horarioExtra->salida->format('H:i:s');
+
+                $horaSalidaReal = is_string($marcacion->salida)
+                    ? $marcacion->salida
+                    : $marcacion->salida->format('H:i:s');
+
+                $salidaProgramada = Carbon::parse($fechaSolo . ' ' . $horaSalidaProgramada);
+                $salidaReal = Carbon::parse($fechaSolo . ' ' . $horaSalidaReal);
+
+                // Ajustar si cruza medianoche
+                if ($salidaReal->lt($salidaProgramada)) {
+                    $salidaReal->addDay();
+                }
+
+                $marcacionExtra = $salidaProgramada->diffInMinutes($salidaReal);
+
+                foreach ($horarios as $horario) {
+                    if ($horario->extra) {
+                        $partesExtra = explode(':', $horario->extra);
+                        $minutosExtra = ((int)$partesExtra[0] * 60) + (int)$partesExtra[1];
+
+                        if ($minutosExtra > $marcacionExtra) {
+                            $nuevoExtra = $minutosExtra - $marcacionExtra;
+                            $horario->extra = sprintf('%02d:%02d:00', floor($nuevoExtra / 60), $nuevoExtra % 60);
+                            $horario->save();
+                            break;
+                        } else {
+                            $marcacionExtra -= $minutosExtra;
+                            $horario->extra = null;
+                            $horario->save();
                         }
                     }
+                }
 
-                    if ($marcacionExtra > 0 && $horario->extra) {
-                        $ultimoHorario = $horarios->last();
-                        $ultimoHorario->extra = $extraTime->subMinutes($marcacionExtra); // Restamos lo que queda, asegurándonos de no pasar de cero
+                if ($marcacionExtra > 0) {
+                    $ultimoHorario = $horarios->last();
+                    if ($ultimoHorario && $ultimoHorario->extra) {
+                        $partesExtra = explode(':', $ultimoHorario->extra);
+                        $minutosExtra = ((int)$partesExtra[0] * 60) + (int)$partesExtra[1];
+
+                        $nuevoExtra = max(0, $minutosExtra - $marcacionExtra);
+                        $ultimoHorario->extra = sprintf('%02d:%02d:00', floor($nuevoExtra / 60), $nuevoExtra % 60);
                         $ultimoHorario->save();
                     }
                 }
-            });
-        } catch (Exception $e) {
-            return back()->withErrors(['message' => $e->getMessage()]);
-        }
+            }
+        });
+    } catch (Exception $e) {
+        return back()->withErrors(['message' => $e->getMessage()]);
     }
+}
 
-    /* /*--------------------Update */
-    public function update(Request $request, Marcacion $marcacione)
+	/* /*--------------------Update*/
+     public function update(Request $request, Marcacion $marcacione)
     {
         // LOG DE ENTRADA INMEDIATA - Si no ves esto, el problema es la Ruta o Middleware
-        \Log::emergency('=== PETICIÓN RECIBIDA ===');
+        \Log::emergency('=== PETICIÃ“N RECIBIDA ===');
         \Log::emergency('ID Marcacion en URL: '.$marcacione->id);
         \Log::emergency('Payload: '.json_encode($request->all()));
 
-        // Usamos all() para saltarnos validaciones que puedan estar rebotando la petición
+        // Usamos all() para saltarnos validaciones que puedan estar rebotando la peticiÃ³n
         $data = $request->all();
 
         try {
@@ -487,13 +474,13 @@ class MarcacionController extends Controller
 
             return $this->updateModoLibre($data, $marcacione);
         } catch (\Exception $e) {
-            \Log::emergency('EXCEPCIÓN CACHADA: '.$e->getMessage());
+            \Log::emergency('EXCEPCIÃ“N CACHADA: '.$e->getMessage());
 
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
     }
 
-    private function updateModoCompensar($data, Marcacion $marcacione)
+	  private function updateModoCompensar($data, Marcacion $marcacione)
     {
         return DB::transaction(function () use ($data, $marcacione) {
             \Log::emergency('--- INICIO TRANSACTION ---');
@@ -504,22 +491,22 @@ class MarcacionController extends Controller
             $horarioFuente = Horario::find($idBolsa);
 
             if (! $horarioFuente) {
-                \Log::emergency("FALLO CRÍTICO: Horario ID $idBolsa no existe en la tabla horarios.");
+                \Log::emergency("FALLO CRÃTICO: Horario ID $idBolsa no existe en la tabla horarios.");
                 throw new \Exception('Bolsa de horas no encontrada.');
             }
 
-            // 1. Cálculos
+            // 1. CÃ¡lculos
             $partesExtra = explode(':', $horarioFuente->extra);
             $minutosReales = (isset($partesExtra[1])) ? ($partesExtra[0] * 60) + $partesExtra[1] : 0;
             $minutosAConsumir = 30;
 
-            \Log::emergency("Saldo: $minutosReales min. Consumo: $minutosAConsumir min.");
+             \Log::emergency("Saldo: $minutosReales min. Consumo: $minutosAConsumir min.");
 
             if ($minutosReales < $minutosAConsumir) {
                 throw new \Exception('Saldo insuficiente en la bolsa.');
             }
 
-            // 2. Modificar Marcación
+            // 2. Modificar MarcaciÃ³n
             $campoHora = $data['tipo']; // 'ingreso' o 'salida'
             $horaCarbon = \Carbon\Carbon::parse($marcacione->$campoHora);
 
@@ -539,11 +526,11 @@ class MarcacionController extends Controller
             \DB::table('horarios')->where('id', $horarioFuente->id)->update([
                 'extra' => $nuevoExtraStr,
                 'calculo_manual' => 1,
-                'destino_compensacion' => 'Compensado día '.$marcacione->fecha,
+                'destino_compensacion' => 'Compensado dÃ­a '.$marcacione->fecha,
             ]);
             \Log::emergency("Horario {$horarioFuente->id} actualizado saldo a $nuevoExtraStr");
 
-            // 5. Auditoría
+            // 5. AuditorÃ­a
             MarcacionEdicion::create([
                 'empleado_id' => $marcacione->empleado_id,
                 'user_id' => \Auth::id(),
@@ -562,21 +549,21 @@ class MarcacionController extends Controller
     private function updateModoLibre($data, Marcacion $marcacione)
     {
         return DB::transaction(function () use ($data, $marcacione) {
-            // 1. Auditoría (Igual que el anterior pero con la hora directa del front)
+            // 1. AuditorÃ­a (Igual que el anterior pero con la hora directa del front)
             MarcacionEdicion::create([
                 'empleado_id' => $marcacione->empleado_id,
                 'user_id' => Auth::id(),
                 'fecha' => $marcacione->fecha,
                 'hora_original' => $marcacione->{$data['tipo']},
                 'hora' => $data['hora_nueva'],
-                'motivo' => $data['motivo'].' (Edición Libre)',
+                'motivo' => $data['motivo'].' (EdiciÃ³n Libre)',
             ]);
 
-            // 2. Actualizamos la marcación directamente con lo que escribió RRHH
+            // 2. Actualizamos la marcaciÃ³n directamente con lo que escribiÃ³ RRHH
             $marcacione->update([$data['tipo'] => $data['hora_nueva']]);
 
             // 3. BLINDAJE: Marcamos el horario de HOY como manual
-            // Esto evita que tu lógica de "Index" intente recalcular este día.
+            // Esto evita que tu lÃ³gica de "Index" intente recalcular este dÃ­a.
             DB::table('horarios')
                 ->where('empleado_id', $marcacione->empleado_id)
                 ->where('fecha', $marcacione->fecha)
@@ -585,11 +572,12 @@ class MarcacionController extends Controller
                     'destino_compensacion' => 'Editado libremente por RRHH',
                 ]);
 
-            return back()->with('success', 'Marcación editada manualmente.');
+            return back()->with('success', 'MarcaciÃ³n editada manualmente.');
         });
     }
 
-    public function getHorasExtraDisponibles(Request $request, $empleado)
+
+	public function getHorasExtraDisponibles(Request $request, $empleado)
     {
         $inicio = $request->query('fechaInicio');
         $fin = $request->query('fechaFin');
@@ -605,7 +593,7 @@ class MarcacionController extends Controller
             ->whereNotNull('h.extra')
             ->where('h.extra', '!=', '00:00:00');
 
-        // Seleccionamos h.id explícitamente para que el Front mande el ID que el Back usa para descontar
+        // Seleccionamos h.id explÃ­citamente para que el Front mande el ID que el Back usa para descontar
         $extras = $query->select('h.id', 'm.fecha', 'h.extra as extra_db')->get();
 
         $extrasProcesadas = $extras->map(function ($registro) {
@@ -632,7 +620,7 @@ class MarcacionController extends Controller
         return response()->json($extrasProcesadas);
     }
 
-    /* -------------------- Update */
+	/*-------------------- Update*/
     public function edicion(Request $request): Response
     {
         $filters = $request->validate([
@@ -680,121 +668,116 @@ class MarcacionController extends Controller
     /*jala las marcas del reloj desde una fecha dada , identifica HI, HS , HRF
      y las convierte en registros oficiales de asistencia en la tabla marcaciones*/
 
-    public function pull(Request $request)
-    {
-        $data = $request->validate([
-            'empresa' => 'required|integer|exists:empresas,id',
-            'fecha' => 'required|date',
-        ]);
+public function pull(Request $request)
+{
+    $data = $request->validate([
+        'empresa' => 'required|integer|exists:empresas,id',
+        'fecha' => 'required|date',
+    ]);
 
-        try {
-            DB::transaction(function () use ($data) {
-                $dnis = Empleado::where('empresa_id', $data['empresa'])
-                    ->whereNull('fecha_cese')
-                    ->pluck('id', 'dni');
+    try {
+        DB::transaction(function () use ($data) {
+            $dnis = Empleado::where('empresa_id', $data['empresa'])
+                ->whereNull('fecha_cese')
+                ->pluck('id', 'dni');
 
-                $horarios = Horario::whereIn('empleado_id', $dnis->values())
-                    ->whereBetween('fecha', [$data['fecha'], now()->toDateString()])
-                    ->get()
-                    ->keyBy(fn ($h) => $h->fecha->format('Y-m-d').'-'.$h->empleado_id);
+            $horarios = Horario::whereIn('empleado_id', $dnis->values())
+                ->whereBetween('fecha', [$data['fecha'], now()->toDateString()])
+                ->get()
+                ->keyBy(fn($h) => $h->fecha->format('Y-m-d').'-'.$h->empleado_id);
 
-                // 1. Recolectamos TODAS las marcas de los relojes involucrados
-                $todasLasMarcasRaw = Zktimems::whereIn('tarjeta', $dnis->keys())
-                    ->whereBetween('fecha', [
-                        \Carbon\Carbon::parse($data['fecha'])->format('Y-m-d'),
-                        now()->addDay()->format('Y-m-d'),
-                    ])
-                    ->get(['tarjeta', 'fecha', 'hora']);
+            // 1. Recolectamos TODAS las marcas de los relojes involucrados
+            $todasLasMarcasRaw = Zktimems::whereIn('tarjeta', $dnis->keys())
+                ->whereBetween('fecha', [
+                    \Carbon\Carbon::parse($data['fecha'])->format('Y-m-d'),
+                    now()->addDay()->format('Y-m-d')
+                ])
+                ->get(['tarjeta', 'fecha', 'hora']);
 
-                // 2. Agrupamos por Jornada Lógica (Regla de las 05:00 AM)
-                $grupos = [];
-                foreach ($todasLasMarcasRaw as $item) {
-                    $empleadoId = $dnis->get($item->tarjeta);
-                    $f = \Carbon\Carbon::parse($item->fecha);
-                    $fechaLogica = ($item->hora < '05:00:00') ? $f->subDay()->format('Y-m-d') : $f->format('Y-m-d');
-                    $key = $fechaLogica.'-'.$empleadoId;
-                    $grupos[$key][] = $item->hora;
-                }
+            // 2. Agrupamos por Jornada LÃ³gica (Regla de las 05:00 AM)
+            $grupos = [];
+            foreach ($todasLasMarcasRaw as $item) {
+                $empleadoId = $dnis->get($item->tarjeta);
+                $f = \Carbon\Carbon::parse($item->fecha);
+                $fechaLogica = ($item->hora < '05:00:00') ? $f->subDay()->format('Y-m-d') : $f->format('Y-m-d');
+                $key = $fechaLogica . '-' . $empleadoId;
+                $grupos[$key][] = $item->hora;
+            }
 
-                // 3. Procesamos cada grupo con lógica antibug
-                foreach ($grupos as $key => $horasArray) {
-                    $partes = explode('-', $key);
-                    $fechaLogica = $partes[0].'-'.$partes[1].'-'.$partes[2];
-                    $empleadoId = end($partes);
+            // 3. Procesamos cada grupo con lÃ³gica antibug
+            foreach ($grupos as $key => $horasArray) {
+                $partes = explode('-', $key);
+                $fechaLogica = $partes[0].'-'.$partes[1].'-'.$partes[2];
+                $empleadoId = end($partes);
 
-                    $marcas = collect($horasArray)->unique()->sort()->values();
-                    $madrugada = $marcas->filter(fn ($h) => $h < '05:00:00')->values();
-                    $tarde = $marcas->filter(fn ($h) => $h >= '05:00:00')->values();
+                $marcas = collect($horasArray)->unique()->sort()->values();
+                $madrugada = $marcas->filter(fn($h) => $h < '05:00:00')->values();
+                $tarde = $marcas->filter(fn($h) => $h >= '05:00:00')->values();
 
-                    $ingreso = null;
-                    $salida = null;
-                    $ingreso_refri = null;
-                    $salida_refri = null;
+                $ingreso = null; $salida = null; $ingreso_refri = null; $salida_refri = null;
 
-                    if ($tarde->isNotEmpty()) {
-                        $ingreso = $tarde->first();
+                if ($tarde->isNotEmpty()) {
+                    $ingreso = $tarde->first();
 
-                        // CASO A: TIENE MARCA DE MADRUGADA (Salida al día siguiente)
-                        if ($madrugada->isNotEmpty()) {
-                            $salida = $madrugada->last();
-                            // Si sobran marcas en la tarde, son refrigerio
-                            if ($tarde->count() >= 2) {
-                                $ingreso_refri = $tarde->get(1);
-                            }
-                            if ($tarde->count() >= 3) {
+                    // CASO A: TIENE MARCA DE MADRUGADA (Salida al dÃ­a siguiente)
+                    if ($madrugada->isNotEmpty()) {
+                        $salida = $madrugada->last();
+                        // Si sobran marcas en la tarde, son refrigerio
+                        if ($tarde->count() >= 2) $ingreso_refri = $tarde->get(1);
+                        if ($tarde->count() >= 3) $salida_refri = $tarde->get(2);
+                    }
+                    // CASO B: TODO OCURRE EL MISMO DÃA
+                    else {
+                        $conteo = $tarde->count();
+                        if ($conteo == 2) {
+                            $salida = $tarde->last();
+                        }
+                        elseif ($conteo == 3) {
+                            // LÃ³gica para AARON: Â¿La 3ra marca es refri o salida?
+                            // Si la marca es antes de las 14:00 (2 PM), es fin de refri
+                            $ingreso_refri = $tarde->get(1);
+                            if ($tarde->get(2) < '14:30:00') {
                                 $salida_refri = $tarde->get(2);
+                                $salida = null;
+                            } else {
+                                $salida = $tarde->get(2);
                             }
                         }
-                        // CASO B: TODO OCURRE EL MISMO DÍA
-                        else {
-                            $conteo = $tarde->count();
-                            if ($conteo == 2) {
-                                $salida = $tarde->last();
-                            } elseif ($conteo == 3) {
-                                // Lógica para AARON: ¿La 3ra marca es refri o salida?
-                                // Si la marca es antes de las 14:00 (2 PM), es fin de refri
-                                $ingreso_refri = $tarde->get(1);
-                                if ($tarde->get(2) < '14:30:00') {
-                                    $salida_refri = $tarde->get(2);
-                                    $salida = null;
-                                } else {
-                                    $salida = $tarde->get(2);
-                                }
-                            } elseif ($conteo >= 4) {
-                                // Caso Acevedo: Entrada, Inicio Refri, Fin Refri, Salida
-                                $ingreso_refri = $tarde->get(1);
-                                $salida_refri = $tarde->get(2);
-                                $salida = $tarde->last();
-                            }
+                        elseif ($conteo >= 4) {
+                            // Caso Acevedo: Entrada, Inicio Refri, Fin Refri, Salida
+                            $ingreso_refri = $tarde->get(1);
+                            $salida_refri = $tarde->get(2);
+                            $salida = $tarde->last();
                         }
                     }
-
-                    // 4. GUARDADO FORZADO: updateOrCreate machaca errores previos
-                    Marcacion::updateOrCreate(
-                        ['empleado_id' => $empleadoId, 'fecha' => $fechaLogica],
-                        [
-                            'ingreso' => $ingreso,
-                            'salida' => $salida,
-                            'ingreso_refri' => $ingreso_refri,
-                            'salida_refri' => $salida_refri,
-                        ]
-                    );
-
-                    // Permisos de descanso
-                    $h = $horarios->get($key);
-                    if ($h && $h->estado === 'D' && ($ingreso || $salida)) {
-                        Permiso::firstOrCreate([
-                            'empleado_id' => $empleadoId, 'tipo_id' => 24, 'fecha' => $fechaLogica, 'estado' => 0,
-                        ], ['motivo' => 'TRABAJO EN DIA DE DESCANSO']);
-                    }
                 }
-            });
 
-            return back()->with('success', 'Sincronización completada.');
-        } catch (\Exception $e) {
-            return back()->withErrors(['message' => $e->getMessage()]);
-        }
+                // 4. GUARDADO FORZADO: updateOrCreate machaca errores previos
+                Marcacion::updateOrCreate(
+                    ['empleado_id' => $empleadoId, 'fecha' => $fechaLogica],
+                    [
+                        'ingreso' => $ingreso,
+                        'salida' => $salida,
+                        'ingreso_refri' => $ingreso_refri,
+                        'salida_refri' => $salida_refri,
+                    ]
+                );
+
+                // Permisos de descanso
+                $h = $horarios->get($key);
+                if ($h && $h->estado === 'D' && ($ingreso || $salida)) {
+                    Permiso::firstOrCreate([
+                        'empleado_id' => $empleadoId, 'tipo_id' => 24, 'fecha' => $fechaLogica, 'estado' => 0
+                    ], ['motivo' => 'TRABAJO EN DIA DE DESCANSO']);
+                }
+            }
+        });
+
+        return back()->with('success', 'SincronizaciÃ³n completada.');
+    } catch (\Exception $e) {
+        return back()->withErrors(['message' => $e->getMessage()]);
     }
+}
 
     public function download(Request $request)
     {
