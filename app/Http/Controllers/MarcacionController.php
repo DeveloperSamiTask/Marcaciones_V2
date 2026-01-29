@@ -27,6 +27,8 @@ use Illuminate\Support\Facades\Log;
 
 class MarcacionController extends Controller
 {
+
+
 public function index(Request $request)
 {
     \DB::enableQueryLog();
@@ -86,7 +88,7 @@ public function index(Request $request)
     // No traemos toda la historia, solo lo que necesitamos comparar (el rango actual)
     $todasLasMarcaciones = Marcacion::whereIn('empleado_id', $empleados->pluck('id'))
         ->whereBetween('fecha', [
-            \Carbon\Carbon::parse($request->fechaInicio)->subMonths(2), // Un mes atrás por si las compensaciones son antiguas
+            \Carbon\Carbon::parse($request->fechaInicio)->subMonths(2), // Un mes atr醩 por si las compensaciones son antiguas
             $request->fechaFin
         ])
         ->get()
@@ -115,7 +117,7 @@ public function index(Request $request)
                     if (isset($matches[1])) {
                         $fechaOrigen = \Carbon\Carbon::createFromFormat('d/m/Y', $matches[1])->format('Y-m-d');
 
-                        // 2. BUSQUEDA EN MEMORIA: Usamos la colección filtrada en el punto 1
+                        // 2. BUSQUEDA EN MEMORIA: Usamos la colecci髇 filtrada en el punto 1
                         $marcacionOrigen = $todasLasMarcaciones->get($empleado->id)?->first(function ($m) use ($fechaOrigen) {
                             $fechaM = ($m->fecha instanceof \Carbon\Carbon) ? $m->fecha : \Carbon\Carbon::parse($m->fecha);
                             return $fechaM->format('Y-m-d') === $fechaOrigen;
@@ -248,8 +250,7 @@ public function index(Request $request)
 }
 
 
-    public function real(Request $request)
-    {
+    public function real(Request $request)   {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
             'encargado' => 'nullable|integer|exists:empleados,id',
@@ -260,7 +261,7 @@ public function index(Request $request)
         $user = $request->user();
         $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
-        // PASO 1: FILTRAR EMPRESAS SEGÃšN USUARIO
+        // PASO 1: FILTRAR EMPRESAS SEG脷N USUARIO
         if ($user->name === 'ANGELES TERRONES MILUSKA') {
             $empresas = Empresa::where('estado', 1)
                 ->whereIn('id', [4, 10, 11])
@@ -312,7 +313,6 @@ public function index(Request $request)
             ->get(['hora', 'tarjeta', 'fecha']);*/
 
 		$fechaFinBusqueda = \Carbon\Carbon::parse($request->fechaFin)->addDay()->toDateString();
-
 $marcaciones = Zktimems::query()
     ->with(['empleado' => function ($query) {
         $query->select('id', 'dni', 'nombres', 'apellidos');
@@ -321,7 +321,7 @@ $marcaciones = Zktimems::query()
     ->whereBetween('fecha', [$request->fechaInicio, $fechaFinBusqueda])
     ->get(['hora', 'tarjeta', 'fecha'])
     ->map(function ($item) {
-        // Mantenemos tu lÃ³gica: < 05:00 AM se mueve al dÃ­a anterior
+        // Mantenemos tu l贸gica: < 05:00 AM se mueve al d铆a anterior
         $h = \Carbon\Carbon::parse($item->hora);
 
         if ($h->hour < 5) {
@@ -331,7 +331,7 @@ $marcaciones = Zktimems::query()
         }
         return $item;
     })
-    // 1. Filtramos por la fecha ya corregida (LÃ³gica)
+    // 1. Filtramos por la fecha ya corregida (L贸gica)
     ->filter(function ($item) use ($request) {
         return $item->fecha >= $request->fechaInicio && $item->fecha <= $request->fechaFin;
     })
@@ -342,14 +342,14 @@ $marcaciones = Zktimems::query()
             return strcmp($a->fecha, $b->fecha);
         }
 
-        // Si es la misma fecha lÃ³gica, aplicamos el truco de la hora virtual
-        // Las 00:06 se convierten en "24:00:06" para que vayan DESPUÃ‰S de las 21:00
+        // Si es la misma fecha l贸gica, aplicamos el truco de la hora virtual
+        // Las 00:06 se convierten en "24:00:06" para que vayan DESPU脡S de las 21:00
         $horaA = ($a->hora < '05:00:00') ? '24:' . $a->hora : $a->hora;
         $horaB = ($b->hora < '05:00:00') ? '24:' . $b->hora : $b->hora;
 
         return strcmp($horaA, $horaB);
     })
-    ->values(); // Resetear Ã­ndices para que Inertia no mande un objeto raro al frontend
+    ->values(); // Resetear 铆ndices para que Inertia no mande un objeto raro al frontend
 
 return Inertia::render('marcaciones/reales/index', [
     'marcaciones' => $marcaciones,
@@ -460,11 +460,11 @@ return Inertia::render('marcaciones/reales/index', [
      public function update(Request $request, Marcacion $marcacione)
     {
         // LOG DE ENTRADA INMEDIATA - Si no ves esto, el problema es la Ruta o Middleware
-        \Log::emergency('=== PETICIÃ“N RECIBIDA ===');
+        \Log::emergency('=== PETICI脫N RECIBIDA ===');
         \Log::emergency('ID Marcacion en URL: '.$marcacione->id);
         \Log::emergency('Payload: '.json_encode($request->all()));
 
-        // Usamos all() para saltarnos validaciones que puedan estar rebotando la peticiÃ³n
+        // Usamos all() para saltarnos validaciones que puedan estar rebotando la petici贸n
         $data = $request->all();
 
         try {
@@ -474,7 +474,7 @@ return Inertia::render('marcaciones/reales/index', [
 
             return $this->updateModoLibre($data, $marcacione);
         } catch (\Exception $e) {
-            \Log::emergency('EXCEPCIÃ“N CACHADA: '.$e->getMessage());
+            \Log::emergency('EXCEPCI脫N CACHADA: '.$e->getMessage());
 
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
@@ -491,11 +491,11 @@ return Inertia::render('marcaciones/reales/index', [
             $horarioFuente = Horario::find($idBolsa);
 
             if (! $horarioFuente) {
-                \Log::emergency("FALLO CRÃTICO: Horario ID $idBolsa no existe en la tabla horarios.");
+                \Log::emergency("FALLO CR脥TICO: Horario ID $idBolsa no existe en la tabla horarios.");
                 throw new \Exception('Bolsa de horas no encontrada.');
             }
 
-            // 1. CÃ¡lculos
+            // 1. C谩lculos
             $partesExtra = explode(':', $horarioFuente->extra);
             $minutosReales = (isset($partesExtra[1])) ? ($partesExtra[0] * 60) + $partesExtra[1] : 0;
             $minutosAConsumir = 30;
@@ -506,7 +506,7 @@ return Inertia::render('marcaciones/reales/index', [
                 throw new \Exception('Saldo insuficiente en la bolsa.');
             }
 
-            // 2. Modificar MarcaciÃ³n
+            // 2. Modificar Marcaci贸n
             $campoHora = $data['tipo']; // 'ingreso' o 'salida'
             $horaCarbon = \Carbon\Carbon::parse($marcacione->$campoHora);
 
@@ -526,11 +526,11 @@ return Inertia::render('marcaciones/reales/index', [
             \DB::table('horarios')->where('id', $horarioFuente->id)->update([
                 'extra' => $nuevoExtraStr,
                 'calculo_manual' => 1,
-                'destino_compensacion' => 'Compensado dÃ­a '.$marcacione->fecha,
+                'destino_compensacion' => 'Compensado d铆a '.$marcacione->fecha,
             ]);
             \Log::emergency("Horario {$horarioFuente->id} actualizado saldo a $nuevoExtraStr");
 
-            // 5. AuditorÃ­a
+            // 5. Auditor铆a
             MarcacionEdicion::create([
                 'empleado_id' => $marcacione->empleado_id,
                 'user_id' => \Auth::id(),
@@ -549,21 +549,21 @@ return Inertia::render('marcaciones/reales/index', [
     private function updateModoLibre($data, Marcacion $marcacione)
     {
         return DB::transaction(function () use ($data, $marcacione) {
-            // 1. AuditorÃ­a (Igual que el anterior pero con la hora directa del front)
+            // 1. Auditor铆a (Igual que el anterior pero con la hora directa del front)
             MarcacionEdicion::create([
                 'empleado_id' => $marcacione->empleado_id,
                 'user_id' => Auth::id(),
                 'fecha' => $marcacione->fecha,
                 'hora_original' => $marcacione->{$data['tipo']},
                 'hora' => $data['hora_nueva'],
-                'motivo' => $data['motivo'].' (EdiciÃ³n Libre)',
+                'motivo' => $data['motivo'].' (Edici贸n Libre)',
             ]);
 
-            // 2. Actualizamos la marcaciÃ³n directamente con lo que escribiÃ³ RRHH
+            // 2. Actualizamos la marcaci贸n directamente con lo que escribi贸 RRHH
             $marcacione->update([$data['tipo'] => $data['hora_nueva']]);
 
             // 3. BLINDAJE: Marcamos el horario de HOY como manual
-            // Esto evita que tu lÃ³gica de "Index" intente recalcular este dÃ­a.
+            // Esto evita que tu l贸gica de "Index" intente recalcular este d铆a.
             DB::table('horarios')
                 ->where('empleado_id', $marcacione->empleado_id)
                 ->where('fecha', $marcacione->fecha)
@@ -572,7 +572,7 @@ return Inertia::render('marcaciones/reales/index', [
                     'destino_compensacion' => 'Editado libremente por RRHH',
                 ]);
 
-            return back()->with('success', 'MarcaciÃ³n editada manualmente.');
+            return back()->with('success', 'Marcaci贸n editada manualmente.');
         });
     }
 
@@ -593,7 +593,7 @@ return Inertia::render('marcaciones/reales/index', [
             ->whereNotNull('h.extra')
             ->where('h.extra', '!=', '00:00:00');
 
-        // Seleccionamos h.id explÃ­citamente para que el Front mande el ID que el Back usa para descontar
+        // Seleccionamos h.id expl铆citamente para que el Front mande el ID que el Back usa para descontar
         $extras = $query->select('h.id', 'm.fecha', 'h.extra as extra_db')->get();
 
         $extrasProcesadas = $extras->map(function ($registro) {
@@ -694,7 +694,7 @@ public function pull(Request $request)
                 ])
                 ->get(['tarjeta', 'fecha', 'hora']);
 
-            // 2. Agrupamos por Jornada LÃ³gica (Regla de las 05:00 AM)
+            // 2. Agrupamos por Jornada L贸gica (Regla de las 05:00 AM)
             $grupos = [];
             foreach ($todasLasMarcasRaw as $item) {
                 $empleadoId = $dnis->get($item->tarjeta);
@@ -704,7 +704,7 @@ public function pull(Request $request)
                 $grupos[$key][] = $item->hora;
             }
 
-            // 3. Procesamos cada grupo con lÃ³gica antibug
+            // 3. Procesamos cada grupo con l贸gica antibug
             foreach ($grupos as $key => $horasArray) {
                 $partes = explode('-', $key);
                 $fechaLogica = $partes[0].'-'.$partes[1].'-'.$partes[2];
@@ -719,21 +719,21 @@ public function pull(Request $request)
                 if ($tarde->isNotEmpty()) {
                     $ingreso = $tarde->first();
 
-                    // CASO A: TIENE MARCA DE MADRUGADA (Salida al dÃ­a siguiente)
+                    // CASO A: TIENE MARCA DE MADRUGADA (Salida al d铆a siguiente)
                     if ($madrugada->isNotEmpty()) {
                         $salida = $madrugada->last();
                         // Si sobran marcas en la tarde, son refrigerio
                         if ($tarde->count() >= 2) $ingreso_refri = $tarde->get(1);
                         if ($tarde->count() >= 3) $salida_refri = $tarde->get(2);
                     }
-                    // CASO B: TODO OCURRE EL MISMO DÃA
+                    // CASO B: TODO OCURRE EL MISMO D脥A
                     else {
                         $conteo = $tarde->count();
                         if ($conteo == 2) {
                             $salida = $tarde->last();
                         }
                         elseif ($conteo == 3) {
-                            // LÃ³gica para AARON: Â¿La 3ra marca es refri o salida?
+                            // L贸gica para AARON: 驴La 3ra marca es refri o salida?
                             // Si la marca es antes de las 14:00 (2 PM), es fin de refri
                             $ingreso_refri = $tarde->get(1);
                             if ($tarde->get(2) < '14:30:00') {
@@ -773,7 +773,7 @@ public function pull(Request $request)
             }
         });
 
-        return back()->with('success', 'SincronizaciÃ³n completada.');
+        return back()->with('success', 'Sincronizaci贸n completada.');
     } catch (\Exception $e) {
         return back()->withErrors(['message' => $e->getMessage()]);
     }

@@ -24,10 +24,7 @@ class AsistenciaDetalle extends Model
         'estado',
         'estado_horas_extra',
 
-        'nocturno',
-        'anticipado',
-        'tardanza',
-        'extra',
+
     ];
 
     protected function casts(): array

@@ -747,6 +747,14 @@ class ReporteController extends Controller
         return $totalMinutos;
     }
 
+
+
+
+
+
+
+
+
     public function calcularMinutosDia($empleado, $horario, $marcacion)
     {
         if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
@@ -772,6 +780,36 @@ class ReporteController extends Controller
 
         return max(0, $minutos);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     public function tareoDownload(Request $request)
     {
@@ -1292,3 +1330,5 @@ class ReporteController extends Controller
         return Excel::download(new HorasExtraExport($data), 'reporte_horas_extra.xlsx');
     }
 }
+
+

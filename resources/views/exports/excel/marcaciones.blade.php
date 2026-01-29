@@ -23,6 +23,7 @@ $estado = [
 	'ST' => ['label' => 'S. TARDANZA'],
 	'SN' => ['label' => 'S. NEGLIGENCIA'],
 	'SFI' => ['label' => 'S. FALTA INJ.'],
+    'TD' => ['label' => 'TRABAJO DIA DESCANSO.'],
     '' => ['label' => 'NO REGISTRADO'],
 ];
 @endphp
