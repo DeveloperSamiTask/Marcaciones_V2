@@ -12,10 +12,9 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
-
+use Illuminate\Support\Facades\Log;
 class SuspensionController extends Controller
 {
     public function index(Request $request): Response
@@ -105,6 +104,80 @@ class SuspensionController extends Controller
             'url' => session('suspensiones_url', route('suspensiones.index')),
         ]);
     }
+
+    /*
+ public function store(Request $request)
+    {
+
+        // 1. cuando viene un motivo -> suspension manual
+        if ($request->has('motivo')) {
+            $data = $request->validate([
+                'empleado_id' => 'required|exists:empleados,id',
+                'fecha' => 'required|date',
+                'motivo' => 'required|string',
+                'tipo' => 'required|string|in:AM,S',
+                'razon' => 'required|string|in:tardanza,falta injustificada,incumplimiento,negligencia',
+            ]);
+
+            // 2. cuando no viene motivo
+        } else {
+            $data = $request->validate([
+                'marcacion_id' => 'required|exists:marcacions,id',
+                'tipo' => 'required|string|in:tardanza,incompleto,refrigerio,incumplimiento',
+            ]);
+        }
+
+        try {
+            DB::transaction(function () use ($data, $request) {
+
+                if ($request->has('motivo')) {
+                    $amonestacion = Suspension::create([
+                        'user_id' => $request->user()->id,
+                        'empleado_id' => $data['empleado_id'],
+                        'fecha' => now(),
+                        'motivo' => 'En la fecha '.$data['fecha'].$data['motivo'],
+                        'tipo' => $data['razon'],
+                    ]);
+
+                    // 3. genera codigo unico : S15012024325
+                    $amonestacion->update(['codigo' => $data['tipo'].now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
+                    CrearNotificacionSuspension::dispatch($amonestacion);
+                } else {
+
+                    // 4. Amonestación Automática por Marcación
+                    $marcacion = Marcacion::with(['empleado.horarios'])->findOrFail($data['marcacion_id']);
+                    $minutos = match ($data['tipo']) { // se obtiene la hora segun el tipo del memorandum
+                        'tardanza' => $marcacion->tardanza,
+                        'refrigerio' => $marcacion->refrigerio,
+                        default => null
+                    };
+
+                    // 5 Convierte minutos a hora (ej: 30 min → 00:30:00)
+                    $hora = $minutos ? Carbon::now()->startOfDay()->addMinutes($minutos)->format('H:i:s') : null;
+
+                    $amonestacion = Suspension::create([
+                        'user_id' => $request->user()->id,
+                        'empleado_id' => $marcacion->empleado_id,
+                        'fecha' => $marcacion->fecha,
+                        'hora' => $hora,
+                        'tipo' => $data['tipo'],
+                    ]);
+
+                    // 6 Código para amonestación: "AM15012024325"
+                    $amonestacion->update(['codigo' => 'AM'.now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
+                }
+
+            });
+
+            if ($request->has('motivo')) {
+                return to_route('suspensiones.index')->withSuccess(['message' => 'Suspension creado exitosamente!']);
+            }
+
+        } catch (Exception $e) {
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
+        }
+    }
+    */
 
     public function store(Request $request)
     {
@@ -222,6 +295,8 @@ class SuspensionController extends Controller
         // EMPRESAS QUE USAN FORMATO A5 HORIZONTAL
         $empresasA5 = [1, 2, 10, 3]; // Granja Villa, Sami Task, Yaku Park, Inturpesa
         $usarA5 = in_array($suspension->empleado->empresa_id, $empresasA5);
+
+
 
         // INCUMPLIMIENTO
         if ($suspension->tipo == 'incumplimiento') {

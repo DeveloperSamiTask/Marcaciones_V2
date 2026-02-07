@@ -36,10 +36,14 @@
 
     <body>
         @php
-            $tipo = [
-                'tardanza' => 'AMONESTACION ESCRITA POR TARDANZA',
-                'refrigerio' => 'AMONESTACION ESCRITA POR SOBRE TIEMPO DE REFRIGERIO',
-            ];
+           $tipo = [
+			'tardanza' => 'AMONESTACION ESCRITA POR TARDANZA',
+			'refrigerio' => 'AMONESTACION ESCRITA POR SOBRE TIEMPO DE REFRIGERIO',
+			'falta injustificada' => 'AMONESTACION ESCRITA POR FALTA INJUSTIFICADA',
+			'negligencia' => 'AMONESTACION ESCRITA POR NEGLIGENCIA',
+			'incumplimiento' => 'AMONESTACION ESCRITA POR INCUMPLIMIENTO',
+			'incompleto' => 'AMONESTACION ESCRITA POR MARCACION IMCOMPLETA',
+			];
         @endphp
         <div style="page-break-inside: avoid;">
             <div style="text-align: center;">
@@ -96,7 +100,7 @@
                                         {{ $item->fecha->format('d/m/Y') }}
                                     </td>
                                     <td style="font-size:16px; text-align:center; border: 1px solid black; uppercase">
-                                        {{ $tipo[$suspension->tipo] }}
+                                        {{ $tipo[$item->tipo] ?? 'AMONESTACION ESCRITA' }}
                                     </td>
                                 </tr>
                             @endforeach

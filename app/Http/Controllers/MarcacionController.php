@@ -537,7 +537,7 @@ return Inertia::render('marcaciones/reales/index', [
                 'fecha' => $marcacione->fecha,
                 'hora_original' => $data['hora_original'] ?? '00:00',
                 'hora' => $nuevaHora,
-                'motivo' => ($data['motivo'] ?? 'Sin motivo').' (HE)',
+                'motivo' => $data['motivo'].' (Edici贸n Compensa)',
             ]);
 
             \Log::emergency('--- FIN TRANSACTION OK ---');
@@ -578,47 +578,55 @@ return Inertia::render('marcaciones/reales/index', [
 
 
 	public function getHorasExtraDisponibles(Request $request, $empleado)
-    {
-        $inicio = $request->query('fechaInicio');
-        $fin = $request->query('fechaFin');
+{
+    // 1. Capturamos y validamos que las fechas existan
+    $inicio = $request->query('fechaInicio');
+    $fin = $request->query('fechaFin');
 
-        // 1. Corregimos el SELECT: Necesitamos el ID de HORARIOS (h.id) para poder descontar
-        $query = \DB::table('marcacions as m')
-            ->join('horarios as h', function ($join) {
-                $join->on('h.fecha', '=', 'm.fecha')
-                    ->on('h.empleado_id', '=', 'm.empleado_id');
-            })
-            ->where('m.empleado_id', $empleado)
-            ->where('m.estado_horas_extra', 1) // 1 = Tiene extras disponibles
-            ->whereNotNull('h.extra')
-            ->where('h.extra', '!=', '00:00:00');
-
-        // Seleccionamos h.id expl铆citamente para que el Front mande el ID que el Back usa para descontar
-        $extras = $query->select('h.id', 'm.fecha', 'h.extra as extra_db')->get();
-
-        $extrasProcesadas = $extras->map(function ($registro) {
-            $partes = explode(':', (string) $registro->extra_db);
-            if (count($partes) < 2) {
-                return null;
-            }
-
-            $horas = (int) $partes[0];
-            $minutos = (int) $partes[1];
-
-            $minutosTotales = ($horas * 60) + $minutos;
-            $ajustado = floor($minutosTotales / 30) * 30;
-
-            return [
-                'id' => $registro->id, // <--- Este ahora es el ID de la tabla HORARIOS
-                'fecha' => $registro->fecha,
-                'extra' => (int) $ajustado,
-            ];
+    $query = \DB::table('marcacions as m')
+        ->join('horarios as h', function ($join) {
+            $join->on('h.fecha', '=', 'm.fecha')
+                 ->on('h.empleado_id', '=', 'm.empleado_id');
         })
-            ->filter(fn ($item) => $item !== null && $item['extra'] >= 30)
-            ->values();
+        ->where('m.empleado_id', $empleado)
+        ->where('m.estado_horas_extra', 1)
+        ->whereNotNull('h.extra')
+        ->where('h.extra', '!=', '00:00:00');
 
-        return response()->json($extrasProcesadas);
+    // 2. FILTRO POR RANGO DE FECHAS (La clave de tu problema)
+    if ($inicio && $fin) {
+        $query->whereBetween('m.fecha', [$inicio, $fin]);
     }
+
+    // Seleccionamos lo necesario
+    $extras = $query->select('h.id', 'm.fecha', 'h.extra as extra_db')
+                    ->orderBy('m.fecha', 'asc') // Ordenado para que el Front no sea un caos
+                    ->get();
+
+    $extrasProcesadas = $extras->map(function ($registro) {
+        // Usamos un helper de string para evitar el error de Undefined si extra_db es raro
+        $timeString = (string) $registro->extra_db;
+        $partes = explode(':', $timeString);
+
+        if (count($partes) < 2) return null;
+
+        $minutosTotales = ((int)$partes[0] * 60) + (int)$partes[1];
+
+        // Tu regla de negocio: bloques de 30 min
+        $ajustado = floor($minutosTotales / 30) * 30;
+
+        return [
+            'id' => $registro->id, // ID de Horarios para el descuento
+            'fecha' => $registro->fecha,
+            'extra' => (int) $ajustado,
+            'label' => \Carbon\Carbon::parse($registro->fecha)->format('d/m/Y') . " (" . $ajustado . " min)",
+        ];
+    })
+    ->filter(fn ($item) => $item !== null && $item['extra'] >= 30)
+    ->values();
+
+    return response()->json($extrasProcesadas);
+}
 
 	/*-------------------- Update*/
     public function edicion(Request $request): Response

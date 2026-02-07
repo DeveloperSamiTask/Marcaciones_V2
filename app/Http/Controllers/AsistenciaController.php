@@ -194,22 +194,47 @@ class AsistenciaController extends Controller
                 $anticipado = max(0, $h_salida->diffInMinutes($p_salida, false));
 
                 // --- TU LÓGICA DE NOCTURNO (INTACTA) ---
-                if ($detalle->empleado->empresa_id == 1 || $detalle->empleado->empresa_id == 4) {
-                    $inicioNocturno = $h_ingreso->copy()->setTime(22, 0, 0);
-                    $inicioConteo = $h_ingreso->gt($inicioNocturno) ? $h_ingreso : $inicioNocturno;
-                    $finConteo = $h_salida;
+                // --- LÓGICA UNIFICADA (AHORA IGUAL A LA OTRA MIERDA) ---
+// --- LÓGICA UNIFICADA (SIN VARIABLES INEXISTENTES) ---
+if (in_array($detalle->empleado->empresa_id, [1, 3, 4])) {
+    // 1. Ventana legal
+    $inicioVentana = $h_ingreso->copy()->setTime(22, 0, 0);
+    $finVentana = $h_ingreso->copy()->addDay()->setTime(6, 0, 0);
 
-                    if ($finConteo->gt($inicioNocturno)) {
-                        $minutos = $inicioConteo->diffInMinutes($finConteo);
-                        $nocturno = ($minutos >= 30) ? floor($minutos / 30) * 30 : 0;
+    // 2. Usamos $detalle->salida que YA EXISTE arriba en tu código
+    $h_salida_prog = \Carbon\Carbon::parse($detalle->salida);
 
-                        $horas = floor($nocturno / 60);
-                        $mins = $nocturno % 60;
-                        $nocturno_formateado = sprintf('%02d:%02d', $horas, $mins);
-                    } else {
-                        $nocturno = 0;
-                    }
-                }
+    // Si la salida programada es menor que el ingreso, es porque cruza la medianoche
+    if ($h_salida_prog->lt($p_ingreso)) {
+        $h_salida_prog->addDay();
+    }
+
+    // 3. Verificamos contra la salida REAL para saber si hubo nocturno
+    if (!$h_salida || $h_salida->lte($inicioVentana)) {
+        $nocturno = 0;
+    } else {
+        $inicioConteo = $h_ingreso->gt($inicioVentana) ? $h_ingreso : $inicioVentana;
+
+        // El fin del conteo es la salida programada, pero topada a las 06:00 AM
+        $finConteo = $h_salida_prog;
+
+        if ($finConteo->gt($finVentana)) {
+            $finConteo = $finVentana;
+        }
+
+        if ($inicioConteo->lt($finConteo)) {
+            $minutos = $inicioConteo->diffInMinutes($finConteo);
+            $nocturno = floor($minutos / 30) * 30;
+
+            // Formateo
+            $horas = floor($nocturno / 60);
+            $mins = $nocturno % 60;
+            $nocturno_formateado = sprintf('%02d:%02d', $horas, $mins);
+        } else {
+            $nocturno = 0;
+        }
+    }
+}
             }
 
             return [
