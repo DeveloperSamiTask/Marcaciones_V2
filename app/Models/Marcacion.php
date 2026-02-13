@@ -18,6 +18,7 @@ class Marcacion extends Model
         'estado',
         'estado_horas_extra',
         'sustento',
+		'pull',
     ];
 
     protected function casts(): array

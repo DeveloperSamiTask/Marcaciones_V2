@@ -23,8 +23,6 @@ class AsistenciaDetalle extends Model
         'total',
         'estado',
         'estado_horas_extra',
-
-
     ];
 
     protected function casts(): array

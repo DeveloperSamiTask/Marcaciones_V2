@@ -154,36 +154,18 @@ class ReporteController extends Controller
                     ->count();
             });
 
-
-		$permisosCompensa = \App\Models\Permiso::whereIn('empleado_id', $empleados->pluck('id'))
+        $permisosCompensa = \App\Models\Permiso::whereIn('empleado_id', $empleados->pluck('id'))
             ->whereBetween('fecha', [$inicio, $fin]) // Rango del Tareo
             ->where('tipo_id', 4)
             ->get()
             ->groupBy('empleado_id');
 
-        $lista = $empleados->map(function ($empleado) use ($feriadosPendientes, $inicio, $fin, $solicitudesHEPT , $permisosCompensa) {
-
-            $heptEmpleado = $solicitudesHEPT->get($empleado->id, collect());
-
-            // Calcular total de horas extras de PT
-            $totalHept = $heptEmpleado->sum(function ($solicitud) {
-                return $solicitud->horas_acumuladas - 93;
-            });
-
-            // Obtener información de aprobación
-            $infoAprobacion = $heptEmpleado->map(function ($solicitud) {
-                return [
-                    'horas' => $solicitud->horas_acumuladas - 93,
-                    'aprobado_por' => $solicitud->aprobado_por,
-                    'color' => $solicitud->aprobado_por == 'SISTEMA' ? 'blue' : 'green', // Cambiar según especifiques
-                ];
-            });
+        $lista = $empleados->map(function ($empleado) use ($feriadosPendientes, $inicio, $fin, $solicitudesHEPT, $permisosCompensa) {
 
             $fechaCorte = $empleado->fecha_ingreso > $inicio ? $empleado->fecha_ingreso : $inicio;
             $empleadoHorarios = $empleado->horarios->filter(fn ($h) => $h->fecha >= $fechaCorte && $h->fecha <= $fin);
             $empleadoMarcaciones = $empleado->marcaciones->filter(fn ($m) => $m->fecha >= $fechaCorte && $m->fecha <= $fin);
             $estadosCount = $empleadoHorarios->countBy('estado');
-            $dias = $fechaCorte->diffInDays($fin) + 1;
             $fechasProcesadas = [];
             $tardanza = 0;
             $horas = 0;
@@ -193,18 +175,17 @@ class ReporteController extends Controller
             $nocturno = 0;
             $extra_25 = 0;
             $extra_35 = 0;
-            $jornada = $empleado->jornada_id;
-            // $horasTrabajasReales = 0;
+
+            // Hora Programado
             $horasTrabajasReales = $this->calcularHorasRealesTrabajadas($empleadoMarcaciones, $empleado);
 
             $horasTrabajadasReales = 0;
 
-			$compensaHorasTotales = 0;
-
+            $compensaHorasTotales = 0;
 
             foreach ($empleadoHorarios as $horario) {
 
-				/* ------------------- LOGICA DE COMPENSAS ------------------- */
+                // ---------------- Logica de Compensa y su refrigerio
 
                 if (in_array($horario->estado, ['C', 'CA', 'CHE'])) {
                     $duracionProg = $horario->ingreso->diffInMinutes($horario->salida, false);
@@ -254,20 +235,18 @@ class ReporteController extends Controller
                     $compensaHorasTotales += $minutosEsteDia;
                 }
 
-                // ------------------- ------------------- ------------------- ------------------- ------------------- -------------------
-
+                // ---------------- Si no tiene programado no lo tomo en cuenta , para cuando tenemos marcaciones pero no programado
                 if ($horario->ingreso->format('H:i') === '00:00' && $horario->salida->format('H:i') === '00:00') {
                     continue; // Si es descanso, ignora este día y pasa al siguiente
                 }
 
-                // buscar la marcación del MISMO día
-                $marcacion = $empleadoMarcaciones
-                    ->firstWhere('fecha', $horario->fecha);
-
+                // ---------------- Evitamos jalar marcaciones duplicadas
+                $marcacion = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
                 if (! $marcacion) {
                     continue;
                 }
 
+                // ---------------- CALCULAMOS LAS HORAS TRABAJADAS REALES
                 $horasTrabajadasReales += $this->calcularTotalDia(
                     $horario,
                     $marcacion,
@@ -275,53 +254,127 @@ class ReporteController extends Controller
                 );
             }
 
-            // 2. CICLO DE CÁLCULO
-            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$horasLaboradas, &$horasTrabajasReales, &$tardanza, &$empleadoHorarios, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35, &$fechasProcesadas) {
+            $empleadoMarcaciones->each(function ($marcacion) use (&$permisosCompensa, $empleado, &$horas, &$horasLaboradas, &$tardanza, &$empleadoHorarios, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35, &$fechasProcesadas) {
+
+                $horario = $empleadoHorarios->firstWhere('fecha', $marcacion->fecha);
+
+                $marcacionHoy = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
+
+                if (in_array($horario->estado, ['C', 'CA', 'CHE'])) {
+                    $duracionProg = $horario->ingreso->diffInMinutes($horario->salida, false);
+                    if ($duracionProg < 0) {
+                        $duracionProg += 1440;
+                    }
+
+                    $minutosEsteDia = $duracionProg;
+
+                    // LÓGICA DE REFRIGERIO PARA COMPENSACIÓN
+                    if ($empleado->jornada_id == 2) {
+
+                        // Buscamos si este horario tiene un permiso asociado
+                        $permiso = $permisosCompensa->get($empleado->id)?->firstWhere('fecha', $horario->fecha);
+
+                        $descontarRefri = false;
+
+                        if ($permiso) {
+                            // Extraer fecha origen del motivo: "COMPENSACION del 09/12/2025"
+                            preg_match('/(\d{2}\/\d{2}\/\d{4})/', $permiso->motivo, $matches);
+
+                            if (isset($matches[1])) {
+                                $fechaOrigen = \Carbon\Carbon::createFromFormat('d/m/Y', $matches[1])->format('Y-m-d');
+
+                                // Buscamos la marcación del feriado de origen para ver si marcó refri
+                                $maruOrigen = \App\Models\Marcacion::where('empleado_id', $empleado->id)
+                                    ->whereDate('fecha', $fechaOrigen)
+                                    ->first();
+
+                                if ($maruOrigen && $maruOrigen->ingreso_refri) {
+                                    $descontarRefri = true;
+                                }
+                            }
+                        }
+
+                        // También checar si marcó refri HOY por si acaso
+                        $marcacionHoy = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
+                        if ($marcacionHoy && $marcacionHoy->ingreso_refri) {
+                            $descontarRefri = true;
+                        }
+
+                        if ($descontarRefri) {
+                            $minutosEsteDia -= 60;
+                        }
+                    }
+
+                    $compensaHorasTotales += $minutosEsteDia;
+                }
+
+                // ---------------- Si no tiene programado no lo tomo en cuenta , para cuando tenemos marcaciones pero no programado
+                if ($horario->ingreso->format('H:i') === '00:00' && $horario->salida->format('H:i') === '00:00') {
+                    continue; // Si es descanso, ignora este día y pasa al siguiente
+                }
+
+                // ---------------- Evitamos jalar marcaciones duplicadas
+                $marcacion = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
+                if (! $marcacion) {
+                    continue;
+                }
+
+                // ---------------- CALCULAMOS LAS HORAS TRABAJADAS REALES
+                $horasTrabajadasReales += $this->calcularTotalDia(
+                    $horario,
+                    $marcacion,
+                    $empleado
+                );
 
                 $fechaDia = $marcacion->fecha instanceof \Carbon\Carbon
                         ? $marcacion->fecha->format('Y-m-d')
                         : $marcacion->fecha;
 
+                // ---------------- Evitar que se jalen dos fechas repetidas
                 if (isset($fechasProcesadas[$fechaDia])) {
                     return;
                 }
 
                 $horario = $empleadoHorarios->firstWhere('fecha', $marcacion->fecha);
 
-                // QUITAMOS el candado de $horario para que sume todos los días con marcas (igual que tu tabla diaria)
+                // ---------------- primero valido si hay marcacion
                 if ($marcacion->ingreso && $marcacion->salida) {
 
+                    // ---------------- Evitar que se cuenten si no tienen programado aun
                     if ($horario) {
                         $hip = $horario->ingreso->format('H:i');
                         $hsp = $horario->salida->format('H:i');
 
                         if ($hip === '00:00' && $hsp === '00:00') {
-                            $fechasProcesadas[$fechaDia] = true; // Marcamos como procesada para no repetir
+                            $fechasProcesadas[$fechaDia] = true;
 
-                            return; // SALIMOS de esta iteración (es como el continue pero para colecciones)
+                            return;
                         }
                     }
 
                     $fechasProcesadas[$fechaDia] = true;
 
-                    // ========================================
-                    // 2. CÁLCULOS QUE SÍ DEPENDEN DEL HORARIO PROGRAMADO
-                    // ========================================
-                    if ($horario && $horario->salida) { // ✅ Validamos que horario Y horario->salida existan
+                    // ---------------- segundo valido si hay marcacion
+                    if ($horario && $horario->salida) {
+
+                        // Si es part time y no tiene refrigerio
                         $partTime = ($empleado->jornada_id == 2 && ! $marcacion->ingreso_refri);
 
-                        // Tiempo programado (Meta del día)
+                        // Programado
                         $horasProgramadas = $horario->ingreso->diffInMinutes($horario->salida, false);
+
+                        // nocturno
                         if ($horasProgramadas < 0) {
                             $horasProgramadas += 1440;
                         }
 
-                        // Tardanza del día
+                        // ---------------- Tardanza del día
                         $tardanzaDia = max(0, $horario->ingreso->diffInMinutes($marcacion->ingreso, false));
                         $tardanza += $tardanzaDia;
 
                         // Refri Programado: Si es Part-Time y no marcó refri, no se resta de la meta.
-                        $refriProgramado = ($horasProgramadas >= 360 && ! $partTime) ? 60 : 0;
+                        // Deberia ser : Si es PART TIME y tiene marcacion de refrigerio.
+                        $refriProgramado = $partTime ? 60 : 0;
 
                         // Horas netas para pago (Meta - tardanza - refri)
                         $horasDia = $horasProgramadas - $tardanzaDia - $refriProgramado;
@@ -329,10 +382,6 @@ class ReporteController extends Controller
 
                         // Horas laboradas (Meta pura)
                         $horasLaboradas += ($horasProgramadas - $refriProgramado);
-
-                        // ========================================
-                        // 3. EXTRAS, ANTICIPADOS Y DEMÁS
-                        // ========================================
 
                         // 🔥 CAMBIO 1: Copias temporales SOLO para anticipado/extra (sin mutar originales)
                         $h_salida_temp = $horario->salida->copy();
@@ -451,8 +500,8 @@ class ReporteController extends Controller
                         }
                     } else {
                         // ✅ LOG: Casos donde no hay horario o no tiene salida programada
-						/*
-						\Log::warning('⚠️ Marcación sin horario programado válido', [
+                        /*
+                        \Log::warning('⚠️ Marcación sin horario programado válido', [
                             'empleado' => $empleado->apellidos,
                             'dni' => $empleado->dni,
                             'fecha' => $fechaDia,
@@ -460,14 +509,14 @@ class ReporteController extends Controller
                             'tiene_salida_programada' => ($horario && $horario->salida) ? 'SI' : 'NO',
                         ]);
 
-						*/
+                        */
 
                     }
                 }
             });
 
             $compensaDias = $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum();
-           // $compensaHorasTotales = 0;
+            // $compensaHorasTotales = 0;
             $compensaDiasCount = 0;
             $esPartTime = $empleado->jornada_id == 2;
 
@@ -476,7 +525,7 @@ class ReporteController extends Controller
                 'empleado' => $empleado,
                 'compensa_pendiente' => $feriadosPendientes->get($empleado->id, 0),
                 'compensa_horas_totales' => $compensaHorasTotales, // <--- MANDAMOS LOS MINUTOS YA CALCULADOS
-                //'compensa_horas_totales' => $compensaHorasTotales,
+                // 'compensa_horas_totales' => $compensaHorasTotales,
                 'compensa_dias_count' => $compensaDiasCount,
                 'compensa_dias_total' => $compensaDias,
                 'es_part_time' => $esPartTime,
@@ -540,102 +589,106 @@ class ReporteController extends Controller
         ]);
     }
 
-   public function calcularTotalDia($horario, $marcacion, $empleado)
-{
-    \Log::info("👤 Iniciando cálculo para: {$empleado->apellidos}");
+    public function calcularTotalDia($horario, $marcacion, $empleado)
+    {
+        \Log::info("👤 Iniciando cálculo para: {$empleado->apellidos}");
 
-    // =========================
-    // VALIDACIONES
-    // =========================
-    if (!$horario || !$marcacion || !$marcacion->ingreso || !$marcacion->salida) {
-        \Log::info('❌ Día descartado: datos incompletos', ['fecha' => $horario->fecha ?? 'SIN FECHA']);
-        return 0;
-    }
+        // =========================
+        // VALIDACIONES
+        // =========================
+        if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
+            \Log::info('❌ Día descartado: datos incompletos', ['fecha' => $horario->fecha ?? 'SIN FECHA']);
 
-    $HIP_check = $horario->ingreso->format('H:i');
-    $HSP_check = $horario->salida->format('H:i');
-    $estado = $horario->estado;
-
-    // Solo descartamos si es 00:00-00:00 Y NO es un día laboral.
-    if ($estado !== '1.LABORAL' && $HIP_check === '00:00' && $HSP_check === '00:00') {
-        \Log::info('⛔ Día de descanso sin programación', ['fecha' => $horario->fecha]);
-        return 0;
-    }
-
-	  if ($empleado->jornada_id === 2 && $estado == 'C') {
             return 0;
         }
 
-    // =========================
-    // HORAS BASE (Sincronización de fechas)
-    // =========================
-    $HIP = $horario->ingreso->copy();
-    $HSP = $horario->salida->copy();
-    $HI_real = $marcacion->ingreso->copy();
-    $HS_real = $marcacion->salida->copy();
+        $HIP_check = $horario->ingreso->format('H:i');
+        $HSP_check = $horario->salida->format('H:i');
+        $estado = $horario->estado;
 
-    // 🔥 CORRECCIÓN MEDIANOCHE: Si la salida es menor al ingreso, es el día siguiente
-    if ($HSP->lt($HIP)) {
-        $HSP->addDay();
+        // Solo descartamos si es 00:00-00:00 Y NO es un día laboral.
+        if ($estado !== '1.LABORAL' && $HIP_check === '00:00' && $HSP_check === '00:00') {
+            \Log::info('⛔ Día de descanso sin programación', ['fecha' => $horario->fecha]);
+
+            return 0;
+        }
+
+        if ($empleado->jornada_id === 2 && $estado == 'C') {
+            return 0;
+        }
+
+        // =========================
+        // HORAS BASE (Sincronización de fechas)
+        // =========================
+        $HIP = $horario->ingreso->copy();
+        $HSP = $horario->salida->copy();
+        $HI_real = $marcacion->ingreso->copy();
+        $HS_real = $marcacion->salida->copy();
+
+        // 🔥 CORRECCIÓN MEDIANOCHE: Si la salida es menor al ingreso, es el día siguiente
+        if ($HSP->lt($HIP)) {
+            $HSP->addDay();
+        }
+
+        // Si la marcación real de salida es de madrugada, sumamos día para que diff sea positivo
+        if ($HS_real->lt($HI_real)) {
+            $HS_real->addDay();
+        }
+
+        // =========================
+        // CÁLCULOS
+        // =========================
+        $horasTrabajadas = max(0, $HIP->diffInMinutes($HSP, false));
+        $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
+
+        // Jornada 1 = Full Time
+        $tiempoBrutoReal = ($empleado->jornada_id === 1) ? $horasTrabajadas : ($horasTrabajadas - $tardanza);
+
+        // Refrigerio
+        $refri = 0;
+        if ($empleado->jornada_id === 1) {
+            $refri = 60;
+        } else {
+            $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
+                                ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
+            if ($tieneMarcasRefri) {
+                $refri = 60;
+            }
+        }
+
+        $totalDia = max(0, $tiempoBrutoReal - $refri);
+
+        // Datos informativos para el Log
+        $extra = max(0, $HSP->diffInMinutes($HS_real, false));
+        $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
+
+        // =========================
+        // 🧾 LOG FINAL (REPORTE OFICIAL)
+        // =========================
+        \Log::info('📅 TOTAL DÍA: '.$horario->fecha.' | '.$empleado->apellidos."\n".
+            json_encode([
+                'fecha' => $horario->fecha,
+                'jornada' => $empleado->jornada->nombre ?? 'N/A',
+                'estado' => $estado,
+                '---PROGRAMADO---' => '---',
+                'HIP' => $HIP->format('Y-m-d H:i'),
+                'HSP' => $HSP->format('Y-m-d H:i'),
+                'minutos_base' => $horasTrabajadas,
+                '---REAL---' => '---',
+                'HI_real' => $HI_real->format('H:i'),
+                'HS_real' => $HS_real->format('H:i'),
+                '---RESULTADOS---' => '---',
+                'tardanza' => $tardanza,
+                'refri' => $refri,
+                'extra' => $extra,
+                'anticipado' => $anticipado,
+                'TOTAL_MINUTOS' => $totalDia,
+                'TOTAL_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
+            ], JSON_PRETTY_PRINT)
+        );
+
+        return $totalDia;
     }
-
-    // Si la marcación real de salida es de madrugada, sumamos día para que diff sea positivo
-    if ($HS_real->lt($HI_real)) {
-        $HS_real->addDay();
-    }
-
-    // =========================
-    // CÁLCULOS
-    // =========================
-    $horasTrabajadas = max(0, $HIP->diffInMinutes($HSP, false));
-    $tardanza = max(0, $HIP->diffInMinutes($HI_real, false));
-
-    // Jornada 1 = Full Time
-    $tiempoBrutoReal = ($empleado->jornada_id === 1) ? $horasTrabajadas : ($horasTrabajadas - $tardanza);
-
-    // Refrigerio
-    $refri = 0;
-    if ($empleado->jornada_id === 1) {
-        $refri = 60;
-    } else {
-        $tieneMarcasRefri = ($marcacion->ingreso_refri && $marcacion->ingreso_refri->format('H:i') !== '00:00') ||
-                            ($marcacion->salida_refri && $marcacion->salida_refri->format('H:i') !== '00:00');
-        if ($tieneMarcasRefri) { $refri = 60; }
-    }
-
-    $totalDia = max(0, $tiempoBrutoReal - $refri);
-
-    // Datos informativos para el Log
-    $extra = max(0, $HSP->diffInMinutes($HS_real, false));
-    $anticipado = max(0, $HS_real->diffInMinutes($HSP, false));
-
-    // =========================
-    // 🧾 LOG FINAL (REPORTE OFICIAL)
-    // =========================
-    \Log::info('📅 TOTAL DÍA: ' . $horario->fecha . " | " . $empleado->apellidos . "\n" .
-        json_encode([
-            'fecha' => $horario->fecha,
-            'jornada' => $empleado->jornada->nombre ?? 'N/A',
-            'estado' => $estado,
-            '---PROGRAMADO---' => '---',
-            'HIP' => $HIP->format('Y-m-d H:i'),
-            'HSP' => $HSP->format('Y-m-d H:i'),
-            'minutos_base' => $horasTrabajadas,
-            '---REAL---' => '---',
-            'HI_real' => $HI_real->format('H:i'),
-            'HS_real' => $HS_real->format('H:i'),
-            '---RESULTADOS---' => '---',
-            'tardanza' => $tardanza,
-            'refri' => $refri,
-            'extra' => $extra,
-            'anticipado' => $anticipado,
-            'TOTAL_MINUTOS' => $totalDia,
-            'TOTAL_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
-        ], JSON_PRETTY_PRINT)
-    );
-
-    return $totalDia;
-}
 
     private function calcularHorasRealesTrabajadas($marcaciones, $empleado)
     {
@@ -747,14 +800,6 @@ class ReporteController extends Controller
         return $totalMinutos;
     }
 
-
-
-
-
-
-
-
-
     public function calcularMinutosDia($empleado, $horario, $marcacion)
     {
         if (! $horario || ! $marcacion || ! $marcacion->ingreso || ! $marcacion->salida) {
@@ -780,36 +825,6 @@ class ReporteController extends Controller
 
         return max(0, $minutos);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     public function tareoDownload(Request $request)
     {
@@ -872,8 +887,8 @@ class ReporteController extends Controller
                     'REFRIGERIO' => 'refrigerio',
                     'NEGLIGENCIA' => 'negligencia',
                     'FALTA INJUSTIFICADA' => 'faltasInjustificadas',
-					'INCUMPLIMIENTO'      => 'incumplimiento', // <--- Agregado
-        default               => 'otros',
+                    'INCUMPLIMIENTO' => 'incumplimiento', // <--- Agregado
+                    default => 'otros',
                 };
             });
 
@@ -1230,7 +1245,7 @@ class ReporteController extends Controller
         ]);
     }
 
-     public function extraDetalle(Request $request)
+    public function extraDetalle(Request $request)
     {
         $request->validate([
             'empleado_id' => 'required|exists:empleados,id',
@@ -1314,7 +1329,6 @@ class ReporteController extends Controller
         ]);
     }
 
-
     public function extraDownload(Request $request)
     {
         $data = $request->validate([
@@ -1330,5 +1344,3 @@ class ReporteController extends Controller
         return Excel::download(new HorasExtraExport($data), 'reporte_horas_extra.xlsx');
     }
 }
-
-
