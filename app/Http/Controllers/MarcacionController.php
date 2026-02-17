@@ -247,7 +247,6 @@ class MarcacionController extends Controller
             });
         });
 
-
         return Inertia::render('marcaciones/index', [
             'marcaciones' => $lista,
             'empresas' => $empresas,
@@ -369,12 +368,12 @@ class MarcacionController extends Controller
         ]);
     }
 
-    /* Enviar las marcaciones a asistencias */
     public function store(StoreMarcacionRequest $request)
     {
         $data = $request->validated();
         try {
             DB::transaction(function () use ($data) {
+
                 $marcacion = Marcacion::updateOrCreate(
                     [
                         'empleado_id' => $data['empleado_id'],
@@ -384,6 +383,50 @@ class MarcacionController extends Controller
                         $data['tipo'] => $data['hora'],
                     ]
                 );
+
+                // ------------------------ Logica para que se registren las creaciones , en el registro que se usara luego en el pull
+
+                // 2. ✅ CONSOLIDADO (AGREGADO)
+                $mapaPrefijos = [
+                    'ingreso' => 'hi',
+                    'salida' => 'hs',
+                    'ingreso_refri' => 'hri',
+                    'salida_refri' => 'hrs',
+                ];
+
+                $pre = $mapaPrefijos[$data['tipo']];
+
+                $edicionExistente = DB::table('marcacion_edicions')
+                    ->where('empleado_id', $marcacion->empleado_id)
+                    ->where('fecha', $marcacion->fecha)
+                    ->where('es_consolidado', 1)
+                    ->first();
+
+                $datosActualizar = [
+                    'user_id' => Auth::id(),
+                    "{$pre}_edit" => $data['hora'],
+                    'updated_at' => now(),
+                ];
+
+                if (! $edicionExistente || is_null($edicionExistente->{"{$pre}_orig"})) {
+                    $datosActualizar["{$pre}_orig"] = null; // Era NULL
+                }
+
+                if (! $edicionExistente) {
+                    $datosActualizar['created_at'] = now();
+                    $datosActualizar['motivo'] = 'Registro consolidado';
+                }
+
+                DB::table('marcacion_edicions')->updateOrInsert(
+                    [
+                        'empleado_id' => $marcacion->empleado_id,
+                        'fecha' => $marcacion->fecha,
+                        'es_consolidado' => 1,
+                    ],
+                    $datosActualizar
+                );
+
+                // ------------------------ Logica para que se registren las creaciones , en el registro que se usara luego en el pull
 
                 MarcacionEdicion::create([
                     'empleado_id' => $marcacion->empleado_id,
@@ -555,34 +598,102 @@ class MarcacionController extends Controller
         });
     }
 
+    // \Log::info('TIPO RECIBIDO: '.($data['tipo'] ?? 'NO EXISTE'));
+    // \Log::info('DATA COMPLETA: '.json_encode($data));
+
     private function updateModoLibre($data, Marcacion $marcacione)
     {
-        return DB::transaction(function () use ($data, $marcacione) {
-            // 1. Auditor铆a (Igual que el anterior pero con la hora directa del front)
-            MarcacionEdicion::create([
-                'empleado_id' => $marcacione->empleado_id,
-                'user_id' => Auth::id(),
-                'fecha' => $marcacione->fecha,
-                'hora_original' => $marcacione->{$data['tipo']},
-                'hora' => $data['hora_nueva'],
-                'motivo' => $data['motivo'].' (Edici贸n Libre)',
-            ]);
 
-            // 2. Actualizamos la marcaci贸n directamente con lo que escribi贸 RRHH
-            $marcacione->update([$data['tipo'] => $data['hora_nueva']]);
+        // \Log::info('DATA COMPLETA: '.json_encode($data));
+        try {
+            return DB::transaction(function () use ($data, $marcacione) {
 
-            // 3. BLINDAJE: Marcamos el horario de HOY como manual
-            // Esto evita que tu l贸gica de "Index" intente recalcular este d铆a.
-            DB::table('horarios')
-                ->where('empleado_id', $marcacione->empleado_id)
-                ->where('fecha', $marcacione->fecha)
-                ->update([
-                    'calculo_manual' => 1,
-                    'destino_compensacion' => 'Editado libremente por RRHH',
+                // \Log::emergency('🔵 INICIO TRANSACCIÓN');
+
+                $mapaPrefijos = [
+                    'ingreso' => 'hi',
+                    'salida' => 'hs',
+                    'ingreso_refri' => 'hri',
+                    'salida_refri' => 'hrs',
+                ];
+
+                $tipo = $data['tipo'];
+                $pre = $mapaPrefijos[$tipo];
+                $horaNueva = (! empty($data['hora_nueva']) && $data['hora_nueva'] !== 'null') ? $data['hora_nueva'] : null;
+
+                // \Log::emergency('🔵 Tipo: '.$tipo.' | Prefijo: '.$pre.' | Hora nueva: '.($horaNueva ?? 'NULL'));
+
+                // 1. Auditoría
+                MarcacionEdicion::create([
+                    'empleado_id' => $marcacione->empleado_id,
+                    'user_id' => Auth::id(),
+                    'fecha' => $marcacione->fecha,
+                    'hora_original' => $marcacione->{$tipo},
+                    'hora' => $horaNueva,
+                    'motivo' => $data['motivo'].' (Edicion libre)',
+                    'es_consolidado' => 0,
                 ]);
 
-            return back()->with('success', 'Marcaci贸n editada manualmente.');
-        });
+                // 2. Consolidado - PROTEGER el _orig
+                $edicionExistente = DB::table('marcacion_edicions')
+                    ->where('empleado_id', $marcacione->empleado_id)
+                    ->where('fecha', $marcacione->fecha)
+                    ->where('es_consolidado', 1)
+                    ->first();
+
+                $datosActualizar = [
+                    'user_id' => Auth::id(),
+                    "{$pre}_edit" => $horaNueva,
+                    'updated_at' => now(),
+                    'motivo' => $data['motivo'].' (Edicion libre)',
+                ];
+
+                if (! $edicionExistente || is_null($edicionExistente->{"{$pre}_orig"})) {
+                    $datosActualizar["{$pre}_orig"] = $marcacione->{$tipo} ?? null;
+                }
+
+                if (! $edicionExistente) {
+                    $datosActualizar['created_at'] = now();
+                    $datosActualizar['motivo'] = 'Registro consolidado';
+                }
+
+                // Si se borra una columna , se almacena el prefijo para saber cual fue borrada y no llenarla otra ves.
+                if (is_null($horaNueva)) {
+                    $borradosActuales = $edicionExistente
+                        ? array_filter(explode(',', $edicionExistente->campos_borrados ?? ''))
+                        : [];
+                    $borradosActuales[] = $pre;
+                    $datosActualizar['campos_borrados'] = implode(',', array_unique($borradosActuales));
+                }
+
+                DB::table('marcacion_edicions')->updateOrInsert(
+                    [
+                        'empleado_id' => $marcacione->empleado_id,
+                        'fecha' => $marcacione->fecha,
+                        'es_consolidado' => 1,
+                    ],
+                    $datosActualizar
+                );
+
+                // 3. Actualizar marcación
+                $marcacione->update([$tipo => $horaNueva]);
+
+                // 4. Blindaje
+                DB::table('horarios')
+                    ->where('empleado_id', $marcacione->empleado_id)
+                    ->where('fecha', $marcacione->fecha)
+                    ->update([
+                        'calculo_manual' => 1,
+                        'destino_compensacion' => 'Editado libremente por RRHH',
+                    ]);
+
+                return back()->with('success', 'Marcación editada manualmente.');
+            });
+        } catch (\Exception $e) {
+            // \Log::emergency('🔴 ERROR CACHADO: '.$e->getMessage());
+            // \Log::emergency('🔴 TRACE: '.$e->getTraceAsString());
+            throw $e;
+        }
     }
 
     public function getHorasExtraDisponibles(Request $request, $empleado)
@@ -727,16 +838,6 @@ class MarcacionController extends Controller
                     $fechaLogica = $partes[0].'-'.$partes[1].'-'.$partes[2];
                     $empleadoId = end($partes);
 
-                    $tieneEdicion = \App\Models\MarcacionEdicion::where('empleado_id', $empleadoId)
-                        ->where('fecha', $fechaLogica)
-                        ->exists();
-
-                    if ($tieneEdicion) {
-                        \Log::info("⚠️ Marcación editada manualmente (protegida): empleado {$empleadoId}, fecha {$fechaLogica}");
-
-                        continue; // Saltar esta marcación
-                    }
-
                     $marcas = collect($horasArray)->unique()->sort()->values();
                     $madrugada = $marcas->filter(fn ($h) => $h < '05:00:00')->values();
                     $tarde = $marcas->filter(fn ($h) => $h >= '05:00:00')->values();
@@ -784,17 +885,54 @@ class MarcacionController extends Controller
                         }
                     }
 
-                    // 4. GUARDADO FORZADO: updateOrCreate machaca errores previos
+                    // 4. -------------- GUARDADO SELECTIVO: Solo actualizar columnas NO editadas
+                    $edicionConsolidada = DB::table('marcacion_edicions')
+                        ->where('empleado_id', $empleadoId)
+                        ->where('fecha', $fechaLogica)
+                        ->where('es_consolidado', 1)
+                        ->first();
 
-                    Marcacion::updateOrCreate(
-                        ['empleado_id' => $empleadoId, 'fecha' => $fechaLogica],
-                        [
-                            'ingreso' => $ingreso,
-                            'salida' => $salida,
-                            'ingreso_refri' => $ingreso_refri,
-                            'salida_refri' => $salida_refri,
-                        ]
-                    );
+                    $borrados = $edicionConsolidada
+                    ? array_filter(explode(',', $edicionConsolidada->campos_borrados ?? ''))
+                    : [];
+
+                    $datosActualizar = [];
+
+                    // Sin tomar el cuenta los campos borrados para evitar sobreescritura
+                    // Solo actualizar si NO fue editado (campo _edit es NULL)
+                    // if (! $edicionConsolidada || is_null($edicionConsolidada->hi_edit)) {
+                    //     $datosActualizar['ingreso'] = $ingreso;
+                    // }
+                    // if (! $edicionConsolidada || is_null($edicionConsolidada->hs_edit)) {
+                    //     $datosActualizar['salida'] = $salida;
+                    // }
+                    // if (! $edicionConsolidada || is_null($edicionConsolidada->hri_edit)) {
+                    //     $datosActualizar['ingreso_refri'] = $ingreso_refri;
+                    // }
+                    // if (! $edicionConsolidada || is_null($edicionConsolidada->hrs_edit)) {
+                    //     $datosActualizar['salida_refri'] = $salida_refri;
+                    // }
+
+                    if (! $edicionConsolidada || (is_null($edicionConsolidada->hi_edit) && ! in_array('hi', $borrados))) {
+                        $datosActualizar['ingreso'] = $ingreso;
+                    }
+                    if (! $edicionConsolidada || (is_null($edicionConsolidada->hs_edit) && ! in_array('hs', $borrados))) {
+                        $datosActualizar['salida'] = $salida;
+                    }
+                    if (! $edicionConsolidada || (is_null($edicionConsolidada->hri_edit) && ! in_array('hri', $borrados))) {
+                        $datosActualizar['ingreso_refri'] = $ingreso_refri;
+                    }
+                    if (! $edicionConsolidada || (is_null($edicionConsolidada->hrs_edit) && ! in_array('hrs', $borrados))) {
+                        $datosActualizar['salida_refri'] = $salida_refri;
+                    }
+
+                    // Solo actualizar si hay algo que tocar
+                    if (! empty($datosActualizar)) {
+                        Marcacion::updateOrCreate(
+                            ['empleado_id' => $empleadoId, 'fecha' => $fechaLogica],
+                            $datosActualizar
+                        );
+                    }
 
                     // Permisos de descanso
                     $h = $horarios->get($key);

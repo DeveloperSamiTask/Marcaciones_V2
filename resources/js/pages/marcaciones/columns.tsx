@@ -137,6 +137,8 @@ export const columns: ColumnDef<Marcacion>[] = [
         },
         cell: ({ row }) => format(row.original.fecha, 'dd/MM/yyyy')
     },
+
+    //  ------------------- Estado
     {
         accessorKey: 'horario.estado',
         header: ({ column }) => {
@@ -194,7 +196,7 @@ export const columns: ColumnDef<Marcacion>[] = [
 import { sendSomething } from "./send";
 
     */
-    //HI
+    //  ------------------- HI
     {
         accessorKey: 'ingreso',
         header: 'HI',
@@ -241,7 +243,7 @@ import { sendSomething } from "./send";
         },
     },
 
-
+    //  ------------------- HIP
     {
         accessorKey: 'ingreso_programado', // ingreso del horario
         header: 'HIP',
@@ -249,7 +251,7 @@ import { sendSomething } from "./send";
 
     },
 
-    //HS
+    //------------------- HS
     {
         accessorKey: 'salida',
         header: 'HS',
@@ -296,12 +298,14 @@ import { sendSomething } from "./send";
         },
     },
 
-
+    //------------------- HSP
     {
         accessorKey: 'salida_programada', // salida del horario
         header: 'HSP',
         cell: ({ row }) => <span className={row.original.horario ? 'text-teal-600' : 'text-red-600'}>{row.original.horario?.salida?.substring(0, 5) || '-'}</span>,
     },
+
+    //------------------- HIR
     {
         accessorKey: 'ingreso_refri', // ingreso de refrigerio de la marcacion
         header: 'HIREF',
@@ -345,6 +349,8 @@ import { sendSomething } from "./send";
             );
         },
     },
+
+    //------------------- HSR
     {
         accessorKey: 'salida_refri', // salida de refrigerio de la marcacion
         header: 'HTREF',
@@ -388,6 +394,9 @@ import { sendSomething } from "./send";
             );
         },
     },
+
+
+    
     {
         accessorKey: 'horas',
         header: 'TOTAL',

@@ -254,11 +254,9 @@ class ReporteController extends Controller
                 );
             }
 
-            $empleadoMarcaciones->each(function ($marcacion) use (&$permisosCompensa, $empleado, &$horas, &$horasLaboradas, &$tardanza, &$empleadoHorarios, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35, &$fechasProcesadas) {
+            $empleadoMarcaciones->each(function ($marcacion) use (&$horasTrabajadasReales , &$compensaHorasTotales , &$permisosCompensa, $empleado, &$horas, &$horasLaboradas, &$tardanza, &$empleadoHorarios, &$extra, &$anticipado, &$nocturno, &$extra_25, &$extra_35, &$fechasProcesadas) {
 
                 $horario = $empleadoHorarios->firstWhere('fecha', $marcacion->fecha);
-
-                $marcacionHoy = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
 
                 if (in_array($horario->estado, ['C', 'CA', 'CHE'])) {
                     $duracionProg = $horario->ingreso->diffInMinutes($horario->salida, false);
@@ -295,7 +293,7 @@ class ReporteController extends Controller
                         }
 
                         // También checar si marcó refri HOY por si acaso
-                        $marcacionHoy = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
+                        $marcacionHoy = $marcacion->firstWhere('fecha', $horario->fecha);
                         if ($marcacionHoy && $marcacionHoy->ingreso_refri) {
                             $descontarRefri = true;
                         }
@@ -310,13 +308,12 @@ class ReporteController extends Controller
 
                 // ---------------- Si no tiene programado no lo tomo en cuenta , para cuando tenemos marcaciones pero no programado
                 if ($horario->ingreso->format('H:i') === '00:00' && $horario->salida->format('H:i') === '00:00') {
-                    continue; // Si es descanso, ignora este día y pasa al siguiente
+                    return; // Si es descanso, ignora este día y pasa al siguiente
                 }
 
                 // ---------------- Evitamos jalar marcaciones duplicadas
-                $marcacion = $empleadoMarcaciones->firstWhere('fecha', $horario->fecha);
-                if (! $marcacion) {
-                    continue;
+                if (!$marcacion) {
+                    return;
                 }
 
                 // ---------------- CALCULAMOS LAS HORAS TRABAJADAS REALES
