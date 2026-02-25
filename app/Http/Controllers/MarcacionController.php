@@ -838,6 +838,10 @@ class MarcacionController extends Controller
                     $fechaLogica = $partes[0].'-'.$partes[1].'-'.$partes[2];
                     $empleadoId = end($partes);
 
+                    if ($fechaLogica < '2026-02-20') {
+                        continue;
+                    }
+
                     $marcas = collect($horasArray)->unique()->sort()->values();
                     $madrugada = $marcas->filter(fn ($h) => $h < '05:00:00')->values();
                     $tarde = $marcas->filter(fn ($h) => $h >= '05:00:00')->values();

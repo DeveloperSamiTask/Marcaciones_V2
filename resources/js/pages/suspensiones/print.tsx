@@ -91,10 +91,12 @@ export default function PrintSuspension({ suspension, isPrint }: { suspension: S
                     </div>
                 )}
 
-                {/* Artículo - SOLO para amonestaciones (AM) de tipo negligencia o incumplimiento */}
-                {suspension.codigo[0] == 'A' && (suspension.tipo == 'negligencia' || suspension.tipo == 'incumplimiento') && (
+                {/* Artículo - AHORA SE MUESTRA PARA AMBAS (A y S) */}
+
                     <div className="grid gap-2">
-                        Articulo {suspension.codigo[0] == 'S' ? '48' : '38'}
+                        <label className="text-sm font-medium">
+                           Articulo {/*  /*{suspension.codigo[0] == 'S' ? '48' : '38'}*/}
+                        </label>
                         <Textarea
                             id="articulo"
                             className="mt-1 block w-full"
@@ -102,11 +104,10 @@ export default function PrintSuspension({ suspension, isPrint }: { suspension: S
                             ref={articuloInput}
                             value={articulo}
                             onChange={(e) => setArticulo(e.target.value)}
-                            autoComplete="articulo"
-                            placeholder="Describe el numero del articulo"
+                            placeholder="Pega aquí el inciso correspondiente"
                         />
                     </div>
-                )}
+
 
                 <DialogFooter className="gap-2">
                     <DialogClose asChild>

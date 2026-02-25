@@ -12,9 +12,10 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Support\Facades\Log;
+
 class SuspensionController extends Controller
 {
     public function index(Request $request): Response
@@ -105,80 +106,6 @@ class SuspensionController extends Controller
         ]);
     }
 
-    /*
- public function store(Request $request)
-    {
-
-        // 1. cuando viene un motivo -> suspension manual
-        if ($request->has('motivo')) {
-            $data = $request->validate([
-                'empleado_id' => 'required|exists:empleados,id',
-                'fecha' => 'required|date',
-                'motivo' => 'required|string',
-                'tipo' => 'required|string|in:AM,S',
-                'razon' => 'required|string|in:tardanza,falta injustificada,incumplimiento,negligencia',
-            ]);
-
-            // 2. cuando no viene motivo
-        } else {
-            $data = $request->validate([
-                'marcacion_id' => 'required|exists:marcacions,id',
-                'tipo' => 'required|string|in:tardanza,incompleto,refrigerio,incumplimiento',
-            ]);
-        }
-
-        try {
-            DB::transaction(function () use ($data, $request) {
-
-                if ($request->has('motivo')) {
-                    $amonestacion = Suspension::create([
-                        'user_id' => $request->user()->id,
-                        'empleado_id' => $data['empleado_id'],
-                        'fecha' => now(),
-                        'motivo' => 'En la fecha '.$data['fecha'].$data['motivo'],
-                        'tipo' => $data['razon'],
-                    ]);
-
-                    // 3. genera codigo unico : S15012024325
-                    $amonestacion->update(['codigo' => $data['tipo'].now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
-                    CrearNotificacionSuspension::dispatch($amonestacion);
-                } else {
-
-                    // 4. Amonestación Automática por Marcación
-                    $marcacion = Marcacion::with(['empleado.horarios'])->findOrFail($data['marcacion_id']);
-                    $minutos = match ($data['tipo']) { // se obtiene la hora segun el tipo del memorandum
-                        'tardanza' => $marcacion->tardanza,
-                        'refrigerio' => $marcacion->refrigerio,
-                        default => null
-                    };
-
-                    // 5 Convierte minutos a hora (ej: 30 min → 00:30:00)
-                    $hora = $minutos ? Carbon::now()->startOfDay()->addMinutes($minutos)->format('H:i:s') : null;
-
-                    $amonestacion = Suspension::create([
-                        'user_id' => $request->user()->id,
-                        'empleado_id' => $marcacion->empleado_id,
-                        'fecha' => $marcacion->fecha,
-                        'hora' => $hora,
-                        'tipo' => $data['tipo'],
-                    ]);
-
-                    // 6 Código para amonestación: "AM15012024325"
-                    $amonestacion->update(['codigo' => 'AM'.now()->format('dmY').$amonestacion->id]); // verificar que se guarde con estado 0
-                }
-
-            });
-
-            if ($request->has('motivo')) {
-                return to_route('suspensiones.index')->withSuccess(['message' => 'Suspension creado exitosamente!']);
-            }
-
-        } catch (Exception $e) {
-            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
-        }
-    }
-    */
-
     public function store(Request $request)
     {
 
@@ -260,6 +187,16 @@ class SuspensionController extends Controller
     // {/* Imprimir en esta parte debe estar el calendario */}
     public function print(Request $request, Suspension $suspension)
     {
+
+        // --- LOG DE VERIFICACIÓN ---
+        Log::info('--- Intento de Impresión ---', [
+            'ID_Suspension' => $suspension->id,
+            'Tipo' => $suspension->tipo,
+            'Codigo' => $suspension->codigo,
+            'Articulo_Recibido' => $request->articulo, // Esto confirma si llega del front
+        ]);
+        // ---------------------------
+
         $suspension->load(['empleado.area', 'empleado.empresa']);
         $suspension->update([
             'estado_print' => 1,
@@ -296,9 +233,7 @@ class SuspensionController extends Controller
         $empresasA5 = [1, 2, 10, 3]; // Granja Villa, Sami Task, Yaku Park, Inturpesa
         $usarA5 = in_array($suspension->empleado->empresa_id, $empresasA5);
 
-
-
-        // INCUMPLIMIENTO
+        // INCUMPLIMIENTO -> 2 (Amonestacion)
         if ($suspension->tipo == 'incumplimiento') {
             if ($usarA5 && isset($suspension->codigo[0]) && $suspension->codigo[0] == 'S') {
                 return view('exports.pdf.suspension.incumplimiento_a5', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
@@ -307,18 +242,18 @@ class SuspensionController extends Controller
             return view('exports.pdf.suspension.incumplimiento', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
-        // FALTA INJUSTIFICADA
+        // FALTA INJUSTIFICADA ->  
         if ($suspension->tipo == 'falta injustificada') {
             $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 
             if ($usarA5) {
-                return view('exports.pdf.suspension.faltaInjustificada_a5', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
+                return view('exports.pdf.suspension.faltaInjustificada_a5', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones', 'articulo'));
             }
 
-            return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones'));
+            return view('exports.pdf.suspension.faltaInjustificada', compact('suspension', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'amonestaciones', 'articulo'));
         }
 
-        // NEGLIGENCIA
+        // NEGLIGENCIA -> 1
         if ($suspension->tipo == 'negligencia') {
             $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 
@@ -343,10 +278,10 @@ class SuspensionController extends Controller
         $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 
         if ($usarA5) {
-            return view('exports.pdf.suspension.suspension_a5', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
+            return view('exports.pdf.suspension.suspension_a5', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'articulo'));
         }
 
-        return view('exports.pdf.suspension.suspension', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
+        return view('exports.pdf.suspension.suspension', compact('suspension', 'amonestaciones', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo', 'articulo'));
     }
 
     public function upload(Request $request, Suspension $suspension)

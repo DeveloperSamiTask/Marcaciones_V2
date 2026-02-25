@@ -105,9 +105,7 @@
             <br>
             <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                 Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
-                CAPITULO X artículo 42) "Medida disciplinaria o sanción es la acción correctiva tomando a través de
-                los niveles de supervisión que sanciona la falta o faltas cometidas por uno o más colaboradores en
-                contra de la disciplinaria".
+                CAPITULO X artículo 42 {{ $articulo }}
             </p>
             <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                 Sobre el particular, le recordamos que cumplir con las normas establecidas por la empresa es
@@ -220,9 +218,7 @@
             <br>
             <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                 Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
-                CAPITULO X artículo 42) "Medida disciplinaria o sanción es la acción correctiva tomando a través de
-                los niveles de supervisión que sanciona la falta o faltas cometidas por uno o más colaboradores en
-                contra de la disciplinaria".
+                CAPITULO X artículo 42 {{ $articulo }}
             </p>
             <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                 Sobre el particular, le recordamos que cumplir con las normas establecidas por la empresa es
