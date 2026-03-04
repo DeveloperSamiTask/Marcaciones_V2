@@ -108,10 +108,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Marcaciones
     Route::resource('marcaciones', MarcacionController::class)->except(['show']);
+
     Route::group(['prefix' => 'marcaciones', 'as' => 'marcaciones.'], function () {
         Route::get('reales', [MarcacionController::class, 'real'])->name('reales');
 
-        Route::get('reales/miluska', [MarcacionController::class, 'realMiluska'])->name('reales.miluska'); // ← CORREGIDO
+        Route::get('reales/miluska', [MarcacionController::class, 'realMiluska'])->name('reales.miluska');
 
         Route::get('ediciones', [MarcacionController::class, 'edicion'])->name('ediciones');
 
@@ -121,9 +122,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('pull', [MarcacionController::class, 'pull'])->name('pull');
 
-        Route::get('{empleado}/extras', [MarcacionController::class, 'getHorasExtraDisponibles'])
-            ->name('extras');
+        Route::get('{empleado}/extras', [MarcacionController::class, 'getHorasExtraDisponibles'])->name('extras');
 
+        Route::post('recalcular-extras', [MarcacionController::class, 'recalcularExtras'])->name('recalcular-extras');
     });
 
     // Asistencias

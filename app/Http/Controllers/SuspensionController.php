@@ -25,6 +25,9 @@ class SuspensionController extends Controller
             'encargado' => 'nullable|integer|exists:empleados,id',
             'fechaInicio' => 'nullable|date',
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+            // --- NUEVOS FILTROS ---
+            'tipo' => 'nullable|string|in:S,AM',
+            'razon' => 'nullable|string',
         ]);
 
         $user = $request->user();
@@ -71,9 +74,22 @@ class SuspensionController extends Controller
                 Carbon::parse($request->fechaInicio)->startOfDay(),
                 Carbon::parse($request->fechaFin)->endOfDay(),
             ])
+    // --- NUEVO: Filtro por Tipo (Amonestación o Suspensión) ---
+            ->when($request->tipo, function ($q) use ($request) {
+                if ($request->tipo === 'S') {
+                    return $q->where('codigo', 'like', 'S%');
+                }
+
+                return $q->where('codigo', 'like', 'AM%');
+            })
+    // --- NUEVO: Filtro por Razón (Busca en la columna 'tipo' de la DB) ---
+            ->when($request->razon, function ($q) use ($request) {
+                return $q->where('tipo', $request->razon);
+            })
             ->whereNull('codigo_asociado')
             ->orderBy('fecha', 'desc');
 
+        // El resto se queda igual, tu lógica de agrupar ya funciona con los datos filtrados
         $lista = $suspensionesQuery->get()
             ->groupBy(fn ($item) => str_starts_with($item->codigo, 'S') ? 'suspensiones' : 'amonestaciones');
 
@@ -242,7 +258,7 @@ class SuspensionController extends Controller
             return view('exports.pdf.suspension.incumplimiento', compact('suspension', 'articulo', 'fecha', 'fechaFin', 'diasSuspension', 'fechaMemo'));
         }
 
-        // FALTA INJUSTIFICADA ->  
+        // FALTA INJUSTIFICADA ->
         if ($suspension->tipo == 'falta injustificada') {
             $amonestaciones = Suspension::where('codigo_asociado', $suspension->codigo)->get();
 

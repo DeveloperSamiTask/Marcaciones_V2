@@ -371,6 +371,9 @@ class MarcacionController extends Controller
     public function store(StoreMarcacionRequest $request)
     {
         $data = $request->validated();
+
+        $data['motivo'] = mb_convert_encoding($data['motivo'], 'UTF-8', 'UTF-8');
+
         try {
             DB::transaction(function () use ($data) {
 
@@ -503,8 +506,14 @@ class MarcacionController extends Controller
                     }
                 }
             });
+
+            return back()->with('success', 'Registro creado correctamente');
+
         } catch (Exception $e) {
-            return back()->withErrors(['message' => $e->getMessage()]);
+            // Loguea el error pero no mandes caracteres raros en el mensaje
+            \Log::error('Error en store: '.$e->getMessage());
+
+            return back()->withErrors(['message' => 'Error de servidor (Encoding/Data)']);
         }
     }
 
@@ -578,8 +587,9 @@ class MarcacionController extends Controller
             \DB::table('horarios')->where('id', $horarioFuente->id)->update([
                 'extra' => $nuevoExtraStr,
                 'calculo_manual' => 1,
-                'destino_compensacion' => 'Compensado d铆a '.$marcacione->fecha,
+                'destino_compensacion' => 'Compensado dia '.$marcacione->fecha,
             ]);
+
             \Log::emergency("Horario {$horarioFuente->id} actualizado saldo a $nuevoExtraStr");
 
             // 5. Auditor铆a
@@ -589,7 +599,7 @@ class MarcacionController extends Controller
                 'fecha' => $marcacione->fecha,
                 'hora_original' => $data['hora_original'] ?? '00:00',
                 'hora' => $nuevaHora,
-                'motivo' => $data['motivo'].' (Edici贸n Compensa)',
+                'motivo' => $data['motivo'].' (Edicion Compensa)',
             ]);
 
             \Log::emergency('--- FIN TRANSACTION OK ---');
@@ -687,7 +697,7 @@ class MarcacionController extends Controller
                         'destino_compensacion' => 'Editado libremente por RRHH',
                     ]);
 
-                return back()->with('success', 'Marcación editada manualmente.');
+                return back()->with('success', 'Cambio hecho');
             });
         } catch (\Exception $e) {
             // \Log::emergency('🔴 ERROR CACHADO: '.$e->getMessage());
@@ -713,9 +723,9 @@ class MarcacionController extends Controller
             ->where('h.extra', '!=', '00:00:00');
 
         // 2. FILTRO POR RANGO DE FECHAS (La clave de tu problema)
-        if ($inicio && $fin) {
-            $query->whereBetween('m.fecha', [$inicio, $fin]);
-        }
+        // if ($inicio && $fin) {
+        //     $query->whereBetween('m.fecha', [$inicio, $fin]);
+        // }
 
         // Seleccionamos lo necesario
         $extras = $query->select('h.id', 'm.fecha', 'h.extra as extra_db')
@@ -747,6 +757,105 @@ class MarcacionController extends Controller
             ->values();
 
         return response()->json($extrasProcesadas);
+    }
+
+    public function recalcularExtras(Request $request)
+    {
+        $inicio = microtime(true);
+
+        $request->validate([
+            'empresa' => 'required|integer',
+            'fechaInicio' => 'required|date',
+            'fechaFin' => 'required|date',
+        ]);
+
+        $empresaId = $request->empresa;
+        $fechaInicio = $request->fechaInicio;
+        $fechaFin = $request->fechaFin;
+        // $ejecutadoPor = auth()->user()->name;
+
+        // 1. Contamos el total de empleados activos para el log inicial
+        $totalEmpleados = Empleado::where('empresa_id', $empresaId)
+            ->whereNull('fecha_cese')
+            ->count();
+
+        \Log::info('INICIO PROCESO MASIVO HE', [
+            // 'usuario' => $ejecutadoPor,
+            'empresa_id' => $empresaId,
+            'total_empleados_activos' => $totalEmpleados,
+            'rango' => "$fechaInicio al $fechaFin",
+        ]);
+
+        // 2. Filtramos empleados: que pertenezcan a la empresa Y NO estén cesados
+        Empleado::where('empresa_id', $empresaId)
+            ->whereNull('fecha_cese')
+            ->chunkById(50, function ($empleados) use ($fechaInicio, $fechaFin) {
+
+                $empleadoIds = $empleados->pluck('id');
+
+                // 3. Traemos horarios: Solo estado 'L' (Laboral) y que tengan hora de salida programada
+                $todosLosHorarios = Horario::whereIn('empleado_id', $empleadoIds)
+                    ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+                    ->where('estado', 'L')
+                    ->whereNotNull('salida') // Validamos que exista hora programada
+                    // ->where('calculo_manual', 0) // Regla de oro: no tocar lo manual
+                    ->get()
+                    ->groupBy('empleado_id');
+
+                // 4. Traemos marcaciones
+                $todasLasMarcaciones = Marcacion::whereIn('empleado_id', $empleadoIds)
+                    ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+                    ->whereNotNull('salida') // Validamos que exista marcación de salida real
+                    ->get()
+                    ->groupBy(function ($item) {
+                        return $item->empleado_id.'_'.$item->fecha;
+                    });
+
+                foreach ($empleados as $empleado) {
+
+                    \Log::info('Inicio del for each para el calculo');
+
+                    $horariosEmpleado = $todosLosHorarios->get($empleado->id, []);
+
+                    foreach ($horariosEmpleado as $horario) {
+                        $key = $empleado->id.'_'.$horario->fecha;
+                        $marcacion = $todasLasMarcaciones->get($key)?->first();
+
+                        // Solo entramos si existe la marcación (la validación de salida real ya se hizo en el query)
+                        if ($marcacion) {
+                            $h_salida = Carbon::parse($horario->salida);
+                            $m_salida = Carbon::parse($marcacion->salida);
+
+                            $extraMinutos = max(0, $h_salida->diffInMinutes($m_salida, false));
+                            $extraTime = gmdate('H:i:s', $extraMinutos * 60);
+
+                            $horario->update([
+                                'extra' => $extraTime,
+                                'calculo_manual' => 1,
+                                // 'estado' => 'Calculado Automat',
+                            ]);
+
+                            \Log::info('HE Calculada', [
+                                'fecha' => $horario->fecha,
+                                'trabajador' => trim("{$empleado->apellidos} {$empleado->nombres}"),
+                                'prog_salida' => $h_salida->toTimeString(),
+                                'real_salida' => $m_salida->toTimeString(),
+                                'resultado_extra' => $extraTime,
+                                // 'ejecutado_por' => $ejecutadoPor,
+                            ]);
+                        }
+                    }
+                }
+            });
+
+        $fin = microtime(true);
+        $tiempo = round($fin - $inicio, 2);
+        \Log::info('Recálculo completado exitosamente', [
+            'tiempo_total_segundos' => $tiempo,
+            'empresa' => $empresaId,
+        ]);
+
+        return back()->with('message', "Proceso completado en {$tiempo}s para {$totalEmpleados} empleados.");
     }
 
     /* -------------------- Update */

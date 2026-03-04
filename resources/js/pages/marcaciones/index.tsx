@@ -168,6 +168,8 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                                 fechaInicio={dateRange?.from?.toISOString().split('T')[0]}
                                                 fechaFin={dateRange?.to?.toISOString().split('T')[0]}
                                                 disabled={isFiltering}
+                                                empresas={empresas} // <--- ¡IMPORTANTE!
+                                                // encargados={encargados}
                                             />
                                         )}
                                     </>
@@ -188,8 +190,6 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                 />
                             )}
 
-
-
                             <DateRangeFilter
                                 dateRange={dateRange}
                                 setDateRange={setDateRange}
@@ -206,7 +206,6 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                     placeholder="SELECCIONAR ENCARGADO"
                                 />
                             )}
-
 
 
 

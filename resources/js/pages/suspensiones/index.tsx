@@ -59,10 +59,31 @@ export default function IndexSuspension({
                 : undefined,
     };
 
+
+    //  definir razones
+    const RAZONES_OPCIONES = {
+        amonestaciones: [
+            { id: 'incumplimiento', label: 'INCUMPLIR NORMAS' },
+            { id: 'negligencia', label: 'NEGLIGENCIA DE FUNCIONES' },
+        ],
+        suspensiones: [
+            { id: 'tardanza', label: 'ACUMULACION DE TARDANZA' },
+            { id: 'falta injustificada', label: 'FALTA INJUSTIFICADA' },
+            { id: 'negligencia', label: 'NEGLIGENCIA DE FUNCIONES' },
+        ]
+    };
+
+    // Estado para saber en qué pestaña estamos (coincide con el defaultValue de los Tabs)
+    const [activeTab, setActiveTab] = useState<'amonestaciones' | 'suspensiones'>('amonestaciones');
+
+    // Estado para la razón seleccionada
+    const [selectedRazon, setSelectedRazon] = useState<string | null>(filters.razon || null);
+
     const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(initialState.empresa);
     const [selectedEncargado, setSelectedEncargado] = useState<string | number | null>(initialState.encargado);
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialState.dateRange);
     const [isFiltering, setIsFiltering] = useState(false);
+
 
     const applyFilters = useCallback(() => {
         router.get(
@@ -72,6 +93,9 @@ export default function IndexSuspension({
                 encargado: selectedEncargado,
                 fechaInicio: dateRange?.from?.toISOString().split('T')[0],
                 fechaFin: dateRange?.to?.toISOString().split('T')[0],
+                // Enviamos estos dos nuevos campos
+                tipo: activeTab === 'suspensiones' ? 'S' : 'AM',
+                razon: selectedRazon,
             },
             {
                 preserveState: true,
@@ -79,7 +103,7 @@ export default function IndexSuspension({
                 onFinish: () => setIsFiltering(false),
             },
         );
-    }, [selectedEmpresa, selectedEncargado, dateRange]);
+    }, [selectedEmpresa, selectedEncargado, dateRange, activeTab, selectedRazon]); // Añadir dependencias
 
     useEffect(() => {
         // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
@@ -94,6 +118,7 @@ export default function IndexSuspension({
             setSelectedEmpresa(empresas[0].id);
         }
     }, [empresas, selectedEmpresa, auth.user.name]);
+
     // carga automatica en tiempo real
     useEffect(() => {
         if (!selectedEmpresa || !dateRange?.to) {
@@ -106,6 +131,12 @@ export default function IndexSuspension({
             return () => clearTimeout(timer);
         }
     }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters]);
+
+    // Limpiar la ventana al buscar con filtros
+    const handleTabChange = (value: string) => {
+        setActiveTab(value as 'amonestaciones' | 'suspensiones');
+        setSelectedRazon(null); // Limpiamos la razón al cambiar de tipo
+    };
 
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
@@ -200,9 +231,25 @@ export default function IndexSuspension({
                                 placeholder="SELECCIONAR ENCARGADO"
                             />
                         )}
+
+                        {auth.user.rol_id != 4 && (
+                            <SelectFilter
+                                items={RAZONES_OPCIONES[activeTab]} // Muestra opciones según el tab actual
+                                selected={selectedRazon}
+                                onSelect={setSelectedRazon}
+                                getValue={(item) => item.id}
+                                displayValue={(item) => item.label}
+                                placeholder="FILTRAR POR RAZÓN"
+                            />
+                        )}
                     </div>
 
-                    <Tabs defaultValue={'amonestaciones'}>
+                    <Tabs
+                        defaultValue={'amonestaciones'}
+                        value={activeTab}
+                        onValueChange={handleTabChange}
+                    >
+
                         <TabsList className="w-full">
                             <TabsTrigger value="amonestaciones"
                                 className="data-[state=active]:bg-warning dark:data-[state=active]:bg-warning dark:data-[state=active]:text-warning-foreground"
