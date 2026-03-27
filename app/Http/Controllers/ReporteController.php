@@ -400,13 +400,31 @@ class ReporteController extends Controller
 
             $compensaDias = $estadosCount->filter(fn ($count, $estado) => in_array($estado, ['C', 'CA', 'CHE']))->sum();
             $compensaDiasCount = 0;
+
+            // ----- Excedente
             $esPartTime = $empleado->jornada_id == 2;
+            if ($esPartTime) {
+                $metaMinutos = 93 * 60;
+            } else {
+                $metaMinutos = (int) $horasProgramadas;
+            }
+            $realMinutos = (int) $horasReales;
+
+            if ($esPartTime) {
+                // Regla PT: (Real - Meta), pero si es negativo retorna 0
+                $excedente = max(0, $realMinutos - $metaMinutos);
+            } else {
+
+                $excedente = abs($realMinutos - $metaMinutos);
+            }
 
             return [
                 'horas' => (int) $horas,
                 'horasLaboradas' => (int) $horasProgramadas, // programado
-                'horasTrabajadasReales' => (int) $horasReales, // real
-                'horasExcedente' => max(0, $horasProgramadas - $horasReales),
+                'horasTrabajadasReales' => (int) $horasReales, // h.trabajadas
+
+                // 'horasExcedente' => (int)$excedente,
+                'horasExcedente' => $excedente,
 
                 'compensa_pendiente' => $feriadosPendientes->get($empleado->id, 0),
                 'compensa_horas_totales' => $compensaHorasTotales, // <--- MANDAMOS LOS MINUTOS YA CALCULADOS
@@ -661,8 +679,6 @@ class ReporteController extends Controller
 
         return $totalMinutos;
     }
-
-
 
     public function tareoDownload(Request $request)
     {

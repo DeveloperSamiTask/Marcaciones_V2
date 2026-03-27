@@ -117,20 +117,49 @@ export const columns: ColumnDef<ReporteTareo>[] = [
             );
         }
     },
+    // {
+    //     accessorKey: 'horasExcedente',
+    //     header: 'EXCEDENTE',
+    //     cell: ({ row }) => {
+    //         const totalMinutos = parseInt(row.original.horasExcedente) || 0;
+
+    //         const esNegativo = totalMinutos < 0;
+    //         const absMinutos = Math.abs(totalMinutos);
+
+    //         const h = Math.floor(absMinutos / 60);
+    //         const m = absMinutos % 60;
+
+    //         const formatted = `${esNegativo ? '-' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+    //         return (
+    //             <span className={totalMinutos > 0 ? "text-green-600 font-bold" : "text-red-500"}>
+    //                 {formatted}
+    //             </span>
+    //         );
+    //     }
+
+    // },
     {
         accessorKey: 'horasExcedente',
         header: 'EXCEDENTE',
         cell: ({ row }) => {
-            // Recibimos el valor ya calculado (ej: 120 minutos)
-            const minutos = row.original.horasExcedente || 0;
+            const totalMinutos = parseInt(row.original.horasExcedente) || 0;
 
-            // Formateo rápido HH:mm
-            const h = Math.floor(minutos / 60);
-            const m = minutos % 60;
-            const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            const esNegativo = totalMinutos < 0;
+            const absMinutos = Math.abs(totalMinutos);
+
+            const h = Math.floor(absMinutos / 60);
+            const m = absMinutos % 60;
+
+            const formatted = `${esNegativo ? '-' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+            // Definir color según el valor
+            let colorClass = "text-gray-400"; // Neutro para 00:00
+            if (totalMinutos > 0) colorClass = "text-green-600 font-bold";
+            if (totalMinutos < 0) colorClass = "text-red-500 font-bold";
 
             return (
-                <span className={minutos > 0 ? "text-green-600 font-bold" : "text-gray-400"}>
+                <span className={colorClass}>
                     {formatted}
                 </span>
             );

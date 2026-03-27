@@ -35,12 +35,23 @@
     </head>
 
     <body>
-        @php
-            $codigo = [
-                'A' => 'AMONESTACION ESCRITA POR NEGLIGENCIA DE FUNCIONES',
-                'S' => 'SUSPENSION POR NEGLIGENCIA DE FUNCIONES',
-            ];
-        @endphp
+		@php
+		// Array para TIPOS (tardanza, negligencia, etc.)
+		$tipo = [
+			'tardanza' => 'AMONESTACION ESCRITA POR TARDANZA',
+			'refrigerio' => 'AMONESTACION ESCRITA POR SOBRE TIEMPO DE REFRIGERIO',
+			'falta injustificada' => 'AMONESTACION ESCRITA POR FALTA INJUSTIFICADA',
+			'negligencia' => 'AMONESTACION ESCRITA POR NEGLIGENCIA',
+			'incumplimiento' => 'AMONESTACION ESCRITA POR INCUMPLIMIENTO',
+			'incompleto' => 'AMONESTACION ESCRITA POR INCOMPLETO',
+		];
+		
+		// Array para CÓDIGOS (S, AM, etc.)
+		$codigo = [
+			'S' => 'SUSPENSIÓN SIN GOCE DE HABER',
+			'A' => 'AMONESTACION ESCRITA',
+		];
+	@endphp
         @if ($suspension->codigo[0] == 'S')
             <div style="page-break-inside: avoid;">
                 <div style="text-align: center;">
@@ -61,7 +72,7 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -69,12 +80,42 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}
+						</strong>
                         en referencia a los hechos que describimos a continuación:
                     </p>
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         {{ $suspension->motivo }}
                     </p>
+
+					 @if ($suspension->codigo[0] == 'S' && isset($amonestaciones) && $amonestaciones->count() > 0)
+						<div style="text-align: center; margin-left: 50px; margin-right: 50px; margin-top: 20px; margin-bottom: 20px;">
+							<table style="width: 100%; border-collapse: collapse; text-align: center;">
+								<thead>
+									<tr>
+										<th style="border: 1px solid black; padding: 8px; font-size: 14px; font-weight: bold;">MES</th>
+										<th style="border: 1px solid black; padding: 8px; font-size: 14px; font-weight: bold;">FECHA</th>
+										<th style="border: 1px solid black; padding: 8px; font-size: 14px; font-weight: bold;">DESCRIPCIÓN</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach ($amonestaciones as $item)
+										<tr>
+											<td style="border: 1px solid black; padding: 4px; font-size: 12px; text-transform: uppercase; text-align: center;">
+												{{ $item->fecha->isoFormat('MMMM') }}
+											</td>
+											<td style="border: 1px solid black; padding: 4px; font-size: 12px; text-align: center;">
+												{{ $item->fecha->format('d/m/Y') }}
+											</td>
+											<td style="border: 1px solid black; padding: 4px; font-size: 12px; text-transform: uppercase; text-align: center;">
+												{{ $tipo[$item->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($item->tipo) }}
+											</td>
+										</tr>
+									@endforeach
+								</tbody>
+							</table>
+						</div>
+					@endif
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
                         artículo 48 inciso
@@ -110,14 +151,22 @@
                     @endif
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
 
-                    <table style="width:100%;">
-                        <tbody>
-                            <tr align="center">
-                                <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt=""></td>
-                                <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt=""></td>
-                            </tr>
-                        </tbody>
-                    </table>
+					<table style="width:100%;">
+						<tbody>
+							<tr align="center">
+								<td>
+									<img src="{{ asset($suspension->empleado->empresa->firma) }}" 
+										 alt="" 
+										 style="max-width: 150px; max-height: 80px;">
+								</td>
+								<td>
+									<img src="{{ asset('storage/firmas/transparente.png') }}" 
+										 alt="" 
+										 style="max-width: 150px; max-height: 80px;">
+								</td>
+							</tr>
+						</tbody>
+					</table>
 
                     <table style="width:100%;">
                         <tr>
@@ -153,7 +202,7 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -161,34 +210,41 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
                         en referencia a los hechos que describimos a continuación:
                     </p>
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         {{ $suspension->motivo }}
                     </p>
 
-                    @if ($suspension->codigo[0] == 'S' && isset($amonestaciones) && $amonestaciones->count() > 0)
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>MES</th>
-                                    <th>FECHA</th>
-                                    <th>DESCRIPCIÓN</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($amonestaciones as $item)
-                                    <tr>
-                                        <td style="text-transform: uppercase;">{{ $item->fecha->isoFormat('MMMM') }}
-                                        </td>
-                                        <td>{{ $item->fecha->format('d/m/Y') }}</td>
-                                        <td style="text-transform: uppercase;">{{ $codigo[$suspension->tipo] }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    @endif
+					 @if ($suspension->codigo[0] == 'S' && isset($amonestaciones) && $amonestaciones->count() > 0)
+						<div style="text-align: center; margin-left: 50px; margin-right: 50px; margin-top: 20px; margin-bottom: 20px;">
+							<table style="width: 100%; border-collapse: collapse; text-align: center;">
+								<thead>
+									<tr>
+										<th style="border: 1px solid black; padding: 8px; font-size: 14px; font-weight: bold;">MES</th>
+										<th style="border: 1px solid black; padding: 8px; font-size: 14px; font-weight: bold;">FECHA</th>
+										<th style="border: 1px solid black; padding: 8px; font-size: 14px; font-weight: bold;">DESCRIPCIÓN</th>
+									</tr>
+								</thead>
+								<tbody>
+									@foreach ($amonestaciones as $item)
+										<tr>
+											<td style="border: 1px solid black; padding: 4px; font-size: 12px; text-transform: uppercase; text-align: center;">
+												{{ $item->fecha->isoFormat('MMMM') }}
+											</td>
+											<td style="border: 1px solid black; padding: 4px; font-size: 12px; text-align: center;">
+												{{ $item->fecha->format('d/m/Y') }}
+											</td>
+											<td style="border: 1px solid black; padding: 4px; font-size: 12px; text-transform: uppercase; text-align: center;">
+												{{ $tipo[$item->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($item->tipo) }}
+											</td>
+										</tr>
+									@endforeach
+								</tbody>
+							</table>
+						</div>
+					@endif
 
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
@@ -225,14 +281,22 @@
                     @endif
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
 
-                    <table style="width:100%;">
-                        <tbody>
-                            <tr align="center">
-                                <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt=""></td>
-                                <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt=""></td>
-                            </tr>
-                        </tbody>
-                    </table>
+					<table style="width:100%;">
+						<tbody>
+							<tr align="center">
+								<td>
+									<img src="{{ asset($suspension->empleado->empresa->firma) }}" 
+										 alt="" 
+										 style="max-width: 150px; max-height: 80px;">
+								</td>
+								<td>
+									<img src="{{ asset('storage/firmas/transparente.png') }}" 
+										 alt="" 
+										 style="max-width: 150px; max-height: 80px;">
+								</td>
+							</tr>
+						</tbody>
+					</table>
 
                     <table style="width:100%;">
                         <tr>
@@ -268,7 +332,7 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -276,14 +340,12 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
                         en referencia a los hechos que describimos a continuación:
                     </p>
-
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         {{ $suspension->motivo }}
                     </p>
-
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
                         Estos hechos representan un incumplimiento a las cláusulas del Reglamento Interno de Trabajo
                         artículo 38 inciso
@@ -319,14 +381,22 @@
                     @endif
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">Atentamente</p>
 
-                    <table style="width:100%;">
-                        <tbody>
-                            <tr align="center">
-                                <td><img src="{{ asset($suspension->empleado->empresa->firma) }}" alt=""></td>
-                                <td><img src="{{ asset('storage/firmas/transparente.png') }}" alt=""></td>
-                            </tr>
-                        </tbody>
-                    </table>
+					<table style="width:100%;">
+						<tbody>
+							<tr align="center">
+								<td>
+									<img src="{{ asset($suspension->empleado->empresa->firma) }}" 
+										 alt="" 
+										 style="max-width: 150px; max-height: 80px;">
+								</td>
+								<td>
+									<img src="{{ asset('storage/firmas/transparente.png') }}" 
+										 alt="" 
+										 style="max-width: 150px; max-height: 80px;">
+								</td>
+							</tr>
+						</tbody>
+					</table>
 
                     <table style="width:100%;">
                         <tr>
@@ -359,7 +429,7 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -367,7 +437,7 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] }}</strong>
+                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
                         en referencia a los hechos que describimos a continuación:
                     </p>
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">

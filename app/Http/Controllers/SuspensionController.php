@@ -74,7 +74,6 @@ class SuspensionController extends Controller
                 Carbon::parse($request->fechaInicio)->startOfDay(),
                 Carbon::parse($request->fechaFin)->endOfDay(),
             ])
-    // --- NUEVO: Filtro por Tipo (Amonestación o Suspensión) ---
             ->when($request->tipo, function ($q) use ($request) {
                 if ($request->tipo === 'S') {
                     return $q->where('codigo', 'like', 'S%');
@@ -82,7 +81,6 @@ class SuspensionController extends Controller
 
                 return $q->where('codigo', 'like', 'AM%');
             })
-    // --- NUEVO: Filtro por Razón (Busca en la columna 'tipo' de la DB) ---
             ->when($request->razon, function ($q) use ($request) {
                 return $q->where('tipo', $request->razon);
             })
