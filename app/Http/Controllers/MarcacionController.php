@@ -751,16 +751,16 @@ class MarcacionController extends Controller
             $minutosTotales = ((int) $partes[0] * 60) + (int) $partes[1];
 
             // Tu regla de negocio: bloques de 30 min
-            $ajustado = floor($minutosTotales / 30) * 30;
+            // $ajustado = floor($minutosTotales / 30) * 30;
 
             return [
                 'id' => $registro->id, // ID de Horarios para el descuento
                 'fecha' => $registro->fecha,
-                'extra' => (int) $ajustado,
-                'label' => \Carbon\Carbon::parse($registro->fecha)->format('d/m/Y').' ('.$ajustado.' min)',
+                'extra' => (int) $minutosTotales,
+                'label' => \Carbon\Carbon::parse($registro->fecha)->format('d/m/Y').' ('.$minutosTotales.' min)',
             ];
         })
-            ->filter(fn ($item) => $item !== null && $item['extra'] >= 30)
+            ->filter(fn ($item) => $item !== null ) //&& $item['extra'] >= 10
             ->values();
 
         \Log::info('HE CRUDAS PARA:', $extras->toArray());
@@ -770,7 +770,7 @@ class MarcacionController extends Controller
 
     /* ------------------------------------------------------------------------------------------------------------------------ Update */
 
-	 public function recalcularExtras(Request $request)
+	public function recalcularExtras(Request $request)
     {
         $inicio = microtime(true);
 
@@ -869,7 +869,7 @@ class MarcacionController extends Controller
         return back()->with('message', "Proceso completado en {$tiempo}s para {$totalEmpleados} empleados.");
     }
 
-   public function edicion(Request $request): Response
+    public function edicion(Request $request): Response
     {
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
