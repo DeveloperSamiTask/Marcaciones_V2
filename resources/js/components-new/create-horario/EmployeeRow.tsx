@@ -76,7 +76,7 @@ export function EmployeeRow({
 
     // Convertir HH:mm → minutos
     const timeToMinutes = (time: string): number => {
-        if (!time || time === '00:00') return 0;
+        if (!time) return -1; // -1 = inválido, 00:00 es medianoche válida
         const [hours, minutes] = time.split(':').map(Number);
         return hours * 60 + minutes;
     };
@@ -137,7 +137,7 @@ export function EmployeeRow({
             // ------
             const entrada = dayData.entryTime || '00:00';
             const salida = dayData.exitTime || '00:00';
-
+            if (entrada === '00:00' && salida === '00:00') return;
 
             const entryMin = timeToMinutes(dayData.entryTime || '00:00');
             const exitMin = timeToMinutes(dayData.exitTime || '00:00');
@@ -153,7 +153,7 @@ export function EmployeeRow({
                     minutos = exitMin - entryMin;
 
                     // Turno nocturno
-                } else if (exitMin < entryMin && entryMin !== 0 && exitMin !== 0) {
+                } else if (exitMin < entryMin && entryMin > 0) { // ← solo verificar entrada
                     dailyDuration = (exitMin + 1440) - entryMin;
                     minutos = (exitMin + 1440) - entryMin;
                 }
@@ -187,14 +187,14 @@ export function EmployeeRow({
             // Si es D o SP, no suma nada.
         });
 
-        console.log(
-            `📊 RESUMEN SEMANAL | ${employee.apellidos} ${employee.nombres} `,
-            {
-                dias: horasPorDia,
-                enSemana: fechasEnSemana,
-                fueraSemana: fechasFueraSemana
-            }
-        );
+        // console.log(
+        //     `📊 RESUMEN SEMANAL | ${employee.apellidos} ${employee.nombres} `,
+        //     {
+        //         dias: horasPorDia,
+        //         enSemana: fechasEnSemana,
+        //         fueraSemana: fechasFueraSemana
+        //     }
+        // );
 
 
 

@@ -24,7 +24,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Horarios',
@@ -35,6 +34,15 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: route('horarios.create-2'),
     },
 ];
+
+
+const esDiaVacio = (entryTime: string, exitTime: string): boolean => {
+    return entryTime === '00:00' && exitTime === '00:00';
+};
+
+const esTurnoNocturno = (entryTime: string, exitTime: string): boolean => {
+    return exitTime === '00:00' && entryTime !== '00:00';
+};
 
 
 export default function App({ empleados, empresas, url, supervisores }) {
@@ -254,7 +262,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         entryTime = currentBaseSchedule.entryTime;
                         exitTime = currentBaseSchedule.exitTime;
 
-                        if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
+                        const esVacio = entryTime === '00:00' && exitTime === '00:00';
+                        if (esVacio && employee.jornada_id === 2) {
                             newStatus = 'SP';
                         }
                     }
@@ -330,7 +339,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             const exitTime = horario.salida;
 
                             // Aplicar la nueva regla de 'SP'
-                            if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
+                            const esVacio = entryTime === '00:00' && exitTime === '00:00';
+                            if (esVacio && employee.jornada_id === 2) {
                                 newStatus = 'SP';
                             }
 
@@ -406,7 +416,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             const exitTime = horario.salida;
 
                             // Aplicar la nueva regla de 'SP'
-                            if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
+                            const esVacio = entryTime === '00:00' && exitTime === '00:00';
+                            if (esVacio && employee.jornada_id === 2) {
                                 newStatus = 'SP';
                             }
 
@@ -483,7 +494,8 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             const exitTime = horario.salida;
 
                             // Aplicar la nueva regla de 'SP'
-                            if (entryTime === '00:00' && exitTime === '00:00' && employee.jornada_id === 2) {
+                            const esVacio = entryTime === '00:00' && exitTime === '00:00';
+                            if (esVacio && employee.jornada_id === 2) {
                                 newStatus = 'SP';
                             }
 
@@ -836,14 +848,14 @@ export default function App({ empleados, empresas, url, supervisores }) {
         // ==================== VALIDACIONES DE HORAS SEMANALES ====================
         filteredEmployees.forEach(employee => {
             const employeeSchedule = scheduleData[employee.id] || {};
-            const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule);
+            const horasSemanales = calcularHorasSemanalesFrontend(employeeSchedule, employee);
             const excepciones = ['V', 'M', 'LF', 'LM', 'LP', 'AI'];
             const tieneExcepcionEnLaSemana = Object.values(employeeSchedule).some(day =>
                 excepciones.includes(day?.status) || excepciones.includes(day?.estado)
             );
 
             // -------------- CANTIDAD DE HORAS PERMITIDAS PARA FT --------------
-            if (employee.jornada_id === 1) { // FULL TIME
+            if (employee?.jornada_id === 1) { // FULL TIME
 
                 const esSamiTask = employee.empresa_id === 2;
                 const MAX_HORAS = 2880;  // 48 horas en minutos
@@ -887,6 +899,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 */
             }
         });
+
         if (hasValidationErrors) return;
         // ==================== CARGAR DATOS DE FERIADOS Y TD ====================
         // 🔥 1. Detectar empleados con C/CA
@@ -1275,13 +1288,18 @@ export default function App({ empleados, empresas, url, supervisores }) {
     }
 
     // ---------------------- Calculo de horas semanales ----------------------
-    const calcularHorasSemanalesFrontend = (employeeSchedule) => {
+    const calcularHorasSemanalesFrontend = (employeeSchedule, employee) => {
         let totalMinutos = 0;
 
         Object.values(employeeSchedule).forEach(dia => {
+
+            console.log('CONSOLE ACTUALIZADO:', dia.status, '| ENTRY:', dia.entryTime, '| EXIT:', dia.exitTime);
+
+
+            const esVacio = dia.entryTime === '00:00' && dia.exitTime === '00:00';
             const estadosQueCuentan = ['L', 'PE', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'SP', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'TD'];
 
-            if (estadosQueCuentan.includes(dia.status) && dia.entryTime && dia.exitTime && dia.entryTime !== '00:00') {
+            if (estadosQueCuentan.includes(dia.status) && dia.entryTime && dia.exitTime && !esVacio) {
 
                 const entradaMin = tiempoAMinutos(dia.entryTime);
                 const salidaMin = tiempoAMinutos(dia.exitTime);
@@ -1297,7 +1315,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 // ⬆⬆⬆ FIN DE LA CORRECCIÓN ⬆⬆⬆
 
                 // Restar 1h (60min) si trabaja más de 6h por día
-                if (empleados.jornada_id == 1) {
+                if (empleados?.jornada_id == 1) {
                     minutosDia -= 60;
                 }
                 else if (minutosDia >= 360) {

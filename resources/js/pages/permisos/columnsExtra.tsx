@@ -137,7 +137,13 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
                 <div className="flex items-center gap-2">
                     {!permiso.estado ? (
                         <>
-                            <EditPermiso key={`edit-permiso${permiso.id}`} permisoId={permiso.id} />
+                            <EditPermiso
+                                key={`edit-permiso${permiso.id}`}
+                                permisoId={permiso.id}
+
+                                salidaProgramada={permiso.horario?.salida ?? null}
+                                salidaReal={permiso.marcacion?.salida ?? null}
+                            />
                             <DeletePermiso key={`delete-permiso${permiso.id}`} permisoId={permiso.id} />
                             {isAdmin && !permiso.comprobante && permiso.tipo_id != 9 && permiso.tipo_id != 2 && permiso.tipo_id != 20 &&
                                 <UploadPermiso key={`upload-permiso-${permiso.id}`} permisoId={permiso.id} />}

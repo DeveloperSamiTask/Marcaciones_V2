@@ -396,7 +396,7 @@ import { sendSomething } from "./send";
     },
 
 
-    
+
     {
         accessorKey: 'horas',
         header: 'TOTAL',

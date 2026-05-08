@@ -27,4 +27,15 @@ export interface Permiso{
         codigo: string,
         nombre: string,
     }
+    horario?: {
+        id: number;
+        ingreso: string;   // "08:00"
+        salida: string;    // "16:00"
+        extra: string | null;
+    };
+    marcacion?: {
+        id: number;
+        ingreso: string;
+        salida: string;    // "17:15" ← la real
+    };
 }

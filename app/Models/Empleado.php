@@ -49,15 +49,17 @@ class Empleado extends Model
 
     // app/Models/Empleado.php
 
+    public function marcaciones(): HasMany
+    {
+        return $this->hasMany(Marcacion::class);
+    }
+
     public function horarios(): HasMany
     {
         return $this->hasMany(Horario::class);
     }
 
-    public function marcaciones(): HasMany
-    {
-        return $this->hasMany(Marcacion::class);
-    }
+
 
     public function subordinados()
     {

@@ -8,6 +8,7 @@ use App\Models\Feriado;
 use App\Models\Horario;
 use App\Models\Marcacion;
 use App\Models\Permiso;
+use App\Models\Empleado;
 use App\Models\SolicitudHorasExtrasPT;
 use App\Models\Suspension;
 use Carbon\Carbon;
@@ -15,6 +16,7 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -150,26 +152,111 @@ class PermisoController extends Controller
             }])
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
             ->orderBy('fecha')
-            ->get()
-            ->groupBy(function ($item) {
-                $estados = [
-                    0 => 'pendientes',
-                    1 => 'aprobados',
-                    2 => 'rechazados',
-                ];
+            ->get(); // ← get() primero, sin groupBy
 
-                return $estados[$item->estado] ?? '';
-            });
+        // each ANTES del groupBy
+        $permisos->each(function ($permiso) {
+            $permiso->setRelation('horario',
+                Horario::where('empleado_id', $permiso->empleado_id)
+                    ->whereDate('fecha', $permiso->fecha)
+                    ->first()
+            );
+            $permiso->setRelation('marcacion',
+                Marcacion::where('empleado_id', $permiso->empleado_id)
+                    ->whereDate('fecha', $permiso->fecha)
+                    ->first()
+            );
+        });
+
+        $agrupados = $permisos->groupBy(function ($item) {
+            $estados = [0 => 'pendientes', 1 => 'aprobados', 2 => 'rechazados'];
+
+            return $estados[$item->estado] ?? '';
+        });
 
         session(['permisos_extras_url' => $request->fullUrl()]);
 
         return Inertia::render('permisos/extras', [
-            'pendientes' => $permisos->get('pendientes', collect()),
-            'aprobados' => $permisos->get('aprobados', collect()),
-            'rechazados' => $permisos->get('rechazados', collect()),
+            'pendientes' => $agrupados->get('pendientes', collect()),
+            'aprobados' => $agrupados->get('aprobados', collect()),
+            'rechazados' => $agrupados->get('rechazados', collect()),
             'empresas' => $empresas,
             'filters' => $filters,
         ]);
+    }
+
+    // Aprobar permiso
+    public function update(Request $request, Permiso $permiso)
+    {
+        if (! $permiso->comprobante && ($permiso->tipo_id == 7 || $permiso->tipo_id == 8 || $permiso->tipo_id == 10 || $permiso->tipo_id == 21 || $permiso->tipo_id == 22)) {
+            return back()->withInput()->withErrors(['message' => 'Debes subir un comprobante']);
+        }
+
+        $validated = [];
+        if ($permiso->tipo_id == 20) {
+            $validated = $request->validate([
+                'he_aprobada' => 'required|date_format:H:i',
+            ]);
+        }
+
+        try {
+            DB::transaction(function () use ($permiso, $validated) {
+                $permiso->update(['estado' => 1]);
+
+                $horario = Horario::where('empleado_id', $permiso->empleado_id) // buscamos el horario para actualizar su estado
+                    ->whereDate('fecha', $permiso->fecha)
+                    ->firstOrFail();
+
+                /* Nueva seleccion de HE aprobadas */
+                if ($permiso->tipo_id == 20) {
+                    AsistenciaDetalle::where('empleado_id', $permiso->empleado_id)
+                        ->whereDate('fecha', $permiso->fecha)
+                        ->update(['estado_horas_extra' => 1]);
+
+                    Marcacion::where('empleado_id', $permiso->empleado_id)
+                        ->whereDate('fecha', $permiso->fecha)
+                        ->update(['estado_horas_extra' => 1]);
+
+                    $horario->update(['extra' => $validated['he_aprobada']]);
+
+                    $empleado = Empleado::find($permiso->empleado_id , 'id');
+
+                    Log::info("HE aprobada | apellidos : {$empleado->apellidos}| empleado_id: {$permiso->empleado_id} | fecha: {$permiso->fecha} | extra: {$validated['he_aprobada']}");
+
+                    return;
+                }
+
+                if ($permiso->tipo_id == 2) { // SOLO PARA HORARIO PROGRAMADO EXTRA PARA PARTTIME
+                    $horario->update(['estado' => 'L']);
+
+                    return response()->json('Actualizado');
+                }
+
+                $horario->update(['estado' => $permiso->tipo->codigo]);
+
+                if ($permiso->tipo_id == 24) {
+                    $horario->update([
+                        'estado' => 'TD',
+                    ]);
+                }
+
+                if ($horario->estado == 'FI') { // se crea una suspension cuando es falta injustificada y cae un fin de semana
+                    $finde = $horario->fecha->isWeekend();
+                    $esFeriado = Feriado::whereDate('fecha', $horario->fecha)->exists();
+
+                    $amonestacion = Suspension::create([
+                        'empleado_id' => $permiso->empleado_id,
+                        'tipo' => 'falta injustificada',
+                        'fecha' => $horario->fecha,
+                        'estado' => 0,
+                    ]);
+                    $amonestacion->update(['codigo' => ($finde || $esFeriado ? 'S' : 'AM').now()->format('dmY').$amonestacion->id]);
+                }
+
+            });
+        } catch (Exception $e) {
+            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
+        }
     }
 
     public function showHorarios(Permiso $permiso): JsonResponse
@@ -194,7 +281,7 @@ class PermisoController extends Controller
         if ($permiso->estado == 0) {
             // FASE 1 - PENDIENTE: solo cuenta 'L'
             $estadosQueCuentan = ['L'];
-        } else if ($permiso->estado == 1) {
+        } elseif ($permiso->estado == 1) {
             // FASE 2 - APROBADO: cuenta múltiples estados
             $estadosQueCuentan = ['L', 'PE', 'V', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'FL', 'SP', 'M', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'TD'];
         }
@@ -248,61 +335,6 @@ class PermisoController extends Controller
             return redirect()->to(session('permisos_url', route('permisos.index')))->withSuccess(['message' => 'Permiso creado exitosamente!']);
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()])->withInput();
-        }
-    }
-
-    public function update(Request $request, Permiso $permiso)
-    {
-        if (! $permiso->comprobante && ($permiso->tipo_id == 7 || $permiso->tipo_id == 8 || $permiso->tipo_id == 10 || $permiso->tipo_id == 21 || $permiso->tipo_id == 22)) {
-            return back()->withInput()->withErrors(['message' => 'Debes subir un comprobante']);
-        }
-
-        try {
-            DB::transaction(function () use ($permiso) {
-                $permiso->update(['estado' => 1]);
-
-                $horario = Horario::where('empleado_id', $permiso->empleado_id) // buscamos el horario para actualizar su estado
-                    ->whereDate('fecha', $permiso->fecha)
-                    ->firstOrFail();
-
-                if ($permiso->tipo_id == 20) { // SOLO SIRVE PARA APROBAR HORAS EXTRA POST MARCACION
-                    AsistenciaDetalle::where('empleado_id', $permiso->empleado_id)->whereDate('fecha', $permiso->fecha)->update(['estado_horas_extra' => 1]); // horas extra aprobado
-                    Marcacion::where('empleado_id', $permiso->empleado_id)->whereDate('fecha', $permiso->fecha)->update(['estado_horas_extra' => 1]); // horas extra enviado aprobado
-
-                    // $horario->update(['estado' => $permiso->tipo->codigo]);
-                    return response()->json('Actualizado');
-                }
-
-                if ($permiso->tipo_id == 2) { // SOLO PARA HORARIO PROGRAMADO EXTRA PARA PARTTIME
-                    $horario->update(['estado' => 'L']);
-
-                    return response()->json('Actualizado');
-                }
-
-                $horario->update(['estado' => $permiso->tipo->codigo]);
-
-                if ($permiso->tipo_id == 24){
-                    $horario->update([
-                        'estado' => 'TD'
-                    ]);
-                }
-
-                if ($horario->estado == 'FI') { // se crea una suspension cuando es falta injustificada y cae un fin de semana
-                    $finde = $horario->fecha->isWeekend();
-                    $esFeriado = Feriado::whereDate('fecha', $horario->fecha)->exists();
-
-                    $amonestacion = Suspension::create([
-                        'empleado_id' => $permiso->empleado_id,
-                        'tipo' => 'falta injustificada',
-                        'fecha' => $horario->fecha,
-                        'estado' => 0,
-                    ]);
-                    $amonestacion->update(['codigo' => ($finde || $esFeriado ? 'S' : 'AM').now()->format('dmY').$amonestacion->id]);
-                }
-
-            });
-        } catch (Exception $e) {
-            return back()->withInput()->withErrors(['message' => $e->getMessage()]);
         }
     }
 

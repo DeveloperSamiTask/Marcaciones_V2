@@ -45,7 +45,7 @@
 			'incumplimiento' => 'AMONESTACION ESCRITA POR INCUMPLIMIENTO',
 			'incompleto' => 'AMONESTACION ESCRITA POR INCOMPLETO',
 		];
-		
+
 		// Array para CÓDIGOS (S, AM, etc.)
 		$codigo = [
 			'S' => 'SUSPENSIÓN SIN GOCE DE HABER',
@@ -72,7 +72,8 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
+                            <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
+
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -80,7 +81,8 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}
+                            <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
+
 						</strong>
                         en referencia a los hechos que describimos a continuación:
                     </p>
@@ -155,13 +157,13 @@
 						<tbody>
 							<tr align="center">
 								<td>
-									<img src="{{ asset($suspension->empleado->empresa->firma) }}" 
-										 alt="" 
+									<img src="{{ asset($suspension->empleado->empresa->firma) }}"
+										 alt=""
 										 style="max-width: 150px; max-height: 80px;">
 								</td>
 								<td>
-									<img src="{{ asset('storage/firmas/transparente.png') }}" 
-										 alt="" 
+									<img src="{{ asset('storage/firmas/transparente.png') }}"
+										 alt=""
 										 style="max-width: 150px; max-height: 80px;">
 								</td>
 							</tr>
@@ -202,7 +204,8 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
+                           <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
+
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -210,7 +213,8 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
+                            <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
+
                         en referencia a los hechos que describimos a continuación:
                     </p>
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
@@ -285,13 +289,13 @@
 						<tbody>
 							<tr align="center">
 								<td>
-									<img src="{{ asset($suspension->empleado->empresa->firma) }}" 
-										 alt="" 
+									<img src="{{ asset($suspension->empleado->empresa->firma) }}"
+										 alt=""
 										 style="max-width: 150px; max-height: 80px;">
 								</td>
 								<td>
-									<img src="{{ asset('storage/firmas/transparente.png') }}" 
-										 alt="" 
+									<img src="{{ asset('storage/firmas/transparente.png') }}"
+										 alt=""
 										 style="max-width: 150px; max-height: 80px;">
 								</td>
 							</tr>
@@ -332,7 +336,8 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
+                            <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
+
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -340,7 +345,8 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
+                            <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
+
                         en referencia a los hechos que describimos a continuación:
                     </p>
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
@@ -385,13 +391,13 @@
 						<tbody>
 							<tr align="center">
 								<td>
-									<img src="{{ asset($suspension->empleado->empresa->firma) }}" 
-										 alt="" 
+									<img src="{{ asset($suspension->empleado->empresa->firma) }}"
+										 alt=""
 										 style="max-width: 150px; max-height: 80px;">
 								</td>
 								<td>
-									<img src="{{ asset('storage/firmas/transparente.png') }}" 
-										 alt="" 
+									<img src="{{ asset('storage/firmas/transparente.png') }}"
+										 alt=""
 										 style="max-width: 150px; max-height: 80px;">
 								</td>
 							</tr>
@@ -429,7 +435,7 @@
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">
                         FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ now()->format('d/m/Y') }}</p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px;">ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;:
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
+    <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
                     </p>
                     <p style="font-size:14px; text-align:left; margin-left: 50px; margin-right: 50px;">
                         ________________________________________________________________________________________</p>
@@ -437,7 +443,7 @@
                         Por la presente comunicación, y en ejercicio de las facultades sancionadoras que nos reconoce la
                         ley, le comunicamos la decisión
                         de la empresa de imponerle una sanción disciplinaria consistente en
-                        <strong>{{ $codigo[$suspension->codigo[0]] ?? $tipo[$suspension->tipo] ?? 'SANCIÓN DISCIPLINARIA' }}</strong>
+                            <strong>{{ $tipo[$suspension->tipo] ?? 'AMONESTACION ESCRITA POR ' . strtoupper($suspension->tipo) }}</strong>
                         en referencia a los hechos que describimos a continuación:
                     </p>
                     <p style="text-align:justify; margin-left: 50px; margin-right: 50px;">
