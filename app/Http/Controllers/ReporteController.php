@@ -926,6 +926,7 @@ class ReporteController extends Controller
         return Excel::download(new CompensaExport($data, $tipo), 'compensas.xlsx');
     }
 
+    //  ------------------------------------------------------------------------
     public function extraIndex(Request $request)
     {
         $filters = $request->validate([
@@ -1004,60 +1005,48 @@ class ReporteController extends Controller
 
         $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
             $empleadoMarcaciones = $empleado->marcaciones ?? collect();
-            $horas = 0;
-            $extra = 0; // Total absoluto (se mantiene real)
+            $extra_no_solicitado = 0;
+            $extra_solicitado = 0; // esto ahora viene de horarios.extra
             $estados_extras = [];
 
-            $extra_solicitado = 0;
-            $extra_no_solicitado = 0;
-
-            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$horas, &$extra, &$estados_extras, &$extra_solicitado, &$extra_no_solicitado) {
+            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$extra_no_solicitado, &$extra_solicitado, &$estados_extras) {
                 $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
 
                 if ($horario && $marcacion->ingreso && $marcacion->salida) {
 
-                    // En caso sea TD no se considera extra.
                     if ($horario->ingreso->format('H:i') === '00:00' && $horario->salida->format('H:i') === '00:00') {
-                        return; // Saltamos este día y pasamos al siguiente
+                        return;
                     }
 
-                    // 1. Preparamos las copias para normalizar
                     $horaSalidaProg = $horario->salida->copy();
                     $horaSalidaReal = $marcacion->salida->copy();
 
-                    // --- MANEJO DE HORARIO NOCTURNO ---
-                    // Si la salida programada es menor al ingreso, es del día siguiente
                     if ($horaSalidaProg->lt($horario->ingreso)) {
                         $horaSalidaProg->addDay();
                     }
-
-                    // Si la marcación real de salida es menor al ingreso real, es del día siguiente
                     if ($horaSalidaReal->lt($marcacion->ingreso)) {
                         $horaSalidaReal->addDay();
                     }
 
-                    // CORRECCIÓN CLAVE: Usamos las variables normalizadas ($horaSalidaProg y $horaSalidaReal)
-                    // Esto elimina los saltos de +24:00 horas
                     $minutosDiferencia = max(0, $horaSalidaProg->diffInMinutes($horaSalidaReal, false));
 
-                    // 1. Acumulamos TODO para el detalle
-                    $extra += $minutosDiferencia;
                     $estados_extras[] = $marcacion->estado_horas_extra;
 
-                    // 3. Aplicamos regla de entrada: Solo si el día tiene más de 30 min
-                    // 2. CAMBIO AQUÍ: Sumamos los minutos brutos sin el filtro de 30 individual
                     if ($marcacion->estado_horas_extra == 1) {
-                        $extra_solicitado += $minutosDiferencia;
+                        // APROBADO: usar horario.extra en vez del cálculo
+                        if ($horario->extra && $horario->extra !== '00:00:00') {
+                            $partes = explode(':', $horario->extra);
+                            $minutosExtra = ((int) $partes[0] * 60) + (int) ($partes[1] ?? 0);
+                            $extra_solicitado += $minutosExtra;
+                        }
                     } else {
+                        // PENDIENTE: sigue calculando desde marcacion
                         $extra_no_solicitado += $minutosDiferencia;
                     }
                 }
             });
 
-            // --- REGLA DE XIOMARA: TRUNCAR DE 30 EN 30 (Sin residuo) ---
-            $extra_solicitado = ($extra_solicitado >= 30) ? floor($extra_solicitado / 30) * 30 : 0;
-            $extra_no_solicitado = ($extra_no_solicitado >= 30) ? floor($extra_no_solicitado / 30) * 30 : 0;
-
+            // Sin redondeo de 30 en 30
             $estadoFinal = null;
             if (! empty($estados_extras)) {
                 if (in_array(0, $estados_extras)) {
@@ -1069,14 +1058,16 @@ class ReporteController extends Controller
                 }
             }
 
+            $extra = $extra_solicitado + $extra_no_solicitado;
+
             if ($extra > 0) {
                 $item = [
                     'empleado' => $empleado,
                     'horas' => 0,
-                    'extra' => $extra, // Se envía el total real acumulado
+                    'extra' => $extra,
                     'estado' => $estadoFinal,
-                    'extra_solicitado' => $extra_solicitado, // Se envía truncado (30, 60, 90...)
-                    'extra_no_solicitado' => $extra_no_solicitado, // Se envía truncado (30, 60, 90...)
+                    'extra_solicitado' => $extra_solicitado,   // ahora viene de horarios.extra
+                    'extra_no_solicitado' => $extra_no_solicitado,
                 ];
 
                 if ($estadoFinal === 'pendientes') {
@@ -1127,7 +1118,6 @@ class ReporteController extends Controller
         foreach ($periodo as $fecha) {
             $fechaStr = $fecha->format('Y-m-d');
 
-            // Buscamos directamente en el índice
             $horario = $horarios->get($fechaStr);
             $marcacion = $marcaciones->get($fechaStr);
 
@@ -1136,12 +1126,10 @@ class ReporteController extends Controller
                 $hSalidaProg = \Carbon\Carbon::parse($horario->salida);
                 $mSalidaReal = \Carbon\Carbon::parse($marcacion->salida);
 
-                // 1. --- VALIDACIÓN TD (DESCANSO) ---
                 if ($hIngresoProg->format('H:i') === '00:00' && $hSalidaProg->format('H:i') === '00:00') {
-                    continue; // Saltamos al siguiente día del periodo
+                    continue;
                 }
 
-                // 2. --- NORMALIZACIÓN DE MEDIANOCHE ---
                 if ($hSalidaProg->lt($hIngresoProg)) {
                     $hSalidaProg->addDay();
                 }
@@ -1149,10 +1137,7 @@ class ReporteController extends Controller
                     $mSalidaReal->addDay();
                 }
 
-                // 3. --- CÁLCULO DE DIFERENCIA ---
                 $diff = $hSalidaProg->diffInMinutes($mSalidaReal, false);
-
-                // Ajuste de seguridad por desfases de 24h
                 if ($diff >= 1440) {
                     $diff -= 1440;
                 }
@@ -1162,6 +1147,19 @@ class ReporteController extends Controller
 
                 $minutosExtra = $diff > 0 ? $diff : 0;
 
+
+                if ($marcacion->estado_horas_extra == 1) {
+                    if (!$horario->extra || $horario->extra === '00:00:00') {
+                        continue; // ya compensado totalmente, saltar
+                    }
+                    $partes = explode(':', $horario->extra);
+                    $minutosExtra = ((int)$partes[0] * 60) + (int)($partes[1] ?? 0);
+                    if ($minutosExtra === 0) continue;
+                } else {
+
+                    if ($minutosExtra <= 0) continue;
+                }
+
                 if ($minutosExtra > 0) {
                     $detalle[] = [
                         'fecha' => $fechaStr,
@@ -1169,10 +1167,12 @@ class ReporteController extends Controller
                         'marcada' => \Carbon\Carbon::parse($marcacion->salida)->format('H:i'),
                         'minutos' => $minutosExtra,
                         'estado_he' => $marcacion->estado_horas_extra,
+                        'extra_aprobado' => $horario->extra, // para el front si lo necesita
+                        'destino_compensacion' => $horario->destino_compensacion, // dónde se usó
                     ];
                 }
             }
-        } // Fin del Foreach
+        }
 
         // EL RETURN DEBE ESTAR FUERA DEL BUCLE
         return response()->json([
@@ -1184,6 +1184,7 @@ class ReporteController extends Controller
             'detalle' => $detalle,
         ]);
     }
+    //  ------------------------------------------------------------------------
 
     public function extraDownload(Request $request)
     {

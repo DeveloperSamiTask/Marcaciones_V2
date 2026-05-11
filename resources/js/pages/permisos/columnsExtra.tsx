@@ -137,13 +137,23 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
                 <div className="flex items-center gap-2">
                     {!permiso.estado ? (
                         <>
-                            <EditPermiso
-                                key={`edit-permiso${permiso.id}`}
-                                permisoId={permiso.id}
-
-                                salidaProgramada={permiso.horario?.salida ?? null}
-                                salidaReal={permiso.marcacion?.salida ?? null}
-                            />
+                            {permiso.tipo_id == 20 ? (
+                                // Solo tipo 20 usa el modal con HE
+                                <EditPermiso
+                                    key={`edit-permiso${permiso.id}`}
+                                    permisoId={permiso.id}
+                                    salidaProgramada={permiso.horario?.salida ?? null}
+                                    salidaReal={permiso.marcacion?.salida ?? null}
+                                />
+                            ) : (
+                                // Todos los demás solo aprueban sin modal de HE
+                                <EditPermiso
+                                    key={`edit-permiso${permiso.id}`}
+                                    permisoId={permiso.id}
+                                    salidaProgramada={null}
+                                    salidaReal={null}
+                                />
+                            )}
                             <DeletePermiso key={`delete-permiso${permiso.id}`} permisoId={permiso.id} />
                             {isAdmin && !permiso.comprobante && permiso.tipo_id != 9 && permiso.tipo_id != 2 && permiso.tipo_id != 20 &&
                                 <UploadPermiso key={`upload-permiso-${permiso.id}`} permisoId={permiso.id} />}

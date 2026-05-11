@@ -65,42 +65,45 @@ export default function EditPermiso({
                     Revisa las horas trabajadas y define cuántas se aprueban.
                 </DialogDescription>
 
-                <div className="space-y-4 py-2">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                            <p className="text-muted-foreground">Salida programada</p>
-                            <p className="text-lg font-bold">{salidaProgramada ?? '—'}</p>
+                {salidaProgramada && salidaReal ? (
+                    // Modal completo con HE — solo tipo 20
+                    <div className="space-y-4 py-2">
+                        <DialogDescription>Revisa las horas trabajadas y define cuántas se aprueban.</DialogDescription>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p className="text-muted-foreground">Salida programada</p>
+                                <p className="text-lg font-bold">{salidaProgramada}</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground">Salida real</p>
+                                <p className="text-lg font-bold">{salidaReal}</p>
+                            </div>
                         </div>
                         <div>
-                            <p className="text-muted-foreground">Salida real</p>
-                            <p className="text-lg font-bold">{salidaReal ?? '—'}</p>
+                            <p className="text-muted-foreground text-sm">HE trabajadas</p>
+                            <p className="text-xl font-bold text-orange-500">{minutosAHHMM(maxMinutos)}</p>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">HE a aprobar:</label>
+                            <Input
+                                type="time"
+                                value={data.he_aprobada}
+                                onChange={(e) => setData('he_aprobada', e.target.value)}
+                                min="00:01"
+                                disabled={maxMinutos === 0}
+                                step={60}
+                            />
+                            {data.he_aprobada > minutosAHHMM(maxMinutos) && (
+                                <p className="text-destructive text-xs">
+                                    No puede superar las {minutosAHHMM(maxMinutos)} HE trabajadas
+                                </p>
+                            )}
                         </div>
                     </div>
-
-                    <div>
-                        <p className="text-muted-foreground text-sm">HE trabajadas</p>
-                        <p className="text-xl font-bold text-orange-500">
-                            {minutosAHHMM(maxMinutos)}
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">HE a aprobar:</label>
-                        <Input
-                            type="time"
-                            value={data.he_aprobada}
-                            onChange={(e) => setData('he_aprobada', e.target.value)}
-                            min="00:01"
-                            disabled={maxMinutos === 0}
-                            step={60}
-                        />
-                        {data.he_aprobada > minutosAHHMM(maxMinutos) && (
-                            <p className="text-destructive text-xs">
-                                No puede superar las {minutosAHHMM(maxMinutos)} HE trabajadas
-                            </p>
-                        )}
-                    </div>
-                </div>
+                ) : (
+                    // Modal simple — tipo 2 y resto
+                    <DialogDescription>¿Estás seguro de aprobar este permiso?</DialogDescription>
+                )}
 
                 <form onSubmit={handleSubmit}>
                     <DialogFooter className="gap-2">
@@ -111,7 +114,7 @@ export default function EditPermiso({
                         </DialogClose>
                         <Button
                             type="submit"
-                            disabled={processing || !esValido}
+                            disabled={processing || (salidaProgramada && salidaReal ? !esValido : false)}
                         >
                             {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
                             Aprobar
