@@ -34,122 +34,133 @@ export default function EditMarcacion({
     fechaFin?: string
 }) {
 
-    const [modoEdicion, setModoEdicion] = useState<'libre' | 'compensar'>('compensar');
+    // const [modoEdicion, setModoEdicion] = useState<'libre' | 'compensar'>('compensar');
 
-    const [open, setOpen] = useState(false);
+    // const [open, setOpen] = useState(false);
     const [listaExtrasBack, setListaExtrasBack] = useState<Horario[]>([]);
-    const [cargandoExtras, setCargandoExtras] = useState(false);
-    const [horaActual, setHoraActual] = useState(marcacionHora);
+    // const [cargandoExtras, setCargandoExtras] = useState(false);
+    // const [horaActual, setHoraActual] = useState(marcacionHora);
     const [horaDescontada, setHoraDescontada] = useState("");
     const [horaOriginal, setHoraOriginal] = useState(marcacionHora);
 
+    const [modoEdicion, setModoEdicion] = useState<'libre' | 'compensar'>('compensar');
+    const [open, setOpen] = useState(false);
 
-    const { data, patch, processing, setData, reset, errors, clearErrors } = useForm<{
-        empleado_id: number;
-        hora_original: string;
-        hora_nueva: string;
-        tipo: string;
-        motivo: string;
-        extraSeleccionada?: string;
-        hsp: string;
-        tiempo_extra: string;
-    }>({
+    // CAMBIO CLAVE: Ahora es un objeto con el total, no un array
+    const [bolsaExtra, setBolsaExtra] = useState({ total_minutos: 0, label: "" });
+    const [cargandoExtras, setCargandoExtras] = useState(false);
+    const [horaActual, setHoraActual] = useState(marcacionHora);
+
+
+    // const { data, patch, processing, setData, reset, errors, clearErrors } = useForm<{
+    //     empleado_id: number;
+    //     hora_original: string;
+    //     hora_nueva: string;
+    //     tipo: string;
+    //     motivo: string;
+    //     extraSeleccionada?: string;
+    //     hsp: string;
+    //     tiempo_extra: string;
+    // }>({
+    //     empleado_id: empleadoId,
+    //     hora_original: marcacionHora,
+    //     hora_nueva: marcacionHora,
+    //     tipo: tipo,
+    //     motivo: '',
+    //     extraSeleccionada: '',
+    //     hsp: hsp || '',
+    //     tiempo_extra: '',
+    //     modo: 'compensar'
+    // });
+
+    const { data, patch, processing, setData, reset } = useForm({
         empleado_id: empleadoId,
         hora_original: marcacionHora,
         hora_nueva: marcacionHora,
         tipo: tipo,
         motivo: '',
-        extraSeleccionada: '',
-        hsp: hsp || '',
-        tiempo_extra: '',
-        modo: 'compensar'
+        modo: 'compensar' // Enviamos el modo al back
     });
 
+
+
+
+    // 5. LIMPIEZA: Al cerrar, reseteamos todo, incluyendo el modo a 'compensar'
+
+
+    // const extrasFiltradas = useMemo(() => {
+    //     //console.log("📋 Lista a renderizar:", listaExtrasBack);
+    //     return listaExtrasBack;
+    // }, [listaExtrasBack]);
+
+    // const tipoFormateado: Record<TipoMarcacion, string> = {
+    //     ingreso: 'ingreso',
+    //     salida: 'salida',
+    //     ingreso_refri: 'ingreso de refrigerio',
+    //     salida_refri: 'salida de refrigerio',
+    // };
 
     useEffect(() => {
         if (open && empleadoId && modoEdicion === 'compensar') {
             setCargandoExtras(true);
-            axios.get(route('marcaciones.extras', { empleado: empleadoId }), {
-                params: { fechaInicio, fechaFin }
-            })
-                .then(res => setListaExtrasBack(res.data))
-                .catch(err => console.error("Error cargando extras:", err))
+            axios.get(route('marcaciones.extras', { empleado: empleadoId }))
+                .then(res => setBolsaExtra(res.data))
+                .catch(err => console.error("Error:", err))
                 .finally(() => setCargandoExtras(false));
         }
     }, [open, modoEdicion]);
 
-    // 5. LIMPIEZA: Al cerrar, reseteamos todo, incluyendo el modo a 'compensar'
-    const closeModal = () => {
-        setOpen(false);
-        reset();
-        setModoEdicion('compensar');
-        setListaExtrasBack([]);
-    };
-
-    const extrasFiltradas = useMemo(() => {
-        //console.log("📋 Lista a renderizar:", listaExtrasBack);
-        return listaExtrasBack;
-    }, [listaExtrasBack]);
-
-    const tipoFormateado: Record<TipoMarcacion, string> = {
-        ingreso: 'ingreso',
-        salida: 'salida',
-        ingreso_refri: 'ingreso de refrigerio',
-        salida_refri: 'salida de refrigerio',
-    };
-
-    const updateMarcacion: FormEventHandler = (e) => {
+    const updateMarcacion = (e) => {
         e.preventDefault();
-        // 6. PATCH: Ahora mandamos el 'modo' dentro del data automáticamente
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
             onSuccess: () => {
-                closeModal();
-                toast.success('¡Actualizado!');
+                setOpen(false);
+                reset();
             },
         });
     };
 
-    useEffect(() => {
-        if (!open) {
-            clearErrors();
-            reset();
-            setData('motivo', '');
-            setData('extraSeleccionada', '');
-            setHoraOriginal(marcacionHora);
-            setHoraActual(marcacionHora);
-            setHoraDescontada("");
-            setListaExtrasBack([]);
-            setCargandoExtras(false);
-        }
-    }, [open]);
+    // useEffect(() => {
+    //     if (!open) {
+    //         clearErrors();
+    //         reset();
+    //         setData('motivo', '');
+    //         setData('extraSeleccionada', '');
+    //         setHoraOriginal(marcacionHora);
+    //         setHoraActual(marcacionHora);
+    //         setHoraDescontada("");
+    //         setListaExtrasBack([]);
+    //         setCargandoExtras(false);
+    //     }
+    // }, [open]);
 
 
-    const calcularDiferencia = (base: string, nueva: string) => {
-        if (!base || !nueva) return "";
+    // const calcularDiferencia = (base: string, nueva: string) => {
+    //     if (!base || !nueva) return "";
 
-        const [h1, m1] = base.split(":").map(Number);
-        const [h2, m2] = nueva.split(":").map(Number);
+    //     const [h1, m1] = base.split(":").map(Number);
+    //     const [h2, m2] = nueva.split(":").map(Number);
 
-        const minutosBase = h1 * 60 + m1;
-        const minutosNueva = h2 * 60 + m2;
+    //     const minutosBase = h1 * 60 + m1;
+    //     const minutosNueva = h2 * 60 + m2;
 
-        const diff = Math.abs(minutosNueva - minutosBase);
-        const horas = Math.floor(diff / 60);
-        const minutos = diff % 60;
+    //     const diff = Math.abs(minutosNueva - minutosBase);
+    //     const horas = Math.floor(diff / 60);
+    //     const minutos = diff % 60;
 
-        return `${horas.toString().padStart(2, "0")}:${minutos.toString().padStart(2, "0")}`;
-    };
+    //     return `${horas.toString().padStart(2, "0")}:${minutos.toString().padStart(2, "0")}`;
+    // };
 
-    const formatMinutes = (value: any): string => {
-        const total = parseInt(value, 10);
-        if (isNaN(total) || total <= 0) return '00:00';
+    // const formatMinutes = (value: any): string => {
+    //     const total = parseInt(value, 10);
+    //     if (isNaN(total) || total <= 0) return '00:00';
 
-        const h = Math.floor(total / 60);
-        const m = total % 60;
+    //     const h = Math.floor(total / 60);
+    //     const m = total % 60;
 
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    };
+    //     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    // };
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -159,93 +170,64 @@ export default function EditMarcacion({
             <DialogContent className="max-w-md">
                 <DialogTitle>Editar marcación</DialogTitle>
 
-                {/* 7. SELECTOR DE MODO: El botón para que RRHH elija su veneno */}
+                {/* Selector de Modo */}
                 <div className="flex bg-slate-100 p-1 rounded-md mb-4">
-                    <button
-                        type="button"
+                    <button type="button"
                         className={`flex-1 py-1 text-xs rounded ${modoEdicion === 'compensar' ? 'bg-white shadow' : ''}`}
                         onClick={() => { setModoEdicion('compensar'); setData('modo', 'compensar'); }}
                     > 🔄 Compensar</button>
-                    <button
-                        type="button"
+                    <button type="button"
                         className={`flex-1 py-1 text-xs rounded ${modoEdicion === 'libre' ? 'bg-white shadow' : ''}`}
                         onClick={() => { setModoEdicion('libre'); setData('modo', 'libre'); }}
                     > ✏️ Libre</button>
                 </div>
 
                 <form className="space-y-4" onSubmit={updateMarcacion}>
+                    {/* Input de Hora */}
                     <div className="grid gap-2">
-                        <label className="text-sm font-medium">Hora de {tipo}</label>
+                        <label className="text-sm font-medium text-muted-foreground">Hora actual de {tipo}</label>
                         <Input
                             type="time"
-                            // 8. DINÁMICO: Si es compensar, es READONLY (se cambia vía select)
-                            // Si es libre, RRHH puede escribir (antiguo)
                             readOnly={modoEdicion === 'compensar'}
                             value={horaActual}
-                            onChange={(e) => setHoraActual(e.target.value)}
-                            onBlur={(e) => {
-                                const nueva = e.target.value;
-                                setHoraActual(nueva);
-                                setData('hora_nueva', nueva);
-                                // Calculamos diferencia por si el back la necesita
-                                const diff = calcularDiferencia(marcacionHora, nueva);
-                                setHoraDescontada(diff);
-                                setData('tiempo_extra', diff);
+                            onChange={(e) => {
+                                setHoraActual(e.target.value);
+                                setData('hora_nueva', e.target.value);
                             }}
                         />
                     </div>
 
-                    {/* 9. VISTA COMPENSAR: Solo se muestra si el modo es 'compensar' */}
+                    {/* Vista de Compensación Automática */}
                     {modoEdicion === 'compensar' && (
-                        <div className="space-y-4 animate-in fade-in duration-300">
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in">
                             {cargandoExtras ? (
-                                <p className="text-xs text-blue-600">Buscando horas extras...</p>
-                            ) : listaExtrasBack.length > 0 ? (
-                                <div className="grid gap-2">
-                                    <label className="text-sm font-semibold">Seleccionar Extra para descontar:</label>
-                                    <select
-                                        className="border rounded p-2 text-sm"
-                                        value={data.extraSeleccionada}
-
-                                        onChange={(e) => {
-                                            const selectedId = e.target.value;
-                                            // Buscamos el objeto completo para ver qué tiene
-                                            const extraEncontrada = listaExtrasBack.find(x => String(x.id) === selectedId);
-                                            console.log("🎯 SELECCIONADO:", {
-                                                id_enviado: selectedId,
-                                                datos_objeto: extraEncontrada
-                                            });
-                                            setData('extraSeleccionada', selectedId);
-                                        }}
-                                    >
-                                        <option value="">-- Selecciona una bolsa --</option>
-                                        {listaExtrasBack.map(ex => (
-                                            <option key={ex.id} value={ex.id}>
-                                                {formatMinutes(ex.extra)} disponible ({ex.fecha})
-                                            </option>
-                                        ))}
-                                    </select>
+                                <p className="text-xs text-blue-600 animate-pulse">Consultando bolsa de horas...</p>
+                            ) : bolsaExtra.total_minutos > 0 ? (
+                                <div className="space-y-1">
+                                    <p className="text-sm font-bold text-blue-900">Disponible: {bolsaExtra.label}</p>
+                                    <p className="text-[10px] text-blue-700 italic">
+                                        * El sistema descontará automáticamente el tiempo necesario de las horas más antiguas.
+                                    </p>
                                 </div>
                             ) : (
-                                <p className="text-xs text-red-500 italic">No hay horas extras este mes para compensar.</p>
+                                <p className="text-xs text-red-500 font-medium">⚠️ No tiene horas extras disponibles para compensar.</p>
                             )}
                         </div>
                     )}
 
-                    {/* 10. MOTIVO: Siempre obligatorio para ambos casos */}
                     <div className="grid gap-2">
-                        <label className="text-sm font-medium">Motivo del cambio</label>
+                        <label className="text-sm font-medium">Motivo</label>
                         <Textarea
                             required
                             value={data.motivo}
                             onChange={(e) => setData('motivo', e.target.value)}
-                            placeholder="Ej: Se le perdonó la tardanza o compensó con extra..."
+                            placeholder="Describa el motivo del ajuste..."
                         />
                     </div>
 
                     <DialogFooter>
-                        <Button type="submit" disabled={processing}>
-                            {processing ? 'Guardando...' : 'Aplicar Cambios'}
+                        <Button type="submit" disabled={processing || (modoEdicion === 'compensar' && bolsaExtra.total_minutos <= 0)}>
+                            {processing ? 'Procesando...' : 'Aplicar Ajuste'}
                         </Button>
                     </DialogFooter>
                 </form>

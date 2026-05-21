@@ -6,11 +6,27 @@ import { LoaderCircle, SquareCheckBig } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 
+// function calcularDiferencia(programada: string, real: string): number {
+//     const [ph, pm] = programada.split(':').map(Number);
+//     const [rh, rm] = real.split(':').map(Number);
+//     return Math.max(0, (rh * 60 + rm) - (ph * 60 + pm));
+// }
+
 function calcularDiferencia(programada: string, real: string): number {
     const [ph, pm] = programada.split(':').map(Number);
     const [rh, rm] = real.split(':').map(Number);
-    return Math.max(0, (rh * 60 + rm) - (ph * 60 + pm));
+
+    let minutosProgramados = ph * 60 + pm;
+    let minutosReales = rh * 60 + rm;
+
+    // Si los minutos reales son menores, es porque pasó la medianoche
+    if (minutosReales < minutosProgramados) {
+        minutosReales += 24 * 60; // Le sumamos 1440 minutos (un día completo)
+    }
+
+    return Math.max(0, minutosReales - minutosProgramados);
 }
+
 
 function minutosAHHMM(min: number): string {
     const h = Math.floor(min / 60).toString().padStart(2, '0');

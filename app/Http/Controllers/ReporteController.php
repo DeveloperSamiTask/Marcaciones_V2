@@ -257,6 +257,23 @@ class ReporteController extends Controller
                     return;
                 }
 
+                // ---------------- tardanza
+                if ($horario && $marcacion->ingreso) {
+                    $fechaBase = Carbon::parse($horario->fecha)->format('Y-m-d');
+                    $hip = $horario->ingreso->format('H:i');
+
+                    if ($hip !== '00:00') {
+                        $ingresoProg = Carbon::parse($fechaBase.' '.$horario->ingreso->format('H:i:s'));
+                        $ingresoReal = Carbon::parse($fechaBase.' '.$marcacion->ingreso->format('H:i:s'));
+
+                        $diffDia = $ingresoProg->diffInMinutes($ingresoReal, false);
+
+                        if ($diffDia > 0) {
+                            $tardanza += $diffDia;
+                        }
+                    }
+                }
+
                 // ---------------- valido si hay marcacion para hacer el resto
                 if (($horario && $marcacion && $marcacion->ingreso)) {
 
@@ -998,10 +1015,58 @@ class ReporteController extends Controller
             ->orderBy('apellidos')
             ->get();
 
-        // ... resto del código igual (cálculos de extras)
+        // Extra usado — horarios con extra_consumido dentro del rango
+        $extraUsado = \DB::table('horarios as h')
+            ->join('empleados as e', 'e.id', '=', 'h.empleado_id')
+            ->join('areas as a', 'a.id', '=', 'e.area_id')
+            ->join('jornadas as j', 'j.id', '=', 'e.jornada_id')
+            ->leftJoin('marcacion_edicions as mse', function ($join) {
+                $join->on('mse.empleado_id', '=', 'e.id')
+                    ->on('mse.fecha', '=', 'h.fecha_compensacion') // para que coincida el dia que se compensó
+                    ->where('mse.es_consolidado', '=', 1);
+            })
+            ->whereNotNull('h.extra_consumido')
+            ->where('h.extra_consumido', '!=', '00:00:00')
+            ->when($request->fechaInicio && $request->fechaFin, fn ($q) => $q->whereBetween('h.fecha_compensacion', [$request->fechaInicio, $request->fechaFin])
+            )
+            ->when($request->empresa, fn ($q) => $q->where('e.empresa_id', $request->empresa)
+            )
+            ->when($request->area, fn ($q) => $q->where('e.area_id', $request->area)
+            )
+            ->when($request->modalidad, fn ($q) => $q->where('e.jornada_id', $request->modalidad)
+            )
+            ->whereNull('e.fecha_cese')
+            ->select(
+                'e.id as empleado_id',
+                'e.apellidos',
+                'e.nombres',
+                'e.dni',
+                'a.nombre as area',
+                'j.nombre as jornada',
+                'h.fecha as fecha_he',
+                'h.extra as extra_restante',
+                'h.extra_consumido',
+                'h.destino_compensacion',
+                'mse.fecha as fecha_uso',
+               \DB::raw('COALESCE(DATE(mse.created_at), DATE(now())) as fecha_edicion')
+            )
+            ->orderBy('e.apellidos')
+            ->get();
+
         $pendientes = collect();
         $revision = collect();
         $aprobados = collect();
+
+        Log::info('Informacion de las HE por dia : '.$extraUsado);
+
+        $debug = \DB::table('horarios')
+            ->whereNotNull('extra_consumido')
+            ->where('extra_consumido', '!=', '00:00:00')
+            ->select('id', 'empleado_id', 'fecha', 'extra_consumido', 'destino_compensacion')
+            ->limit(5)
+            ->get();
+
+        Log::info('DEBUG horarios con extra_consumido: '.json_encode($debug));
 
         $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
             $empleadoMarcaciones = $empleado->marcaciones ?? collect();
@@ -1085,7 +1150,7 @@ class ReporteController extends Controller
             'empresas' => $empresas,
             'encargados' => $encargados,
             'pendientes' => $pendientes,
-            'revision' => $revision,
+            'revision' => $extraUsado,
             'aprobados' => $aprobados,
             'areas' => $areas,
             'csrf_token' => csrf_token(),
@@ -1147,17 +1212,20 @@ class ReporteController extends Controller
 
                 $minutosExtra = $diff > 0 ? $diff : 0;
 
-
                 if ($marcacion->estado_horas_extra == 1) {
-                    if (!$horario->extra || $horario->extra === '00:00:00') {
+                    if (! $horario->extra || $horario->extra === '00:00:00') {
                         continue; // ya compensado totalmente, saltar
                     }
                     $partes = explode(':', $horario->extra);
-                    $minutosExtra = ((int)$partes[0] * 60) + (int)($partes[1] ?? 0);
-                    if ($minutosExtra === 0) continue;
+                    $minutosExtra = ((int) $partes[0] * 60) + (int) ($partes[1] ?? 0);
+                    if ($minutosExtra === 0) {
+                        continue;
+                    }
                 } else {
 
-                    if ($minutosExtra <= 0) continue;
+                    if ($minutosExtra <= 0) {
+                        continue;
+                    }
                 }
 
                 if ($minutosExtra > 0) {
@@ -1184,6 +1252,81 @@ class ReporteController extends Controller
             'detalle' => $detalle,
         ]);
     }
+
+    public function extraRevision(Request $request)
+    {
+        $request->validate([
+            'empresa' => 'nullable|integer|exists:empresas,id',
+            'fechaInicio' => 'nullable|date',
+            'fechaFin' => 'nullable|date',
+        ]);
+
+        /*
+            $extraUsado = \DB::table('horarios as h')
+            ->join('empleados as e', 'e.id', '=', 'h.empleado_id')
+            ->join('areas as a', 'a.id', '=', 'e.area_id')
+            ->join('jornadas as j', 'j.id', '=', 'e.jornada_id')
+            ->leftJoin('marcacion_edicions as mse', function ($join) {
+                $join->on('mse.empleado_id', '=', 'e.id')
+                    ->on('mse.fecha', '=', 'h.fecha_compensacion') // para que coincida el dia que se compensó
+                    ->where('mse.es_consolidado', '=', 1);
+            })
+            ->whereNotNull('h.extra_consumido')
+            ->where('h.extra_consumido', '!=', '00:00:00')
+            ->when($request->fechaInicio && $request->fechaFin, fn ($q) => $q->whereBetween('h.fecha_compensacion', [$request->fechaInicio, $request->fechaFin])
+            )
+            ->when($request->empresa, fn ($q) => $q->where('e.empresa_id', $request->empresa)
+            )
+            ->when($request->area, fn ($q) => $q->where('e.area_id', $request->area)
+            )
+            ->when($request->modalidad, fn ($q) => $q->where('e.jornada_id', $request->modalidad)
+            )
+            ->whereNull('e.fecha_cese')
+            ->select(
+                'e.id as empleado_id',
+                'e.apellidos',
+                'e.nombres',
+                'e.dni',
+                'a.nombre as area',
+                'j.nombre as jornada',
+                'h.fecha as fecha_he',
+                'h.extra as extra_restante',
+                'h.extra_consumido',
+                'h.destino_compensacion',
+                'mse.fecha as fecha_uso',
+                \DB::raw('DATE(mse.created_at) as fecha_edicion')
+            )
+            ->orderBy('e.apellidos')
+            ->get();
+        */
+
+        $horarios = \DB::table('horarios as h')
+            ->join('empleados as e', 'e.id', '=', 'h.empleado_id')
+            ->join('areas as a', 'a.id', '=', 'e.area_id')
+            ->whereNotNull('h.extra_consumido')
+            ->where('h.extra_consumido', '!=', '00:00:00')
+            ->whereNotNull('h.destino_compensacion')
+            ->when($request->fechaInicio && $request->fechaFin, fn ($q) => $q->whereBetween('h.fecha', [$request->fechaInicio, $request->fechaFin])
+            )
+            ->when($request->empresa, fn ($q) => $q->where('e.empresa_id', $request->empresa)
+            )
+            ->select(
+                'e.id as empleado_id',
+                'e.apellidos',
+                'e.nombres',
+                'e.dni',
+                'a.nombre as area',
+                'h.fecha as fecha_he',           // fecha de la HE original
+                'h.extra as extra_restante',      // lo que queda en bolsa
+                'h.extra_consumido',              // lo que se consumió
+                'h.destino_compensacion',         // fecha donde se usó
+            )
+            ->orderBy('e.apellidos')
+            ->get();
+
+        return response()->json($horarios);
+    }
+
     //  ------------------------------------------------------------------------
 
     public function extraDownload(Request $request)

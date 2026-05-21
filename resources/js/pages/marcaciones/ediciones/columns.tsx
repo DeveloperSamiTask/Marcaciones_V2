@@ -64,6 +64,18 @@ export const columns: ColumnDef<MarcacionEditado>[] = [
                 </Button>
             );
         },
-        cell: ({ row }) => <span className='text-violet-500 font-semibold'> {format(row.original.created_at, 'dd/MM/yyyy')} </span>
+        cell: ({ row }) => {
+            const date = row.original.created_at ? new Date(row.original.created_at) : null;
+
+            if (!date || isNaN(date.getTime())) {
+                return <span className='text-gray-400 font-semibold'>—</span>;
+            }
+
+            return (
+                <span className='text-violet-500 font-semibold'>
+                    {format(date, 'dd/MM/yyyy')}
+                </span>
+            );
+        }
     },
 ];

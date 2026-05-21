@@ -138,39 +138,34 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
                     {!permiso.estado ? (
                         <>
                             {permiso.tipo_id == 20 ? (
-                                // Solo tipo 20 usa el modal con HE
                                 <EditPermiso
-                                    key={`edit-permiso${permiso.id}`}
                                     permisoId={permiso.id}
                                     salidaProgramada={permiso.horario?.salida ?? null}
                                     salidaReal={permiso.marcacion?.salida ?? null}
                                 />
                             ) : (
-                                // Todos los demás solo aprueban sin modal de HE
                                 <EditPermiso
-                                    key={`edit-permiso${permiso.id}`}
                                     permisoId={permiso.id}
                                     salidaProgramada={null}
                                     salidaReal={null}
                                 />
                             )}
-                            <DeletePermiso key={`delete-permiso${permiso.id}`} permisoId={permiso.id} />
+                            <DeletePermiso permisoId={permiso.id} />
                             {isAdmin && !permiso.comprobante && permiso.tipo_id != 9 && permiso.tipo_id != 2 && permiso.tipo_id != 20 &&
-                                <UploadPermiso key={`upload-permiso-${permiso.id}`} permisoId={permiso.id} />}
+                                <UploadPermiso permisoId={permiso.id} />}
                         </>
                     ) : (
-                        permiso.tipo_id == 9 && (<PrintPermiso key={`print-permiso${permiso.id}`} permiso={permiso} isPrint={permiso.estado_print} />)
+                        permiso.tipo_id == 9 && (<PrintPermiso permiso={permiso} isPrint={permiso.estado_print} />)
                     )}
 
-
                     {permiso.tipo_id == 2 && permiso.estado == 0 && (
-                        <Button variant="info" asChild key={`search-permiso-extra-${permiso.id}`} size="sm">
+                        <Button variant="info" asChild size="sm">
                             <SearchHorario permisoId={permiso.id} jornada={permiso.empleado.jornada_id} />
                         </Button>
                     )}
 
                     {permiso.comprobante && (
-                        <Button variant="info" asChild key={`download-permiso-${permiso.id}`} size="sm">
+                        <Button variant="info" asChild size="sm">
                             <a href={`${permiso.comprobante}`} target='_blank' rel="noopener noreferrer">
                                 <Download />
                             </a>

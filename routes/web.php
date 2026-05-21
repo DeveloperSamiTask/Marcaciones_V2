@@ -163,6 +163,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('horas-extra/download', [ReporteController::class, 'extraDownload'])->name('extras.download');
 
         Route::get('extra-detalle', [ReporteController::class, 'extraDetalle'])->name('extraDetalle');
+
+        Route::get('reportes/extras/revision', [ReporteController::class, 'extraRevision']);
+
     });
 
     // Settings
@@ -194,8 +197,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes'])->name('solicitudes-enviar-acumulada');
 
-    // miluska
-
+    // reportes
+    Route::get('reportes/extras/revision', [ReporteController::class, 'extraRevision']);
 });
 
 // routes/web.php

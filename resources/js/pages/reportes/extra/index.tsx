@@ -12,6 +12,7 @@ import { CalendarIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import { columns } from './columns';
+import { columnsRevision } from './columnsRevision';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Encargado } from '@/types/encargados';
@@ -253,7 +254,7 @@ export default function IndexHorasExtra({
                     <Tabs defaultValue={'pendientes'} className="flex flex-1 flex-col gap-6">
                         <TabsList className="w-full">
                             <TabsTrigger value="pendientes"> PENDIENTES </TabsTrigger>
-                            <TabsTrigger value="revision"> EN REVISION </TabsTrigger>
+                            <TabsTrigger value="revision"> HE USADAS </TabsTrigger>
                             <TabsTrigger value="aprobados"> APROBADOS </TabsTrigger>
                         </TabsList>
 
@@ -278,10 +279,11 @@ export default function IndexHorasExtra({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={revision} meta={{
-                                            fechaInicio: filters.fechaInicio,
-                                            fechaFin: filters.fechaFin
-                                        }} />
+                                        <DataTable
+                                            key="datatable-reporte-extras-usados"
+                                            columns={columnsRevision}
+                                            data={revision}
+                                        />
                                     )}
                                 </TabsContent>
 

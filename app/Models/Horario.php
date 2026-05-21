@@ -23,7 +23,8 @@ class Horario extends Model
         'validado',
         'calculo_manual',
         'destino_compensacion',
-
+        'fecha_compensacion',
+        'extra_consumido',
     ];
 
     protected function casts(): array

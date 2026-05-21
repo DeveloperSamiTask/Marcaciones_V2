@@ -535,58 +535,129 @@ class MarcacionController extends Controller
     private function updateModoCompensar($data, Marcacion $marcacione)
     {
         return DB::transaction(function () use ($data, $marcacione) {
+            // 1. Identificar la BOLSA (Origen del tiempo)
             $idBolsa = $data['extraSeleccionada'] ?? null;
-            $horarioFuente = Horario::find($idBolsa);
+
+            if ($idBolsa) {
+                $horarioFuente = Horario::find($idBolsa);
+            } else {
+                // Si no mandan ID, buscamos la bolsa más antigua con saldo real
+
+                $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
+
+                $horarioFuente = Horario::where('empleado_id', $marcacione->empleado_id)
+                    ->whereDate('fecha', '>=', $inicioAnio)
+                    ->whereRaw('TIME_TO_SEC(extra) > 0')
+                    ->orderBy('fecha', 'asc')
+                    ->first();
+            }
 
             if (! $horarioFuente) {
-                throw new \Exception('Bolsa de horas no encontrada.');
+                throw new \Exception('El empleado no tiene saldo de horas extra para compensar.');
             }
 
-            // Minutos disponibles en la bolsa
-            $partesExtra = explode(':', $horarioFuente->extra);
+            \Log::emergency('extra_consumido raw: '.$horarioFuente->extra_consumido);
+            \Log::emergency('extra raw: '.$horarioFuente->extra);
+
+            // 2. Calcular Deuda del día (Destino del tiempo)
+            $campoHora = $data['tipo'];
+            $horarioDestino = Horario::where('empleado_id', $marcacione->empleado_id)
+                ->whereDate('fecha', $marcacione->fecha)
+                ->first();
+
+            if (! $horarioDestino) {
+                throw new \Exception('No hay horario programado para el día de la marcación.');
+            }
+
+            $horaProgramada = \Carbon\Carbon::parse($campoHora === 'ingreso' ? $horarioDestino->ingreso : $horarioDestino->salida);
+
+            $horaProg = \Carbon\Carbon::createFromFormat('H:i:s',
+                $campoHora === 'ingreso'
+                    ? $horarioDestino->getRawOriginal('ingreso')
+                    : $horarioDestino->getRawOriginal('salida')
+            );
+            $horaReal = \Carbon\Carbon::createFromFormat('H:i:s',
+                $marcacione->getRawOriginal($campoHora)
+            );
+
+            // $minutosDeudaTotal = (int) abs($horaReal->diffInMinutes($horaProgramada));
+
+            if ($campoHora === 'ingreso') {
+                if ($horaReal->gt($horaProg)) {
+                    $minutosDeudaTotal = (int) abs($horaReal->diffInMinutes($horaProg));
+                } else {
+                    throw new \Exception('No puedes compensar si no hay tardanza.');
+                }
+            } else {
+                if ($horaReal->lt($horaProg)) {
+                    $minutosDeudaTotal = (int) abs($horaReal->diffInMinutes($horaProg));
+                } else {
+                    throw new \Exception('No puedes compensar si no saliste antes de tu hora.');
+                }
+            }
+
+            $extraStr = is_string($horarioFuente->extra)
+                ? $horarioFuente->extra
+                : \Carbon\Carbon::parse($horarioFuente->extra)->format('H:i:s');
+
+            $partesExtra = explode(':', $extraStr);
             $minutosDisponibles = ((int) $partesExtra[0] * 60) + (int) ($partesExtra[1] ?? 0);
 
-            if ($minutosDisponibles <= 0) {
-                throw new \Exception('Saldo insuficiente en la bolsa.');
-            }
+            // Convertir extra de la bolsa a minutos
+            // $partesExtra = explode(':', $horarioFuente->extra);
+            // $minutosDisponibles = ((int) $partesExtra[0] * 60) + (int) ($partesExtra[1] ?? 0);
 
-            // Hora programada del horario de ese día
-            $campoHora = $data['tipo']; // 'ingreso' o 'salida'
-            // $horarioDelDia = Horario::where('empleado_id', $marcacione->empleado_id)
-            //     ->whereDate('fecha', $marcacione->fecha)
-            //     ->first();
+            // 3. Consumo
+            $minutosAConsumir = min($minutosDeudaTotal, $minutosDisponibles);
+            $restoBolsa = $minutosDisponibles - $minutosAConsumir;
 
-            // $horaProgramada = \Carbon\Carbon::parse(
-            //     $campoHora === 'ingreso' ? $horarioDelDia->ingreso : $horarioDelDia->salida
-            // );
-            // $horaReal = \Carbon\Carbon::parse($marcacione->$campoHora);
+            \Log::emergency("minutosDeudaTotal: $minutosDeudaTotal");
+            \Log::emergency("minutosDisponibles: $minutosDisponibles");
+            \Log::emergency('horaReal: '.$horaReal->format('H:i'));
+            \Log::emergency('horaProg: '.$horaProg->format('H:i'));
 
-            // // Diferencia exacta entre lo que marcó y lo que debía marcar
-            // $diferenciaMinutos = (int) abs($horaProgramada->diffInMinutes($horaReal));
+            // Manejo de extra_consumido acumulativo
+            $extraConsumidoActual = is_string($horarioFuente->extra_consumido)
+            ? $horarioFuente->extra_consumido
+            : ($horarioFuente->extra_consumido
+                ? \Carbon\Carbon::parse($horarioFuente->extra_consumido)->format('H:i:s')
+                : '00:00:00');
 
-            // if ($diferenciaMinutos === 0) {
-            //     throw new \Exception('La marcación ya coincide con el horario programado.');
-            // }
+            $partesCons = explode(':', $extraConsumidoActual);
+            $yaConsumido = max(0, ((int) $partesCons[0] * 60) + (int) ($partesCons[1] ?? 0));
+            $nuevoConsumidoTotal = $yaConsumido + $minutosAConsumir;
 
-            // Consume lo que se necesita, sin pasarse de lo disponible
-            $minutosAConsumir = $minutosDisponibles;
+            // Formateo HH:MM:SS
+            $nuevoExtraStr = sprintf('%02d:%02d:00', floor($restoBolsa / 60), $restoBolsa % 60);
+            $consumidoStr = sprintf('%02d:%02d:00', floor($nuevoConsumidoTotal / 60), $nuevoConsumidoTotal % 60);
 
-            // Corrige la hora: ingreso resta, salida suma
+            // 4. AJUSTE DE RELOJ (Marcación)
             $horaCarbon = \Carbon\Carbon::parse($marcacione->$campoHora);
-            $campoHora === 'ingreso'
-                ? $horaCarbon->subMinutes($minutosAConsumir)
-                : $horaCarbon->addMinutes($minutosAConsumir);
-            $nuevaHora = $horaCarbon->format('H:i:s');
+            $nuevaHora = ($campoHora === 'ingreso')
+                ? $horaCarbon->subMinutes($minutosAConsumir)->format('H:i:s')
+                : $horaCarbon->addMinutes($minutosAConsumir)->format('H:i:s');
 
-            $mapaPrefijos = [
-                'ingreso' => 'hi',
-                'salida' => 'hs',
-                'ingreso_refri' => 'hri',
-                'salida_refri' => 'hrs',
-            ];
-            $pre = $mapaPrefijos[$campoHora];
+            // --- UPDATES DIRECTOS (Para asegurar que entren a DB) ---
 
-            // 1. Auditoría
+            // A. Actualizar la BOLSA (De donde sale el tiempo)
+            DB::table('horarios')->where('id', $horarioFuente->id)->update([
+                'extra' => $nuevoExtraStr,
+                'extra_consumido' => $consumidoStr,
+                'destino_compensacion' => 'Compensado dia '.$marcacione->fecha->format('Y-m-d'),
+                'fecha_compensacion' => $marcacione->fecha->format('Y-m-d'),
+                'calculo_manual' => 1,
+                'updated_at' => now(),
+            ]);
+
+            // B. Actualizar la MARCACIÓN (El registro visual)
+            DB::table('marcacions')->where('id', $marcacione->id)->update([
+                $campoHora => $nuevaHora,
+            ]);
+
+            // C. Auditoría (Tu lógica sagrada)
+            $mapa = ['ingreso' => 'hi', 'salida' => 'hs', 'ingreso_refri' => 'hri', 'salida_refri' => 'hrs'];
+            $pre = $mapa[$campoHora];
+
             MarcacionEdicion::create([
                 'empleado_id' => $marcacione->empleado_id,
                 'user_id' => \Auth::id(),
@@ -595,55 +666,23 @@ class MarcacionController extends Controller
                 'hora' => $nuevaHora,
                 'motivo' => $data['motivo'].' (Edicion Compensa)',
                 'es_consolidado' => 0,
-            ]);
-
-            // 2. Consolidado
-            $edicionExistente = DB::table('marcacion_edicions')
-                ->where('empleado_id', $marcacione->empleado_id)
-                ->where('fecha', $marcacione->fecha)
-                ->where('es_consolidado', 1)
-                ->first();
-
-            $datosActualizar = [
-                'user_id' => \Auth::id(),
-                "{$pre}_edit" => $nuevaHora,
+                'created_at' => now(), // <--- PARA QUE DATE-FNS NO EXPLOTE
                 'updated_at' => now(),
-            ];
-
-            if (! $edicionExistente || is_null($edicionExistente->{"{$pre}_orig"})) {
-                $datosActualizar["{$pre}_orig"] = $marcacione->{$campoHora};
-            }
-
-            if (! $edicionExistente) {
-                $datosActualizar['created_at'] = now();
-                $datosActualizar['motivo'] = 'Registro consolidado';
-            }
+            ]);
 
             DB::table('marcacion_edicions')->updateOrInsert(
+                ['empleado_id' => $marcacione->empleado_id, 'fecha' => $marcacione->fecha, 'es_consolidado' => 1],
                 [
-                    'empleado_id' => $marcacione->empleado_id,
+                    'user_id' => \Auth::id(),
+                    "{$pre}_edit" => $nuevaHora,
+                    'motivo' => 'Registro consolidado',
                     'fecha' => $marcacione->fecha,
-                    'es_consolidado' => 1,
-                ],
-                $datosActualizar
+                    "{$pre}_orig" => $marcacione->{$campoHora},
+                    'created_at' => \DB::raw('IFNULL(created_at, NOW())'),
+                ]
             );
 
-            // Actualizar marcación
-            \DB::table('marcacions')->where('id', $marcacione->id)->update([
-                $campoHora => $nuevaHora,
-            ]);
-
-            // Descontar de la bolsa
-            $resto = $minutosDisponibles - $minutosAConsumir;
-            $nuevoExtraStr = sprintf('%02d:%02d:00', floor($resto / 60), $resto % 60);
-
-            \DB::table('horarios')->where('id', $horarioFuente->id)->update([
-                'extra' => $nuevoExtraStr,
-                'calculo_manual' => 1,
-                'destino_compensacion' => 'Compensado dia '.$marcacione->fecha,
-            ]);
-
-            return back()->with('success', 'Actualizado.');
+            return back()->with('success', "Compensados $minutosAConsumir minutos.");
         });
     }
 
@@ -679,6 +718,8 @@ class MarcacionController extends Controller
                     'motivo' => $data['motivo'].' (Edicion libre)',
 
                     'es_consolidado' => 0,
+                    'created_at' => now(), // Forzado manual por si las moscas
+                    'updated_at' => now(),
                 ]);
 
                 // 2. Consolidado - PROTEGER el _orig
@@ -743,54 +784,44 @@ class MarcacionController extends Controller
         }
     }
 
-    public function getHorasExtraDisponibles(Request $request, $empleado)
+    public function getHorasExtraDisponibles(Request $request, $empleadoId) // 1. Cambia el nombre aquí para no confundirte
     {
-        // 1. Capturamos y validamos que las fechas existan
         $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
         $finAnio = \Carbon\Carbon::now()->endOfYear()->toDateString();
+
+        // 2. Buscamos al empleado pero guardamos su nombre en otra variable
+        $objEmpleado = \App\Models\Empleado::find($empleadoId);
+        $nombreEmpleado = $objEmpleado ? $objEmpleado->apellidos : 'ID: '.$empleadoId;
 
         $query = \DB::table('marcacions as m')
             ->join('horarios as h', function ($join) {
                 $join->on('h.fecha', '=', 'm.fecha')
                     ->on('h.empleado_id', '=', 'm.empleado_id');
             })
-            ->where('m.empleado_id', $empleado)
+            ->where('m.empleado_id', $empleadoId) // 3. Usa el ID original aquí
             ->where('m.estado_horas_extra', 1)
             ->whereNotNull('h.extra')
             ->where('h.extra', '!=', '00:00:00')
+            ->where('h.fecha', '>=', $inicioAnio)
             ->whereBetween('m.fecha', [$inicioAnio, $finAnio]);
 
-        $extras = $query->select('h.id', 'm.fecha', 'h.extra as extra_db')
-            ->orderBy('m.fecha', 'desc') // Ordenado para que el Front no sea un caos
-            ->get();
+        $extras = $query->select('h.extra as extra_db')->get();
 
-        $extrasProcesadas = $extras->map(function ($registro) {
-            // Usamos un helper de string para evitar el error de Undefined si extra_db es raro
-            $timeString = (string) $registro->extra_db;
-            $partes = explode(':', $timeString);
-
-            if (count($partes) < 2) {
-                return null;
+        $minutosTotales = $extras->reduce(function ($carry, $registro) {
+            $partes = explode(':', (string) $registro->extra_db);
+            if (count($partes) >= 2) {
+                $carry += ((int) $partes[0] * 60) + (int) $partes[1];
             }
 
-            $minutosTotales = ((int) $partes[0] * 60) + (int) $partes[1];
+            return $carry;
+        }, 0);
 
-            // Tu regla de negocio: bloques de 30 min
-            // $ajustado = floor($minutosTotales / 30) * 30;
+        \Log::info('Minutos a compensar de : '.$nombreEmpleado.': '.$minutosTotales);
 
-            return [
-                'id' => $registro->id, // ID de Horarios para el descuento
-                'fecha' => $registro->fecha,
-                'extra' => (int) $minutosTotales,
-                'label' => \Carbon\Carbon::parse($registro->fecha)->format('d/m/Y').' ('.$minutosTotales.' min)',
-            ];
-        })
-            ->filter(fn ($item) => $item !== null) // && $item['extra'] >= 10
-            ->values();
-
-        \Log::info('HE CRUDAS PARA:', $extras->toArray());
-
-        return response()->json($extrasProcesadas);
+        return response()->json([
+            'total_minutos' => $minutosTotales,
+            'label' => floor($minutosTotales / 60).'h '.($minutosTotales % 60).'min disponibles',
+        ]);
     }
 
     /* ------------------------------------------------------------------------------------------------------------------------ Update */
@@ -1084,6 +1115,11 @@ class MarcacionController extends Controller
                     */
 
                     // Permisos de descanso
+                    /*
+                        La logica del TD es :
+                            1. cuando el trabajador labora los dias que tiene marcado como horario.estado = D y tiene marcaciones
+                            2. Se crea un permiso con permiso_tipo = 24 , que esu na TD con estado 0
+                    */
                     $h = $horarios->get($key);
                     if ($h && $h->estado === 'D' && ($ingreso || $salida)) {
                         Permiso::firstOrCreate([
