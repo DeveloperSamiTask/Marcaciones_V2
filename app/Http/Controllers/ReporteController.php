@@ -10,6 +10,7 @@ use App\Exports\TareoStarsoftExport;
 use App\Models\Area;
 use App\Models\Empleado;
 use App\Models\Empresa;
+use App\Models\ReporteHeConsumida;
 use App\Models\Feriado;
 use App\Models\Horario;
 use App\Models\Jornada;
@@ -1016,48 +1017,24 @@ class ReporteController extends Controller
             ->get();
 
         // Extra usado — horarios con extra_consumido dentro del rango
-        $extraUsado = \DB::table('horarios as h')
-            ->join('empleados as e', 'e.id', '=', 'h.empleado_id')
-            ->join('areas as a', 'a.id', '=', 'e.area_id')
-            ->join('jornadas as j', 'j.id', '=', 'e.jornada_id')
-            ->leftJoin('marcacion_edicions as mse', function ($join) {
-                $join->on('mse.empleado_id', '=', 'e.id')
-                    ->on('mse.fecha', '=', 'h.fecha_compensacion') // para que coincida el dia que se compensó
-                    ->where('mse.es_consolidado', '=', 1);
-            })
-            ->whereNotNull('h.extra_consumido')
-            ->where('h.extra_consumido', '!=', '00:00:00')
-            ->when($request->fechaInicio && $request->fechaFin, fn ($q) => $q->whereBetween('h.fecha_compensacion', [$request->fechaInicio, $request->fechaFin])
-            )
-            ->when($request->empresa, fn ($q) => $q->where('e.empresa_id', $request->empresa)
-            )
-            ->when($request->area, fn ($q) => $q->where('e.area_id', $request->area)
-            )
-            ->when($request->modalidad, fn ($q) => $q->where('e.jornada_id', $request->modalidad)
-            )
-            ->whereNull('e.fecha_cese')
-            ->select(
-                'e.id as empleado_id',  // 	bigint a
-                'e.apellidos',          // 	varchar(255)
-                'e.nombres',            // 	varchar(255)
-                'e.dni',                // 	char(10)
-                'a.nombre as area',     // 	varchar(255)
-                'j.nombre as jornada',  // 	varchar(255)
-                'h.fecha as fecha_he',  // 	date
-                'h.extra as extra_restante',    // 	time
-                'h.extra_consumido',            // 	time
-                'h.destino_compensacion',       //  varchar(255)
-                'mse.fecha as fecha_uso',       // 	bigint
-               \DB::raw('COALESCE(DATE(mse.created_at), DATE(now())) as fecha_edicion')     // 	date
-            )
-            ->orderBy('e.apellidos')
-            ->get();
+        $query = ReporteHeConsumida::query();
+
+        // Aplicas los mismos filtros que tenías, pero sobre una sola tabla
+        if ($request->fechaInicio && $request->fechaFin) {
+            $query->whereBetween('fecha_uso', [$request->fechaInicio, $request->fechaFin]);
+        }
+
+        if ($request->area) {
+            $query->where('area', $request->area); // O por ID si guardaste el ID en la tabla
+        }
+
+        $extraUsado = $query->orderBy('apellidos')->get();
 
         $pendientes = collect();
         $revision = collect();
         $aprobados = collect();
 
-        Log::info('Informacion de las HE por dia : '.$extraUsado);
+        Log::info('Informacion de las HE por dia : ' . $extraUsado);
 
         $debug = \DB::table('horarios')
             ->whereNotNull('extra_consumido')

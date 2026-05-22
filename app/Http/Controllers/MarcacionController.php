@@ -10,6 +10,7 @@ use App\Models\Horario;
 use App\Models\Marcacion;
 use App\Models\MarcacionEdicion;
 use App\Models\Permiso;
+use App\Models\ReporteHeConsumida;
 use App\Models\User;
 use App\Models\Zktimems;
 use Carbon\Carbon;
@@ -668,6 +669,26 @@ class MarcacionController extends Controller
                 'es_consolidado' => 0,
                 'created_at' => now(), // <--- PARA QUE DATE-FNS NO EXPLOTE
                 'updated_at' => now(),
+            ]);
+
+            $minutosDelta = $minutosAConsumir; // ESTO es lo que consumiste hoy
+            $saldoRestante = $restoBolsa;
+
+            $empleado = Empleado::find($marcacione->empleado_id);
+
+            ReporteHeConsumida::create([
+                'empleado_id' => $marcacione->empleado_id,
+                'apellidos' => $empleado->apellidos,
+                'nombres' => $empleado->nombres,
+                'dni' => $empleado->dni,
+                'area' => $empleado->area->nombre ?? 'N/A',
+                'jornada' => $empleado->jornada->nombre ?? 'N/A',
+                'fecha_he' => $horarioFuente->fecha, // Usamos el objeto que identificamos arriba
+                'extra_consumido' => $minutosAConsumir,
+                'extra_restante' => $saldoRestante,
+                'destino_compensacion' => 'Compensado dia '.$marcacione->fecha->format('Y-m-d'),
+                'fecha_uso' => $marcacione->fecha, // <-- CORREGIDO: ahora es una fecha
+                'fecha_edicion' => now(), // <-- CORREGIDO: fecha actual
             ]);
 
             DB::table('marcacion_edicions')->updateOrInsert(
