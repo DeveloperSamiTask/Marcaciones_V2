@@ -34,9 +34,9 @@ class MarcacionEdicion extends Model
     protected function casts(): array
     {
         return [
-            'created_at' => 'datetime:Y-m-d H:i:s', // Forza el formato al serializar a JSON
-    'updated_at' => 'datetime:Y-m-d H:i:s',
-    'fecha'      => 'date:Y-m-d',
+        'created_at' => 'datetime:Y-m-d H:i:s', // Forza el formato al serializar a JSON
+        'updated_at' => 'datetime:Y-m-d H:i:s',
+        'fecha'      => 'date:Y-m-d',
         ];
     }
 

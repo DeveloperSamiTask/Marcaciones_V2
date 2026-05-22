@@ -1037,18 +1037,18 @@ class ReporteController extends Controller
             )
             ->whereNull('e.fecha_cese')
             ->select(
-                'e.id as empleado_id',
-                'e.apellidos',
-                'e.nombres',
-                'e.dni',
-                'a.nombre as area',
-                'j.nombre as jornada',
-                'h.fecha as fecha_he',
-                'h.extra as extra_restante',
-                'h.extra_consumido',
-                'h.destino_compensacion',
-                'mse.fecha as fecha_uso',
-               \DB::raw('COALESCE(DATE(mse.created_at), DATE(now())) as fecha_edicion')
+                'e.id as empleado_id',  // 	bigint a
+                'e.apellidos',          // 	varchar(255)
+                'e.nombres',            // 	varchar(255)
+                'e.dni',                // 	char(10)
+                'a.nombre as area',     // 	varchar(255)
+                'j.nombre as jornada',  // 	varchar(255)
+                'h.fecha as fecha_he',  // 	date
+                'h.extra as extra_restante',    // 	time
+                'h.extra_consumido',            // 	time
+                'h.destino_compensacion',       //  varchar(255)
+                'mse.fecha as fecha_uso',       // 	bigint
+               \DB::raw('COALESCE(DATE(mse.created_at), DATE(now())) as fecha_edicion')     // 	date
             )
             ->orderBy('e.apellidos')
             ->get();
