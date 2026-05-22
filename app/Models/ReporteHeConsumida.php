@@ -27,8 +27,8 @@ class ReporteHeConsumida extends Model
 
     // Para que Eloquent maneje correctamente las fechas si es necesario
     protected $casts = [
-        'fecha_he' => 'date',
+        'fecha_he' => 'datetime:Y-m-d',
         'fecha_uso' => 'date',
-        'fecha_edicion' => 'date',
+        'fecha_edicion' => 'datetime:Y-m-d',
     ];
 }

@@ -1034,7 +1034,7 @@ class ReporteController extends Controller
         $revision = collect();
         $aprobados = collect();
 
-        Log::info('Informacion de las HE por dia : ' . $extraUsado);
+        // Log::info('Informacion de las HE por dia : ' . $extraUsado);
 
         $debug = \DB::table('horarios')
             ->whereNotNull('extra_consumido')
@@ -1043,7 +1043,7 @@ class ReporteController extends Controller
             ->limit(5)
             ->get();
 
-        Log::info('DEBUG horarios con extra_consumido: '.json_encode($debug));
+        // Log::info('DEBUG horarios con extra_consumido: '.json_encode($debug));
 
         $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
             $empleadoMarcaciones = $empleado->marcaciones ?? collect();

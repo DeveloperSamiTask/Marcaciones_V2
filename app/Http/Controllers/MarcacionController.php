@@ -546,11 +546,22 @@ class MarcacionController extends Controller
 
                 $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
 
-                $horarioFuente = Horario::where('empleado_id', $marcacione->empleado_id)
-                    ->whereDate('fecha', '>=', $inicioAnio)
-                    ->whereRaw('TIME_TO_SEC(extra) > 0')
-                    ->orderBy('fecha', 'asc')
+                $horarioFuente = \DB::table('horarios as h')
+                    ->join('marcacions as m', function ($join) {
+                        $join->on('m.empleado_id', '=', 'h.empleado_id')
+                            ->on('m.fecha', '=', 'h.fecha');
+                    })
+                    ->where('h.empleado_id', $marcacione->empleado_id)
+                    ->where('m.estado_horas_extra', 1)
+                    ->whereDate('h.fecha', '>=', $inicioAnio)
+                    ->whereRaw('TIME_TO_SEC(h.extra) > 0')
+                    ->orderBy('h.fecha', 'asc')
+                    ->select('h.*')
                     ->first();
+
+                if ($horarioFuente) {
+                    $horarioFuente = Horario::find($horarioFuente->id);
+                }
             }
 
             if (! $horarioFuente) {
@@ -683,12 +694,13 @@ class MarcacionController extends Controller
                 'dni' => $empleado->dni,
                 'area' => $empleado->area->nombre ?? 'N/A',
                 'jornada' => $empleado->jornada->nombre ?? 'N/A',
-                'fecha_he' => $horarioFuente->fecha, // Usamos el objeto que identificamos arriba
-                'extra_consumido' => $minutosAConsumir,
-                'extra_restante' => $saldoRestante,
+
+                'fecha_he' => \Carbon\Carbon::parse($horarioFuente->fecha)->format('Y-m-d'),
+                'extra_consumido' => sprintf('%02d:%02d:00', floor($minutosAConsumir / 60), $minutosAConsumir % 60),
+                'extra_restante' => sprintf('%02d:%02d:00', floor($saldoRestante / 60), $saldoRestante % 60),
                 'destino_compensacion' => 'Compensado dia '.$marcacione->fecha->format('Y-m-d'),
                 'fecha_uso' => $marcacione->fecha, // <-- CORREGIDO: ahora es una fecha
-                'fecha_edicion' => now(), // <-- CORREGIDO: fecha actual
+                'fecha_edicion' => now()->format('Y-m-d H:i:s'),
             ]);
 
             DB::table('marcacion_edicions')->updateOrInsert(
