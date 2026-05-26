@@ -206,7 +206,10 @@ import { sendSomething } from "./send";
             const marcacionHora = row.original.marcacion?.ingreso?.substring(0, 5) || '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
-            const hsp = row.original.horario?.ingreso?.substring(0, 5) || '';
+
+            const hip = row.original.horario?.ingreso?.substring(0, 5) || '';
+            const hsp = row.original.horario?.salida?.substring(0, 5) || '';
+
             const fechaInicio = tableMeta?.filters?.fechaInicio;
             const fechaFin = tableMeta?.filters?.fechaFin;
 
@@ -217,7 +220,8 @@ import { sendSomething } from "./send";
             if (horariosValidado === 0 && estadoMarcacion === 0) {
                 disabled = false;
             }
-
+            // console.log("Data en la fila:", row.original);
+            // console.log("Horario encontrado:", row.original.horario);
             return row.original.marcacion?.ingreso ? (
                 <EditMarcacion
                     key={`marcacion-ingreso-${empleadoId}-${fecha}-${marcacionId}`}
@@ -225,7 +229,10 @@ import { sendSomething } from "./send";
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
                     tipo="ingreso"
+
                     hsp={hsp}
+                    hip={hip}
+
                     empleadoId={empleadoId}
                     fechaInicio={fechaInicio}
                     fechaFin={fechaFin}
@@ -261,7 +268,10 @@ import { sendSomething } from "./send";
             const marcacionHora = row.original.marcacion?.salida?.substring(0, 5) || '';
             const empleadoId = row.original.empleado.id;
             const fecha = format(row.original.fecha, 'yyyy-MM-dd');
+
+            const hip = row.original.horario?.ingreso?.substring(0, 5) || '';
             const hsp = row.original.horario?.salida?.substring(0, 5) || '';
+
             const fechaInicio = tableMeta?.filters?.fechaInicio;
             const fechaFin = tableMeta?.filters?.fechaFin;
 
@@ -280,7 +290,10 @@ import { sendSomething } from "./send";
                     marcacionId={marcacionId}
                     marcacionHora={marcacionHora}
                     tipo="salida"
+
                     hsp={hsp}
+                    hip={hip}
+
                     empleadoId={empleadoId}
                     fechaInicio={fechaInicio}
                     fechaFin={fechaFin}
@@ -545,7 +558,7 @@ import { sendSomething } from "./send";
     },
 
     // Extra
-     {
+    {
         accessorKey: 'extra', // horas extra despues de la hora de salida programada (horario)
         header: 'EXTRA',
         cell: ({ row }) => {

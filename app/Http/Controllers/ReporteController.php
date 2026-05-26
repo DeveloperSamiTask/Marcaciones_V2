@@ -10,11 +10,11 @@ use App\Exports\TareoStarsoftExport;
 use App\Models\Area;
 use App\Models\Empleado;
 use App\Models\Empresa;
-use App\Models\ReporteHeConsumida;
 use App\Models\Feriado;
 use App\Models\Horario;
 use App\Models\Jornada;
 use App\Models\Permiso;
+use App\Models\ReporteHeConsumida;
 use App\Models\Suspension;
 use App\Models\User;
 use Carbon\Carbon;
@@ -1019,13 +1019,31 @@ class ReporteController extends Controller
         // Extra usado — horarios con extra_consumido dentro del rango
         $query = ReporteHeConsumida::query();
 
-        // Aplicas los mismos filtros que tenías, pero sobre una sola tabla
         if ($request->fechaInicio && $request->fechaFin) {
             $query->whereBetween('fecha_uso', [$request->fechaInicio, $request->fechaFin]);
         }
 
-        if ($request->area) {
-            $query->where('area', $request->area); // O por ID si guardaste el ID en la tabla
+        if ($request->empresa || $request->area || $request->encargado) {
+            $empleadosIds = Empleado::query()
+                ->when($request->empresa, fn ($q) => $q->where('empresa_id', $request->empresa))
+                ->when($request->area, fn ($q) => $q->where('area_id', $request->area))
+                ->when($request->encargado, fn ($q) => $q->where('jefe_id', $request->encargado))
+                ->whereNull('fecha_cese')
+                ->pluck('id');
+
+            $query->whereIn('empleado_id', $empleadosIds);
+        }
+
+        // Restricciones de seguridad por usuario
+        if ($user->name === 'ANGELES TERRONES MILUSKA') {
+            $ids = Empleado::whereIn('empresa_id', [4, 10, 11])->pluck('id');
+            $query->whereIn('empleado_id', $ids);
+        } elseif ($user->id === 73) {
+            $ids = Empleado::whereIn('empresa_id', [1, 5])->pluck('id');
+            $query->whereIn('empleado_id', $ids);
+        } elseif ($user->rol_id == 4 && $user->id !== 73 && ! $request->encargado) {
+            $ids = Empleado::where('jefe_id', $user->empleado_id)->pluck('id');
+            $query->whereIn('empleado_id', $ids);
         }
 
         $extraUsado = $query->orderBy('apellidos')->get();

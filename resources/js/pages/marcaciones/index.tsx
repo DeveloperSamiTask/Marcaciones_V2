@@ -162,7 +162,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                             getSelectedData={() => dataTableRef.current?.getSelectedData() || []}
                                             filters={initialState} />
                                         <DownloadMarcacion disabled={isFiltering} marcaciones={marcaciones} filters={initialState} />
-                                        {/* {auth.user.rol_id === 1 && (
+                                        {auth.user.rol_id === 1 && (
                                             <RecalcularButton
                                                 empresa={selectedEmpresa as number}
                                                 fechaInicio={dateRange?.from?.toISOString().split('T')[0]}
@@ -171,7 +171,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                                 empresas={empresas} // <--- ¡IMPORTANTE!
                                                 // encargados={encargados}
                                             />
-                                        )} */}
+                                        )}
                                     </>
                                 )}
 

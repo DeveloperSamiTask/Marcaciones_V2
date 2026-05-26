@@ -525,12 +525,165 @@ class MarcacionController extends Controller
                 return $this->updateModoCompensar($data, $marcacione);
             }
 
+            if (isset($data['modo']) && $data['modo'] === 'compensarDia') {
+                return $this->updateModoCompensarDia($data, $marcacione);
+            }
+
             return $this->updateModoLibre($data, $marcacione);
         } catch (\Exception $e) {
             \Log::emergency('EXCEPCI脫N CACHADA: '.$e->getMessage());
 
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
+    }
+
+    protected function updateModoCompensarDia($data, Marcacion $marcacion)
+    {
+        try {
+
+            // 1. datos
+            $marcaciones = Marcacion::find($data['marcacion_id']);
+            $fecha = \Carbon\Carbon::parse($marcaciones->fecha)->format('Y-m-d');
+            $horario = \DB::table('horarios as h')
+                ->where('h.fecha', $fecha)
+                ->where('h.empleado_id', $data['empleado_id'])
+                ->first();
+
+            $empleado = \DB::table('empleados as emp')
+                ->where('emp.id', $horario->empleado_id)
+                ->first();
+
+            $total_he = $this->calcularHorasExtraDisponibles($empleado->id);
+
+            // \Log::info('DEBUG COMPENSAR DIA: '.json_encode([
+            //     'marcacion' => $marcaciones,
+            //     'horario' => $horario,
+            //     'fecha parseada' => $fecha,
+            //     'horario_id' => $horario ? $horario->id : 'NO ENCONTRADO',
+            //     'empleado' => $empleado,
+            //     '$total_he' => $total_he,
+            // ], JSON_PRETTY_PRINT));
+
+            // 2. comparar si hay suciente HE
+            $inicio = \Carbon\Carbon::parse($horario->ingreso);
+            $fin = \Carbon\Carbon::parse($horario->salida);
+            $minutos_programados = $inicio->diffInMinutes($fin);
+
+            // log::info('tiempos ingreso y salida : '.json_encode([
+            //     'inicio' => $inicio,
+            //     'fin' => $fin,
+            //     'programado' => $minutos_programados,
+            // ], JSON_PRETTY_PRINT));
+
+            if ($total_he < $minutos_programados) {
+                return back()->with('error', "Saldo insuficiente. Tienes {$total_he} min y necesitas {$minutos_programados} min.");
+            } else {
+
+                // 3. Empezar el calculo
+                /*
+                    Encontrar todos los horarios con HE aprobadas del inicio del año a hoy
+                    Esto me retorna un array supongo
+                    supongo que usar un forEach
+                */
+                $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
+                $finAnio = \Carbon\Carbon::now()->endOfYear()->toDateString();
+                $bolsa_acumulada = 0;
+                $deuda_pendiente = $minutos_programados;
+                $detalles_descuento = []; // Para tu log
+
+                $extras = \DB::table('marcacions as m')
+                    ->join('horarios as h', function ($join) {
+                        $join->on('h.fecha', '=', 'm.fecha')
+                            ->on('h.empleado_id', '=', 'm.empleado_id');
+                    })
+                    ->where('m.empleado_id', $empleado->id)
+                    ->where('m.estado_horas_extra', 1)
+                    ->whereNotNull('h.extra')
+                    ->where('h.extra', '!=', '00:00:00')
+                    ->whereBetween('m.fecha', [$inicioAnio, $finAnio])
+                    ->select('h.id', 'h.extra as extra_db', 'h.extra_consumido')
+                    ->orderBy('m.fecha', 'asc')
+                    ->get();
+
+                // log::info('horas extras : '.json_encode([
+                //     'Horas extras' => $extras,
+                // ], JSON_PRETTY_PRINT));
+
+                foreach ($extras as $e) {
+
+                    /* voy sumando los minutos y RESTANDOLOS de horario.extras, mientras sea menor o igual que el programado se ira sumando
+                       el tema es como haria si por algun motivo , ya en las ultimas pues , sobra tiempo de la bolsa al momento de completar la hora_programada
+                    */
+                    if ($deuda_pendiente <= 0) {
+                        break;
+                    }
+
+                    $tiempo = \Carbon\Carbon::parse($e->extra_db);
+                    $disponible_en_registro = ($tiempo->hour * 60) + $tiempo->minute;
+                    // Tomamos el MINIMO entre lo que hay en el registro y lo que todavía debemos.
+                    // Ejemplo: Si hay 60 min pero solo debo 10, min(60, 10) devolverá 10.
+                    $a_consumir = min($disponible_en_registro, $deuda_pendiente);
+
+                    $bolsa_acumulada += $a_consumir;
+                    $deuda_pendiente -= $a_consumir;
+
+                    $sobrante_en_registro = $disponible_en_registro - $a_consumir;
+
+                    // --- FORMATEO PARA EL "EXTRA" (lo que sobra) ---
+                    $h_sobra = floor($sobrante_en_registro / 60);
+                    $m_sobra = $sobrante_en_registro % 60;
+                    $extra_formateado = sprintf('%02d:%02d:00', $h_sobra, $m_sobra);
+
+                    // --- FORMATEO PARA EL "EXTRA_CONSUMIDO" (lo que usaste) ---
+                    $h_usado = floor($a_consumir / 60);
+                    $m_usado = $a_consumir % 60;
+                    $consumido_formateado = sprintf('%02d:%02d:00', $h_usado, $m_usado);
+
+                    \DB::table('horarios')->where('id', $e->id)->update([
+                        'extra' => $extra_formateado,
+                        'extra_consumido' => $consumido_formateado,
+                        'destino_compensacion' => 'Compensa total del dia : ' . $fecha,
+                    ]);
+
+                    // actualizar las h.e
+
+                    $detalles_descuento[] = [
+                        'horario_id' => $e->id,
+                        'tenia' => $disponible_en_registro,
+                        'usamos' => $a_consumir,
+                        'sobro_en_este_dia' => $sobrante_en_registro,
+                        'falta_por_pagar (programado)' => $deuda_pendiente,
+                    ];
+
+                    log::info('Resumen del cobro: '.json_encode([
+                        'detalle descuento' => $detalles_descuento,
+                    ], JSON_PRETTY_PRINT));
+
+                }
+
+                // Ajuste de tiempos y descuentos
+
+                \DB::table('horarios')
+                    ->where('id', $horario->id) // El ID del día que estamos compensando
+                    ->update(['estado' => 'CHE']);
+
+                \Log::info('COMPENSACIÓN COMPLETADA', [
+                    'empleado' => $empleado->nombres,
+                    'dia_compensado' => $fecha,
+                    'minutos_gastados' => $bolsa_acumulada,
+                    'detalles' => $detalles_descuento,
+                ]);
+
+                return back()->with('success', 'Procesando lógica de compensación...');
+            }
+
+        } catch (\Exception $e) {
+            \Log::emergency('EXCEPCI脫N CACHADA: '.$e->getMessage());
+
+            return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
+        }
+
+        return back()->with('success', 'Procesando lógica de compensación...');
     }
 
     private function updateModoCompensar($data, Marcacion $marcacione)
@@ -817,30 +970,25 @@ class MarcacionController extends Controller
         }
     }
 
-    public function getHorasExtraDisponibles(Request $request, $empleadoId) // 1. Cambia el nombre aquí para no confundirte
+    private function calcularHorasExtraDisponibles($empleadoId): int
     {
         $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
         $finAnio = \Carbon\Carbon::now()->endOfYear()->toDateString();
 
-        // 2. Buscamos al empleado pero guardamos su nombre en otra variable
-        $objEmpleado = \App\Models\Empleado::find($empleadoId);
-        $nombreEmpleado = $objEmpleado ? $objEmpleado->apellidos : 'ID: '.$empleadoId;
-
-        $query = \DB::table('marcacions as m')
+        $extras = \DB::table('marcacions as m')
             ->join('horarios as h', function ($join) {
                 $join->on('h.fecha', '=', 'm.fecha')
                     ->on('h.empleado_id', '=', 'm.empleado_id');
             })
-            ->where('m.empleado_id', $empleadoId) // 3. Usa el ID original aquí
+            ->where('m.empleado_id', $empleadoId)
             ->where('m.estado_horas_extra', 1)
             ->whereNotNull('h.extra')
             ->where('h.extra', '!=', '00:00:00')
-            ->where('h.fecha', '>=', $inicioAnio)
-            ->whereBetween('m.fecha', [$inicioAnio, $finAnio]);
+            ->whereBetween('m.fecha', [$inicioAnio, $finAnio])
+            ->select('h.extra as extra_db')
+            ->get();
 
-        $extras = $query->select('h.extra as extra_db')->get();
-
-        $minutosTotales = $extras->reduce(function ($carry, $registro) {
+        return $extras->reduce(function ($carry, $registro) {
             $partes = explode(':', (string) $registro->extra_db);
             if (count($partes) >= 2) {
                 $carry += ((int) $partes[0] * 60) + (int) $partes[1];
@@ -848,8 +996,11 @@ class MarcacionController extends Controller
 
             return $carry;
         }, 0);
+    }
 
-        \Log::info('Minutos a compensar de : '.$nombreEmpleado.': '.$minutosTotales);
+    public function getHorasExtraDisponibles($empleadoId)
+    {
+        $minutosTotales = $this->calcularHorasExtraDisponibles($empleadoId);
 
         return response()->json([
             'total_minutos' => $minutosTotales,
