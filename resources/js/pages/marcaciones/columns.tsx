@@ -240,11 +240,19 @@ import { sendSomething } from "./send";
                 />
             ) : (
                 <CreateMarcacion
-                    key={`marcacion-ingreso-${fecha}-${empleadoId}`}
+                    key={`marcacion-ingreso-${empleadoId}-${fecha}-${marcacionId}`}
                     disabled={disabled}
-                    empleadoId={empleadoId}
-                    fecha={fecha}
+                    marcacionId={marcacionId}
+                    marcacionHora={marcacionHora}
                     tipo="ingreso"
+
+                    hsp={hsp}
+                    hip={hip}
+
+                    empleadoId={empleadoId}
+                    fechaInicio={fechaInicio}
+                    fechaFin={fechaFin}
+                    fecha={fecha}
                 />
             );
         },
