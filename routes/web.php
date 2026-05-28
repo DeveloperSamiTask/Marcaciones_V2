@@ -125,7 +125,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{empleado}/extras', [MarcacionController::class, 'getHorasExtraDisponibles'])->name('extras');
 
         Route::post('recalcular-extras', [MarcacionController::class, 'recalcularExtras'])->name('recalcular-extras');
+
+
     });
+
+    Route::post('/marcaciones/compensar-dia', [MarcacionController::class, 'storeCompensarDia'])
+    ->name('marcaciones.compensarDiaStore');
 
     // Asistencias
     Route::resource('asistencias', AsistenciaController::class);

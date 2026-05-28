@@ -10,6 +10,8 @@ use App\Models\Horario;
 use App\Models\Marcacion;
 use App\Models\MarcacionEdicion;
 use App\Models\Permiso;
+use App\Models\Area;
+use App\Models\Jornada;
 use App\Models\ReporteHeConsumida;
 use App\Models\User;
 use App\Models\Zktimems;
@@ -537,13 +539,56 @@ class MarcacionController extends Controller
         }
     }
 
-    protected function updateModoCompensarDia($data, Marcacion $marcacion)
+    public function storeCompensarDia(Request $request)
     {
         try {
 
+            \DB::beginTransaction();
+
+            // 1. Crear marcación
+            $marcacion = Marcacion::create([
+                'empleado_id' => $request->empleado_id,
+                'fecha' => $request->fecha,
+                'tipo' => $request->tipo,
+                'hora' => '00:00:00',
+                'motivo' => $request->motivo,
+            ]);
+
+            // 2. Preparar data para reutilizar lógica existente
+            $data = $request->all();
+
+            $data['marcacion_id'] = $marcacion->id;
+
+            // 3. Reutilizar lógica actual
+            $response = $this->updateModoCompensarDia($data, $marcacion);
+
+            \DB::commit();
+
+            return $response;
+
+        } catch (\Exception $e) {
+
+            \DB::rollBack();
+
+            \Log::error('ERROR STORE COMPENSAR DIA: '.$e->getMessage());
+
+            return back()->withErrors([
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function updateModoCompensarDia($data, $marcacione = null)
+    {
+        try {
+
+            if (! $marcacione->exists) {
+                $marcacione = null;
+            }
+
             // 1. datos
             $marcaciones = Marcacion::find($data['marcacion_id']);
-            $fecha = \Carbon\Carbon::parse($marcaciones->fecha)->format('Y-m-d');
+            $fecha = isset($data['fecha']) ? \Carbon\Carbon::parse($data['fecha'])->format('Y-m-d') : \Carbon\Carbon::parse($marcacione->fecha)->format('Y-m-d');
             $horario = \DB::table('horarios as h')
                 ->where('h.fecha', $fecha)
                 ->where('h.empleado_id', $data['empleado_id'])
@@ -553,16 +598,19 @@ class MarcacionController extends Controller
                 ->where('emp.id', $horario->empleado_id)
                 ->first();
 
+            $area = Area::find($empleado->area_id);
+            $jornada = Jornada::find($empleado->jornada_id);
+
             $total_he = $this->calcularHorasExtraDisponibles($empleado->id);
 
-            // \Log::info('DEBUG COMPENSAR DIA: '.json_encode([
-            //     'marcacion' => $marcaciones,
-            //     'horario' => $horario,
-            //     'fecha parseada' => $fecha,
-            //     'horario_id' => $horario ? $horario->id : 'NO ENCONTRADO',
-            //     'empleado' => $empleado,
-            //     '$total_he' => $total_he,
-            // ], JSON_PRETTY_PRINT));
+            \Log::info('DEBUG COMPENSAR DIA: '.json_encode([
+                'marcacion' => $marcaciones,
+                'horario' => $horario,
+                'fecha parseada' => $fecha,
+                'horario_id' => $horario ? $horario->id : 'NO ENCONTRADO',
+                'empleado' => $empleado,
+                '$total_he' => $total_he,
+            ], JSON_PRETTY_PRINT));
 
             // 2. comparar si hay suciente HE
             $inicio = \Carbon\Carbon::parse($horario->ingreso);
@@ -601,7 +649,7 @@ class MarcacionController extends Controller
                     ->whereNotNull('h.extra')
                     ->where('h.extra', '!=', '00:00:00')
                     ->whereBetween('m.fecha', [$inicioAnio, $finAnio])
-                    ->select('h.id', 'h.extra as extra_db', 'h.extra_consumido')
+                    ->select('h.id', 'h.extra as extra_db', 'h.extra_consumido', 'h.fecha')
                     ->orderBy('m.fecha', 'asc')
                     ->get();
 
@@ -642,7 +690,7 @@ class MarcacionController extends Controller
                     \DB::table('horarios')->where('id', $e->id)->update([
                         'extra' => $extra_formateado,
                         'extra_consumido' => $consumido_formateado,
-                        'destino_compensacion' => 'Compensa total del dia : ' . $fecha,
+                        'destino_compensacion' => 'Compensa total del dia : '.$fecha,
                     ]);
 
                     // actualizar las h.e
@@ -659,6 +707,29 @@ class MarcacionController extends Controller
                         'detalle descuento' => $detalles_descuento,
                     ], JSON_PRETTY_PRINT));
 
+                    $reporte = ReporteHeConsumida::create([
+                        'empleado_id' => $empleado->id,
+                        'apellidos' => $empleado->apellidos,
+                        'nombres' => $empleado->nombres,
+                        'dni' => $empleado->dni,
+                        'area' => $area->nombre ?? 'N/A',
+                        'jornada' => $jornada->nombre ?? 'N/A',
+
+                        'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
+                        'extra_consumido' => $consumido_formateado,
+                        'extra_restante' => $extra_formateado,
+                        'destino_compensacion' => 'Compensa total del dia: '. $fecha,
+                        'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
+                        'fecha_edicion' => now()->format('Y-m-d H:i:s'),
+                    ]);
+
+                    log::info(
+                        'reporte HE: ' . json_encode([
+                            'reporte HE' => $reporte,
+                        ], JSON_PRETTY_PRINT)
+                    );
+
+
                 }
 
                 // Ajuste de tiempos y descuentos
@@ -666,6 +737,16 @@ class MarcacionController extends Controller
                 \DB::table('horarios')
                     ->where('id', $horario->id) // El ID del día que estamos compensando
                     ->update(['estado' => 'CHE']);
+
+                \DB::table('marcacions')
+                    ->where('empleado_id', $empleado->id)
+                    ->where('fecha', $fecha)
+                    ->update([
+                        'ingreso' => $horario->ingreso, // HI programada
+                        'salida' => $horario->salida,  // HS programada
+                    ]);
+
+                // crear reportes
 
                 \Log::info('COMPENSACIÓN COMPLETADA', [
                     'empleado' => $empleado->nombres,

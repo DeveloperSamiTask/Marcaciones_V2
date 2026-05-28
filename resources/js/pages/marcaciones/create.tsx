@@ -58,13 +58,13 @@ export default function CreateMarcacion({
         tipo: tipo,
         fecha: fecha,
         motivo: '',
-        modo: 'compensar',
+        modo: 'libre',
         total_he_disponibles: 0
     });
 
     // 3. Efecto para cargar bolsa (copiado del Edit)
     useEffect(() => {
-        if (open && empleadoId && (modoEdicion === 'libre' || modoEdicion === 'compensarDia')) {
+        if (open && empleadoId && modoEdicion === 'compensarDia') {
             setCargandoExtras(true);
             axios.get(route('marcaciones.extras', { empleado: empleadoId }))
                 .then(res => setBolsaExtra(res.data))
@@ -80,8 +80,8 @@ export default function CreateMarcacion({
 
         // Router dinámico: si es compensarDia, va a su ruta; si no, al store normal
         const url = modoEdicion === 'compensarDia'
-            ? route('marcaciones.update')
-            : route('marcaciones.store');
+        ? route('marcaciones.compensarDiaStore')
+        : route('marcaciones.store');
 
         post(url, {
             data: payload,
