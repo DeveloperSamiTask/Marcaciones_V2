@@ -175,6 +175,7 @@ class AsistenciaController extends Controller
                     // 1. Objetos para cálculo (Marcación Real vs Programado)
                     $h_ingreso = \Carbon\Carbon::parse($detalle->hora_ingreso); // Real
                     $h_salida = \Carbon\Carbon::parse($detalle->hora_salida);   // Real
+
                     $p_ingreso = \Carbon\Carbon::parse($detalle->ingreso);      // Programado
                     $p_salida = \Carbon\Carbon::parse($detalle->salida);        // Programado
 
@@ -190,8 +191,11 @@ class AsistenciaController extends Controller
                     // Tardanza: Llegó después de su hora programada
                     $tardanza = max(0, $p_ingreso->diffInMinutes($h_ingreso, false));
 
-                    // Extra: Salió después de su hora programada
-                    $extra = max(0, $p_salida->diffInMinutes($h_salida, false));
+                    // Extra
+                    $extra_ingreso = max(0,$h_ingreso->diffInMinutes($p_ingreso , false));
+                    $extra_salida = max(0, $p_salida->diffInMinutes($h_salida, false));
+
+                    $extra = $extra_ingreso + $extra_salida;
 
                     // Anticipado: Salió antes de su hora programada
                     $anticipado = max(0, $h_salida->diffInMinutes($p_salida, false));
@@ -269,7 +273,7 @@ class AsistenciaController extends Controller
     }
 
 
-    // metodo para enviar 
+    // metodo para enviar
     public function store(Request $request)
     {
         $data = $request->validate([

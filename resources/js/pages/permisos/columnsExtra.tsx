@@ -101,13 +101,47 @@ export const columnsExtra: ColumnDef<Permiso>[] = [
         accessorKey: 'extra',
         header: 'EXTRA',
         cell: ({ row }) => {
-            /*
-                    Cuantas horas extra trabajo un empleado el dia que pidio un permiso y lo muestra como columna extra.
-            */
-            const extra = row.original.empleado.horarios ? row.original.empleado.horarios?.find(horario => horario.fecha === row.original.fecha)?.extra : '';
-            return (
-                <span className='text-red-600'>{extra}</span>
-            );
+            const { fecha, empleado } = row.original;
+            const fechaPermiso = fecha.substring(0, 10);
+
+            const horario = empleado.horarios?.find(h => h.fecha.substring(0, 10) === fechaPermiso);
+            const marcacion = empleado.marcaciones?.find(m => m.fecha.substring(0, 10) === fechaPermiso);
+
+            // LOG PARA VER POR QUÉ FALLA
+            if (!horario || !marcacion) {
+                console.log("Falla en busqueda:", { fechaPermiso, horario, marcacion });
+                return <span className='text-gray-400'>00:00</span>;
+            }
+
+            // AHORA USAMOS LOS NOMBRES REALES DE TU BASE DE DATOS: ingreso y salida
+            if (!marcacion.ingreso || !marcacion.salida) {
+                console.log("Campos de hora vacíos:", marcacion);
+                return <span className='text-red-500'>NULL</span>;
+            }
+
+            const getTs = (timeStr: string) => {
+                const [h, m] = timeStr.split(':').map(Number);
+                const d = new Date();
+                d.setHours(h, m, 0, 0);
+                return d.getTime();
+            };
+
+            const h_ingreso = getTs(marcacion.ingreso);
+            const h_salida = getTs(marcacion.salida);
+            const p_ingreso = getTs(horario.ingreso);
+            const p_salida = getTs(horario.salida);
+
+            const h_salida_ts = h_salida < h_ingreso ? h_salida + 86400000 : h_salida;
+            const p_salida_ts = p_salida < p_ingreso ? p_salida + 86400000 : p_salida;
+
+            const extra_ingreso = Math.max(0, (p_ingreso - h_ingreso) / 60000);
+            const extra_salida = Math.max(0, (h_salida_ts - p_salida_ts) / 60000);
+
+            const total_minutos = Math.round(extra_ingreso + extra_salida);
+            const hh = Math.floor(total_minutos / 60).toString().padStart(2, '0');
+            const mm = (total_minutos % 60).toString().padStart(2, '0');
+
+            return <span className='text-red-600'>{`${hh}:${mm}`}</span>;
         },
     },
     {

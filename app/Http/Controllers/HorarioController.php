@@ -805,122 +805,123 @@ class HorarioController extends Controller
         return back()->with('success', 'Proceso ejecutado');
     }
     */
-public function storeMultiple(Request $request)
-{
-    // 1. VALIDACIÓN ORIGINAL (Mantenemos tu seguridad)
-    \Log::info("\n".
-        "🚀 STORE MULTIPLE - INICIO DE PROCESO\n".
-        "\n".
-        "📥 Datos recibidos del request:\n".
-        '  Total de entries: '.count($request->input('entries', []))."\n".
-        '  Fecha/hora: '.now()->format('Y-m-d H:i:s')."\n".
-        '');
-
-    $validated = $request->validate([
-        'entries' => 'required|array|min:1',
-        'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
-        'entries.*.fecha' => 'required|date',
-        //'entries.*.ingreso' => 'required|date_format:H:i',
-		'entries.*.ingreso' => 'nullable',
-        'entries.*.salida' => 'required|date_format:H:i',
-        'entries.*.estado' => 'required|string',
-        'entries.*.feriado' => 'nullable|integer',
-        'entries.*.permiso_td_id' => 'nullable|integer',
-    ]);
-
-    $entries = $validated['entries'];
-
-    \Log::info('--- INICIO PROCESAMIENTO ENTRIES ---', ['cantidad' => count($entries)]);
-
-    // 2. EL ANCLA
-    $fechaReferencia = Carbon::parse($entries[0]['fecha'], 'America/Lima');
-    $inicioSemana = $fechaReferencia->copy()->startOfWeek(Carbon::MONDAY);
-    $finSemana = $fechaReferencia->copy()->endOfWeek(Carbon::SUNDAY);
-
-    \Log::info("📅 CÁLCULO DE SEMANA OFICIAL:\n".
-        '  Fecha referencia (primera entry): '.$entries[0]['fecha']."\n".
-        '  Lunes de la semana: '.$inicioSemana->format('d/m/Y')."\n".
-        '  Domingo de la semana: '.$finSemana->format('d/m/Y')."\n".
-        "  Días de la semana:\n".
-        '    Lunes: '.$inicioSemana->format('d/m/Y')."\n".
-        '    Martes: '.$inicioSemana->copy()->addDay()->format('d/m/Y')."\n".
-        '    Miércoles: '.$inicioSemana->copy()->addDays(2)->format('d/m/Y')."\n".
-        '    Jueves: '.$inicioSemana->copy()->addDays(3)->format('d/m/Y')."\n".
-        '    Viernes: '.$inicioSemana->copy()->addDays(4)->format('d/m/Y')."\n".
-        '    Sábado: '.$inicioSemana->copy()->addDays(5)->format('d/m/Y')."\n".
-        '    Domingo: '.$inicioSemana->copy()->addDays(6)->format('d/m/Y')."\n".
-        '');
-
-    // 4. TRANSACCIÓN Y PROCESAMIENTO (Movimos la Foto aquí adentro con LOCK)
-    return DB::transaction(function () use ($entries, $inicioSemana, $finSemana) {
-
-        // 3. LA FOTO (AHORA CON LOCK): Esto detiene al segundo proceso en el remoto
-        $empleadosIds = collect($entries)->pluck('empleado_id')->unique();
-        $horariosExistentes = DB::table('horarios')
-            ->whereIn('empleado_id', $empleadosIds)
-            ->whereBetween('fecha', [$inicioSemana->toDateString(), $finSemana->toDateString()])
-            ->lockForUpdate() // 🔒 EL CANDADO PARA PRODUCCIÓN
-            ->get()
-            ->groupBy('empleado_id');
-
-        // LOG DE EXISTENTES ENCONTRADOS (Dentro de la transacción para ver la realidad post-bloqueo)
-        \Log::info("🔍 HORARIOS EXISTENTES ENCONTRADOS EN BD (LOCK ACTIVADO):\n".
-            '  Empleados con registros existentes: '.$horariosExistentes->count()."\n".
-            "  Distribución por empleado:\n".
-            collect($horariosExistentes)->map(function ($registros, $empleadoId) {
-                return "    • Empleado {$empleadoId}: ".$registros->count().' registros';
-            })->implode("\n")."\n".
+    public function storeMultiple(Request $request)
+    {
+        // 1. VALIDACIÓN ORIGINAL (Mantenemos tu seguridad)
+        \Log::info("\n".
+            "🚀 STORE MULTIPLE - INICIO DE PROCESO\n".
+            "\n".
+            "📥 Datos recibidos del request:\n".
+            '  Total de entries: '.count($request->input('entries', []))."\n".
+            '  Fecha/hora: '.now()->format('Y-m-d H:i:s')."\n".
             '');
 
-        $contadorProcesados = 0;
+        $validated = $request->validate([
+            'entries' => 'required|array|min:1',
+            'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
+            'entries.*.fecha' => 'required|date',
+            // 'entries.*.ingreso' => 'required|date_format:H:i',
+            'entries.*.ingreso' => 'nullable',
+            'entries.*.salida' => 'required|date_format:H:i',
+            'entries.*.estado' => 'required|string',
+            'entries.*.feriado' => 'nullable|integer',
+            'entries.*.permiso_td_id' => 'nullable|integer',
+        ]);
 
-        foreach ($entries as $data) {
-            $empId = $data['empleado_id'];
-            $EmpleadosNombre = Empleado::find($empId);
-            $fechaDeseada = Carbon::parse($data['fecha'])->toDateString();
+        $entries = $validated['entries'];
 
-            // 2. REGLA 2
-            $registrosEnFoto = $horariosExistentes->get($empId, collect());
-            if ($registrosEnFoto->count() >= 7) {
-                \Log::info("Regla 2: Empleado {$EmpleadosNombre->apellidos} tiene semana llena. Omitiendo.");
-                continue;
-            }
+        \Log::info('--- INICIO PROCESAMIENTO ENTRIES ---', ['cantidad' => count($entries)]);
 
-            // 3. REGLA 3 (Evitar Duplicados)
-            $existeEnFoto = $registrosEnFoto->firstWhere('fecha', $fechaDeseada);
+        // 2. EL ANCLA
+        $fechaReferencia = Carbon::parse($entries[0]['fecha'], 'America/Lima');
+        $inicioSemana = $fechaReferencia->copy()->startOfWeek(Carbon::MONDAY);
+        $finSemana = $fechaReferencia->copy()->endOfWeek(Carbon::SUNDAY);
 
-            if (! $existeEnFoto) {
-                // REFUERZO: Doble check real
-                $existeEnBDReal = DB::table('horarios')
-                    ->where('empleado_id', $empId)
-                    ->where('fecha', $fechaDeseada)
-                    ->exists();
+        \Log::info("📅 CÁLCULO DE SEMANA OFICIAL:\n".
+            '  Fecha referencia (primera entry): '.$entries[0]['fecha']."\n".
+            '  Lunes de la semana: '.$inicioSemana->format('d/m/Y')."\n".
+            '  Domingo de la semana: '.$finSemana->format('d/m/Y')."\n".
+            "  Días de la semana:\n".
+            '    Lunes: '.$inicioSemana->format('d/m/Y')."\n".
+            '    Martes: '.$inicioSemana->copy()->addDay()->format('d/m/Y')."\n".
+            '    Miércoles: '.$inicioSemana->copy()->addDays(2)->format('d/m/Y')."\n".
+            '    Jueves: '.$inicioSemana->copy()->addDays(3)->format('d/m/Y')."\n".
+            '    Viernes: '.$inicioSemana->copy()->addDays(4)->format('d/m/Y')."\n".
+            '    Sábado: '.$inicioSemana->copy()->addDays(5)->format('d/m/Y')."\n".
+            '    Domingo: '.$inicioSemana->copy()->addDays(6)->format('d/m/Y')."\n".
+            '');
 
-                if (! $existeEnBDReal) {
-                    \Log::info("Regla 3: Llenando hueco para el día {$fechaDeseada}");
+        // 4. TRANSACCIÓN Y PROCESAMIENTO (Movimos la Foto aquí adentro con LOCK)
+        return DB::transaction(function () use ($entries, $inicioSemana, $finSemana) {
 
-                    $this->procesarUnDia(
-                        $empId,
-                        $fechaDeseada,
-                        $data['ingreso'],
-                        $data['salida'],
-                        $data['estado'],
-                        $data['descripcion'] ?? '',
-                        $data['feriado'] ?? null,
-                        $data['permiso_td_id'] ?? null
-                    );
-                    $contadorProcesados++;
-                } else {
-                    \Log::warning("⚠️ Intento de duplicado evitado por Doble Check para: {$fechaDeseada}");
+            // 3. LA FOTO (AHORA CON LOCK): Esto detiene al segundo proceso en el remoto
+            $empleadosIds = collect($entries)->pluck('empleado_id')->unique();
+            $horariosExistentes = DB::table('horarios')
+                ->whereIn('empleado_id', $empleadosIds)
+                ->whereBetween('fecha', [$inicioSemana->toDateString(), $finSemana->toDateString()])
+                ->lockForUpdate() // 🔒 EL CANDADO PARA PRODUCCIÓN
+                ->get()
+                ->groupBy('empleado_id');
+
+            // LOG DE EXISTENTES ENCONTRADOS (Dentro de la transacción para ver la realidad post-bloqueo)
+            \Log::info("🔍 HORARIOS EXISTENTES ENCONTRADOS EN BD (LOCK ACTIVADO):\n".
+                '  Empleados con registros existentes: '.$horariosExistentes->count()."\n".
+                "  Distribución por empleado:\n".
+                collect($horariosExistentes)->map(function ($registros, $empleadoId) {
+                    return "    • Empleado {$empleadoId}: ".$registros->count().' registros';
+                })->implode("\n")."\n".
+                '');
+
+            $contadorProcesados = 0;
+
+            foreach ($entries as $data) {
+                $empId = $data['empleado_id'];
+                $EmpleadosNombre = Empleado::find($empId);
+                $fechaDeseada = Carbon::parse($data['fecha'])->toDateString();
+
+                // 2. REGLA 2
+                $registrosEnFoto = $horariosExistentes->get($empId, collect());
+                if ($registrosEnFoto->count() >= 7) {
+                    \Log::info("Regla 2: Empleado {$EmpleadosNombre->apellidos} tiene semana llena. Omitiendo.");
+
+                    continue;
+                }
+
+                // 3. REGLA 3 (Evitar Duplicados)
+                $existeEnFoto = $registrosEnFoto->firstWhere('fecha', $fechaDeseada);
+
+                if (! $existeEnFoto) {
+                    // REFUERZO: Doble check real
+                    $existeEnBDReal = DB::table('horarios')
+                        ->where('empleado_id', $empId)
+                        ->where('fecha', $fechaDeseada)
+                        ->exists();
+
+                    if (! $existeEnBDReal) {
+                        \Log::info("Regla 3: Llenando hueco para el día {$fechaDeseada}");
+
+                        $this->procesarUnDia(
+                            $empId,
+                            $fechaDeseada,
+                            $data['ingreso'],
+                            $data['salida'],
+                            $data['estado'],
+                            $data['descripcion'] ?? '',
+                            $data['feriado'] ?? null,
+                            $data['permiso_td_id'] ?? null
+                        );
+                        $contadorProcesados++;
+                    } else {
+                        \Log::warning("⚠️ Intento de duplicado evitado por Doble Check para: {$fechaDeseada}");
+                    }
                 }
             }
-        }
 
-        \Log::info('--- FIN PROCESAMIENTO ---', ['insertados' => $contadorProcesados]);
+            \Log::info('--- FIN PROCESAMIENTO ---', ['insertados' => $contadorProcesados]);
 
-        return redirect()->back()->with('success', "Se han procesado {$contadorProcesados} registros correctamente.");
-    });
-}
+            return redirect()->back()->with('success', "Se han procesado {$contadorProcesados} registros correctamente.");
+        });
+    }
 
     private function procesarUnDia(
         $empleadoId,
@@ -1420,7 +1421,7 @@ public function storeMultiple(Request $request)
             ->whereDate('fecha', '<=', now())
             ->pluck('fecha');
 
-   $anioActual = now()->year;
+        $anioActual = now()->year;
         $anioHorario = $horario->fecha->year;
 
         if ($anioHorario < $anioActual) {
@@ -1431,7 +1432,7 @@ public function storeMultiple(Request $request)
                 ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
                 ->select(['id', 'fecha', 'nombre'])
                 ->orderBy('fecha', 'desc')
-                 ->limit(1)
+                ->limit(1)
                 ->get();  // TODOS los feriados de ese año
         } else {
             // AÑO ACTUAL: Solo el feriado más próximo
@@ -1450,7 +1451,7 @@ public function storeMultiple(Request $request)
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->orderBy('fecha', 'asc')
-			->limit(1)
+            ->limit(1)
             ->get();
 
         $diasTDDisponibles = Permiso::query()
@@ -1459,7 +1460,7 @@ public function storeMultiple(Request $request)
             ->where('estado', 0)
             ->select(['id', 'fecha', 'motivo'])
             ->orderBy('fecha', 'asc')
-			->limit(1)
+            ->limit(1)
             ->get();
 
         return Inertia::render('horarios/edit', [

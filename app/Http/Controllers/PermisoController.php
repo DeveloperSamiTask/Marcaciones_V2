@@ -147,12 +147,18 @@ class PermisoController extends Controller
                 });
         })
             ->whereIn('tipo_id', [2, 20])
-            ->with(['empleado.area', 'tipo', 'empleado.horarios' => function ($query) use ($request) {
-                $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-            }])
+            ->with(['empleado.area', 'tipo',
+                'empleado.horarios' => function ($query) use ($request) {
+                    $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
+                },
+                'empleado.marcaciones' => function ($query) use ($request) { // <--- FILTRA TAMBIÉN AQUÍ
+                    $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
+                }
+            ])
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
             ->orderBy('fecha')
             ->get(); // ← get() primero, sin groupBy
+
 
         // each ANTES del groupBy
         $permisos->each(function ($permiso) {
