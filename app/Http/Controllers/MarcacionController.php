@@ -188,8 +188,30 @@ class MarcacionController extends Controller
                     $horas = max(0, $minutosProgramados - $descuentoRefri);
 
                     // ---------------- Extra y anticipado
-                    if ($m_salida) {
-                        $extra = max(0, $h_salida->diffInMinutes($m_salida, false));
+                    if ($m_salida && $m_ingreso) {
+
+                        $extra_salida = max(0, $h_salida->diffInMinutes($m_salida, false));
+
+                        /*
+                            Si ingreso antes de su HI entonces cuenta
+                            HIP - HIR : positivo toma , si es negativo 0
+                        */
+                        $extra_ingreso =  max(0,$m_ingreso->diffInMinutes($h_ingreso,false));
+
+                        $extra = $extra_salida + $extra_ingreso;
+
+                        // Log::info('Calculo de HE: ' . json_encode([
+                        //     'empleado' => $empleado->apellidos,
+                        //     'fecha' =>$fechaStr,
+                        //     'HIP: ' => $h_ingreso,
+                        //     'HI: ' => $m_ingreso,
+                        //     'extra ingreso: ' => $extra_ingreso,
+                        //     'HSP: ' => $m_salida,
+                        //     'HS: ' => $h_salida,
+                        //     'extra salida: ' => $extra_salida,
+                        //     'TOTAL: ' => $extra,
+                        // ],JSON_PRETTY_PRINT));
+
                         $horasAnticipado = max(0, $m_salida->diffInMinutes($h_salida, false));
                     } else {
                         $extra = 0;
@@ -603,7 +625,8 @@ class MarcacionController extends Controller
 
             $total_he = $this->calcularHorasExtraDisponibles($empleado->id);
 
-            \Log::info('DEBUG COMPENSAR DIA: '.json_encode([
+			/*
+				\Log::info('DEBUG COMPENSAR DIA: '.json_encode([
                 'marcacion' => $marcaciones,
                 'horario' => $horario,
                 'fecha parseada' => $fecha,
@@ -611,19 +634,35 @@ class MarcacionController extends Controller
                 'empleado' => $empleado,
                 '$total_he' => $total_he,
             ], JSON_PRETTY_PRINT));
+			*/
+
 
             // 2. comparar si hay suciente HE
             $inicio = \Carbon\Carbon::parse($horario->ingreso);
             $fin = \Carbon\Carbon::parse($horario->salida);
             $minutos_programados = $inicio->diffInMinutes($fin);
 
-            // log::info('tiempos ingreso y salida : '.json_encode([
-            //     'inicio' => $inicio,
-            //     'fin' => $fin,
-            //     'programado' => $minutos_programados,
-            // ], JSON_PRETTY_PRINT));
+
+			if ($minutos_programados > 360) {
+				$minutos_programados -= 60;
+			}
+
+
+			/*
+			log::info('tiempos ingreso y salida : '.json_encode([
+                 'inicio' => $inicio,
+                 'fin' => $fin,
+                 'programado' => $minutos_programados,
+             ], JSON_PRETTY_PRINT));
+			*/
+
 
             if ($total_he < $minutos_programados) {
+				log::info('Tiempos insuficientes : '.json_encode([
+					 'Total HE' => $total_he,
+					 'Programado' => $minutos_programados,
+				 ], JSON_PRETTY_PRINT));
+
                 return back()->with('error', "Saldo insuficiente. Tienes {$total_he} min y necesitas {$minutos_programados} min.");
             } else {
 
@@ -653,9 +692,12 @@ class MarcacionController extends Controller
                     ->orderBy('m.fecha', 'asc')
                     ->get();
 
-                // log::info('horas extras : '.json_encode([
-                //     'Horas extras' => $extras,
-                // ], JSON_PRETTY_PRINT));
+				/*
+					log::info('horas extras : '.json_encode([
+					'Horas extras' => $extras,
+				], JSON_PRETTY_PRINT));
+				*/
+
 
                 foreach ($extras as $e) {
 
@@ -690,7 +732,7 @@ class MarcacionController extends Controller
                     \DB::table('horarios')->where('id', $e->id)->update([
                         'extra' => $extra_formateado,
                         'extra_consumido' => $consumido_formateado,
-                        'destino_compensacion' => 'Compensa total del dia : '.$fecha,
+                        'destino_compensacin' => 'Compensa total del dia : '.$fecha,
                     ]);
 
                     // actualizar las h.e
@@ -703,9 +745,12 @@ class MarcacionController extends Controller
                         'falta_por_pagar (programado)' => $deuda_pendiente,
                     ];
 
-                    log::info('Resumen del cobro: '.json_encode([
+
+					log::info('Resumen del cobro: '.json_encode([
                         'detalle descuento' => $detalles_descuento,
                     ], JSON_PRETTY_PRINT));
+
+
 
                     $reporte = ReporteHeConsumida::create([
                         'empleado_id' => $empleado->id,
@@ -718,16 +763,19 @@ class MarcacionController extends Controller
                         'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
                         'extra_consumido' => $consumido_formateado,
                         'extra_restante' => $extra_formateado,
-                        'destino_compensacion' => 'Compensa total del dia: '. $fecha,
+                        'destino_compensacin' => 'Compensa total del dia: '. $fecha,
                         'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
-                        'fecha_edicion' => now()->format('Y-m-d H:i:s'),
+                        'fecha_edicin' => now()->format('Y-m-d H:i:s'),
                     ]);
 
-                    log::info(
+					/*
+						log::info(
                         'reporte HE: ' . json_encode([
                             'reporte HE' => $reporte,
                         ], JSON_PRETTY_PRINT)
                     );
+					*/
+
 
 
                 }
@@ -748,23 +796,23 @@ class MarcacionController extends Controller
 
                 // crear reportes
 
-                \Log::info('COMPENSACIÓN COMPLETADA', [
+                \Log::info('COMPENSACIN COMPLETADA', [
                     'empleado' => $empleado->nombres,
                     'dia_compensado' => $fecha,
                     'minutos_gastados' => $bolsa_acumulada,
                     'detalles' => $detalles_descuento,
                 ]);
 
-                return back()->with('success', 'Procesando lógica de compensación...');
+                return back()->with('success', 'Procesando lógica de compensacin...');
             }
 
         } catch (\Exception $e) {
-            \Log::emergency('EXCEPCI脫N CACHADA: '.$e->getMessage());
+            \Log::emergency('EXCEPCIN CACHADA: '.$e->getMessage());
 
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
 
-        return back()->with('success', 'Procesando lógica de compensación...');
+        return back()->with('success', 'Procesando lógica de compensacin...');
     }
 
     private function updateModoCompensar($data, Marcacion $marcacione)
