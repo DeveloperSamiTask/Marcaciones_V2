@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\AsistenciaDetalle;
+use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Feriado;
 use App\Models\Horario;
 use App\Models\Marcacion;
 use App\Models\Permiso;
-use App\Models\Empleado;
 use App\Models\SolicitudHorasExtrasPT;
 use App\Models\Suspension;
 use Carbon\Carbon;
@@ -67,15 +67,15 @@ class PermisoController extends Controller
     {
 
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        // 🟢 FILTROS
+        // ?? FILTROS
         $filters = $request->validate([
             'empresa' => 'nullable|integer|exists:empresas,id',
             'fechaInicio' => 'nullable|date',
             'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
         ]);
 
-        // 🟢 QUERY CON FILTROS (SIN aprobador)
-        $query = SolicitudHorasExtrasPT::with(['empleado.empresa']) // 🟢 SOLO esto
+        // ?? QUERY CON FILTROS (SIN aprobador)
+        $query = SolicitudHorasExtrasPT::with(['empleado.empresa']) // ?? SOLO esto
             ->where('estado', 0); // Solo pendientes
 
         // Aplicar filtros
@@ -95,7 +95,7 @@ class PermisoController extends Controller
 
         $solicitudes = $query->orderBy('fecha_limite_aprobacion', 'asc')->get();
 
-        // 🟢 USUARIO LOGUEADO
+        // ?? USUARIO LOGUEADO
         $usuario = auth()->user();
 
         return Inertia::render('permisos/index-gerencia', [
@@ -140,44 +140,45 @@ class PermisoController extends Controller
         ]);
 
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+
         $permisos = Permiso::whereHas('empleado', function ($query) use ($request) {
-            $query->where('empresa_id', $request->empresa)->whereNull('fecha_cese')
+            $query->where('empresa_id', $request->empresa)
+                ->whereNull('fecha_cese')
                 ->when($request->user()->rol_id == 4, function ($q) use ($request) {
                     $q->where('jefe_id', $request->user()->empleado_id);
                 });
         })
             ->whereIn('tipo_id', [2, 20])
-            ->with(['empleado.area', 'tipo',
-                'empleado.horarios' => function ($query) use ($request) {
-                    $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-                },
-                'empleado.marcaciones' => function ($query) use ($request) { // <--- FILTRA TAMBIÉN AQUÍ
-                    $query->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]);
-                }
-            ])
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->with(['empleado.area', 'tipo']) // Solo lo básico aquí
             ->orderBy('fecha')
-            ->get(); // ← get() primero, sin groupBy
+            ->get();
 
-
-        // each ANTES del groupBy
+        // Reemplazamos el 'each' costoso por lógica de colección en memoria
         $permisos->each(function ($permiso) {
-            $permiso->setRelation('horario',
-                Horario::where('empleado_id', $permiso->empleado_id)
-                    ->whereDate('fecha', $permiso->fecha)
-                    ->first()
-            );
-            $permiso->setRelation('marcacion',
-                Marcacion::where('empleado_id', $permiso->empleado_id)
-                    ->whereDate('fecha', $permiso->fecha)
-                    ->first()
-            );
+            // Traemos solo EL registro que coincide con la fecha del permiso
+            $horario = Horario::where('empleado_id', $permiso->empleado_id)
+                ->whereDate('fecha', $permiso->fecha)
+                ->first(['id', 'ingreso', 'salida', 'fecha']); // Solo columnas necesarias
+
+            $marcacion = Marcacion::where('empleado_id', $permiso->empleado_id)
+                ->whereDate('fecha', $permiso->fecha)
+                ->first(['id', 'ingreso', 'salida', 'fecha']);
+
+            // Inyectamos la relación directamente
+            $permiso->setRelation('horario_dia', $horario);
+            $permiso->setRelation('marcacion_dia', $marcacion);
+
+            // Limpiamos la relación pesada de "empleado" para que no lleve
+            // colecciones vacías de horarios/marcaciones al Front
+            $permiso->empleado->unsetRelation('horarios');
+            $permiso->empleado->unsetRelation('marcaciones');
         });
 
         $agrupados = $permisos->groupBy(function ($item) {
             $estados = [0 => 'pendientes', 1 => 'aprobados', 2 => 'rechazados'];
 
-            return $estados[$item->estado] ?? '';
+            return $estados[$item->estado] ?? 'otros';
         });
 
         session(['permisos_extras_url' => $request->fullUrl()]);
@@ -225,7 +226,7 @@ class PermisoController extends Controller
 
                     $horario->update(['extra' => $validated['he_aprobada']]);
 
-                    $empleado = Empleado::find($permiso->empleado_id , 'id');
+                    $empleado = Empleado::find($permiso->empleado_id, 'id');
 
                     Log::info("HE aprobada | apellidos : {$empleado->apellidos}| empleado_id: {$permiso->empleado_id} | fecha: {$permiso->fecha} | extra: {$validated['he_aprobada']}");
 
@@ -283,7 +284,7 @@ class PermisoController extends Controller
             ->whereDate('fecha', $permiso->fecha)
             ->first();
 
-        // 🆕 DEFINIR ESTADOS QUE CUENTAN SEGÚN FASE
+        // ?? DEFINIR ESTADOS QUE CUENTAN SEGÚN FASE
         if ($permiso->estado == 0) {
             // FASE 1 - PENDIENTE: solo cuenta 'L'
             $estadosQueCuentan = ['L'];
@@ -292,11 +293,11 @@ class PermisoController extends Controller
             $estadosQueCuentan = ['L', 'PE', 'V', 'F', 'S', 'D', 'AHE', 'C', 'CA', 'CHE', 'FL', 'SP', 'M', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'LP', 'LM', 'LF', 'TD'];
         }
 
-        // ✅ CALCULAR CORRECTAMENTE
+        // ? CALCULAR CORRECTAMENTE
         foreach ($horarios as $horario) {
             $minutosDia = 0;
 
-            // 🆕 SOLO CALCULAR SI TIENE HORARIOS VÁLIDOS
+            // ?? SOLO CALCULAR SI TIENE HORARIOS VÁLIDOS
             if ($horario->ingreso && $horario->salida && $horario->ingreso != '00:00' && $horario->salida != '00:00') {
                 $minutosDia = $horario->ingreso->diffInMinutes($horario->salida);
 
@@ -305,13 +306,13 @@ class PermisoController extends Controller
                     $minutosDia -= 60;
                 }
 
-                // 🆕 SUMAR AL TOTAL SOLO SI EL ESTADO CUENTA
+                // ?? SUMAR AL TOTAL SOLO SI EL ESTADO CUENTA
                 if (in_array($horario->estado, $estadosQueCuentan)) {
                     $totalHorasTrabajadas += $minutosDia;
                 }
             }
 
-            // 🆕 GUARDAR EN horas_por_dia PARA TODOS LOS ESTADOS
+            // ?? GUARDAR EN horas_por_dia PARA TODOS LOS ESTADOS
             $horasPorDia[$horario->fecha->format('Y-m-d')] = $minutosDia;
         }
 
