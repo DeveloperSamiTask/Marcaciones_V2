@@ -24,6 +24,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Horarios',
@@ -1435,9 +1437,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
                                 </div>
                             </div>
                         )}
-
-
-
 
                         {/* Fila: Selector de Semana + Gestión de Horarios Base */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

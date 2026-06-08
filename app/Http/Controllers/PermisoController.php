@@ -202,7 +202,9 @@ class PermisoController extends Controller
         $validated = [];
         if ($permiso->tipo_id == 20) {
             $validated = $request->validate([
-                'he_aprobada' => 'required|date_format:H:i',
+                // 'he_aprobada' => 'required|date_format:H:i',
+                'he_anticipada' => 'required|numeric|min:0',
+                'he_salida' => 'required|numeric|min:0',
             ]);
         }
 
@@ -216,6 +218,12 @@ class PermisoController extends Controller
 
                 /* Nueva seleccion de HE aprobadas */
                 if ($permiso->tipo_id == 20) {
+
+                    $totalMinutos = $validated['he_anticipada'] + $validated['he_salida'];
+                    $totalFormateado = sprintf('%02d:%02d', floor($totalMinutos / 60), $totalMinutos % 60);
+
+
+
                     AsistenciaDetalle::where('empleado_id', $permiso->empleado_id)
                         ->whereDate('fecha', $permiso->fecha)
                         ->update(['estado_horas_extra' => 1]);
@@ -224,11 +232,16 @@ class PermisoController extends Controller
                         ->whereDate('fecha', $permiso->fecha)
                         ->update(['estado_horas_extra' => 1]);
 
-                    $horario->update(['extra' => $validated['he_aprobada']]);
+                    $horario->update(['extra' => $totalFormateado]);
 
                     $empleado = Empleado::find($permiso->empleado_id, 'id');
 
-                    Log::info("HE aprobada | apellidos : {$empleado->apellidos}| empleado_id: {$permiso->empleado_id} | fecha: {$permiso->fecha} | extra: {$validated['he_aprobada']}");
+                    Log:info('HE aprobadas: ' . json_encode([
+                        'Emp: ' => $empleado->apellidos,
+                        'Total: ' => $totalFormateado,
+                        'Ant: ' => $validated['he_anticipada'],
+                        'Sal: ' => $validated['he_salida'],
+                    ], JSON_PRETTY_PRINT));
 
                     return;
                 }

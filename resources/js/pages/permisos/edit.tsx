@@ -52,29 +52,34 @@ export default function EditPermiso({
     // console.log("DEBUG MODAL CORRIENDO:", { salidaProgramada, salidaReal });
     // console.log("Permiso: " , permiso);
 
-    const { horario_dia, marcacion_dia } = permiso;
+    // const { horario_dia, marcacion_dia } = permiso;
+    const horario_dia = permiso?.horario_dia || { ingreso: '00:00', salida: '00:00' };
+    const marcacion_dia = permiso?.marcacion_dia || { ingreso: '00:00', salida: '00:00' };
     const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-
     // 1.Extra anticipado , extra salida
     const realAnticipo = Math.max(0, toMin(horario_dia.ingreso) - toMin(marcacion_dia.ingreso));
     const realSalida = Math.max(0, toMin(marcacion_dia.salida) - toMin(horario_dia.salida));
 
-    const maxMinutos = salidaProgramada && salidaReal
-        ? calcularDiferencia(salidaProgramada, salidaReal)
-        : 0;
+    const esModoHE = permiso?.tipo_id === 20;
 
     // 2.
     const { patch, processing, reset, clearErrors, setData, data } = useForm({
-        he_aprobada: '',
-        he_anticipada: realAnticipo,
-        he_salida: realSalida,
+        he_anticipada: realAnticipo, // Esto viene de tu cálculo de arriba
+        he_salida: realSalida,       // Esto viene de tu cálculo de arriba
     });
 
-    const esValido = data.he_aprobada !== '' && data.he_aprobada <= minutosAHHMM(maxMinutos) && data.he_aprobada > '00:00';
+    const esValido = esModoHE
+        ? (
+            Number(data.he_anticipada) <= realAnticipo &&
+            Number(data.he_salida) <= realSalida &&
+            (Number(data.he_anticipada) + Number(data.he_salida) > 0)
+        )
+        : true;
 
     const handleSubmit: React.FormEventHandler = (e) => {
         e.preventDefault();
         patch(route('permisos.update', permisoId), {
+
             preserveScroll: true,
             onSuccess: () => toast.success('Permiso autorizado exitosamente!', {
                 richColors: true, position: 'top-center', duration: 4000,
@@ -95,12 +100,16 @@ export default function EditPermiso({
                 </Button>
             </DialogTrigger>
             <DialogContent>
-                <DialogTitle>Aprobar Horas Extra</DialogTitle>
+                <DialogTitle>
+                    {esModoHE ? 'Aprobar Horas Extra' : 'Aprobar Permiso'}
+                </DialogTitle>
                 <DialogDescription>
-                    Revisa las horas trabajadas y define cuántas se aprueban.
+                    {esModoHE
+                        ? 'Revisa las horas trabajadas y define cuántas se aprueban.'
+                        : '¿Estás seguro de aprobar este permiso?'}
                 </DialogDescription>
 
-                {salidaProgramada && salidaReal ? (
+                {esModoHE ? (
                     // Modal completo con HE — solo tipo 20
                     <div className="space-y-6 py-4">
                         {/* BLOQUE HE ANTICIPADO */}
@@ -161,7 +170,7 @@ export default function EditPermiso({
                         <Button
                             className="w-full h-12 text-base"
                             type="submit"
-                            disabled={processing || (Number(data.he_anticipada) + Number(data.he_salida) > maxMinutos)}
+                            disabled={processing || !esValido}
                         >
                             {processing ? "Procesando..." : "Aprobar"}
                         </Button>
