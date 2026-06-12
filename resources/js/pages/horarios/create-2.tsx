@@ -24,8 +24,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-
-
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Horarios',
@@ -88,12 +86,12 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     params.set("supervisor_id", String(sup));
                     if (emp) params.set("empresa_id", String(emp));
                     url = `/horarios/empleados?${params.toString()}`;
-                    // console.log("🔄 Fetching (SUPERVISOR endpoint):", url);
+                    // console.log("?? Fetching (SUPERVISOR endpoint):", url);
                 } else if (emp) {
                     url = `/horarios/empleados-por-empresa?empresa_id=${emp}`;
-                    // console.log("🔄 Fetching (EMPRESA endpoint):", url);
+                    // console.log("?? Fetching (EMPRESA endpoint):", url);
                 } else {
-                    // console.log("🔄 No filtro -> limpiando lista");
+                    // console.log("?? No filtro -> limpiando lista");
                     setEmpleadosList([]);
                     return;
                 }
@@ -108,7 +106,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
                 // Debug: contar y mostrar primer elemento
                 /*
-   console.log("📦 Respuesta fetch:", {
+   console.log("?? Respuesta fetch:", {
                     url,
                     length: Array.isArray(data) ? data.length : null,
                     // Verificar si el supervisor está en los resultados
@@ -178,7 +176,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             ...prev,
             [currentWeekKey]: {
                 ...prev[currentWeekKey],
-                [selectedModality]: schedule  // ← Guardar en la semana actual
+                [selectedModality]: schedule  // ? Guardar en la semana actual
             }
         }));
     };
@@ -193,7 +191,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
     const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
     useEffect(() => {
-        //  console.log("🔄 Reseteando validaciones - semana o empresa cambió");
+        //  console.log("?? Reseteando validaciones - semana o empresa cambió");
         setExpandedEmployees(new Set());
 
         setScheduleData({});
@@ -221,7 +219,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     const dateStr = formatDate(date);
                     const dateObj = new Date(date);
 
-                    // 🔥 VALIDACIÓN 1: AI (PRIMERO, antes que todo)
+                    // ?? VALIDACIÓN 1: AI (PRIMERO, antes que todo)
                     if (employee.fecha_ingreso) {
                         const fechaIngreso = new Date(employee.fecha_ingreso);
                         fechaIngreso.setHours(0, 0, 0, 0); // Normalizar
@@ -237,7 +235,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         }
                     }
 
-                    // 🔥 VALIDACIÓN 2: Horarios existentes (NO tocar)
+                    // ?? VALIDACIÓN 2: Horarios existentes (NO tocar)
                     if (horariosExistentes.has(`${employee.id}-${dateStr}`)) {
                         if (prev[employee.id]?.[dateStr]) {
                             newData[employee.id][dateStr] = prev[employee.id][dateStr];
@@ -245,7 +243,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         return;
                     }
 
-                    // 🔥 VALIDACIÓN 3: Lógica normal
+                    // ?? VALIDACIÓN 3: Lógica normal
                     const existingDaySchedule = prev[employee.id]?.[dateStr] || {
                         entryTime: '00:00',
                         exitTime: '00:00',
@@ -551,12 +549,12 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 const data = await response.json();
 
                 if (data.success && data.empleados) {
-                    // 🔥 CALCULAR fechas válidas de ESTA semana
+                    // ?? CALCULAR fechas válidas de ESTA semana
                     const weekDateKeys = new Set(
                         weekDates.map(d => d.toISOString().slice(0, 10))
                     );
 
-                    console.log('📅 Semana actual (válida):', [...weekDateKeys]);
+                    console.log('?? Semana actual (válida):', [...weekDateKeys]);
 
                     const newScheduleData = {};
                     const existentes = new Set<string>();
@@ -565,9 +563,9 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         newScheduleData[emp.empleado_id] = {};
 
                         emp.horarios.forEach((dia: any) => {
-                            // 🔥 SKIP si NO está en la semana actual
+                            // ?? SKIP si NO está en la semana actual
                             if (!weekDateKeys.has(dia.fecha)) {
-                                console.log('⏭️ SKIP (fuera de semana):', dia.fecha);
+                                console.log('?? SKIP (fuera de semana):', dia.fecha);
                                 return;
                             }
 
@@ -587,17 +585,17 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         });
                     });
 
-                    // 🔥 REEMPLAZAR COMPLETO (no mergear)
+                    // ?? REEMPLAZAR COMPLETO (no mergear)
                     setScheduleData(newScheduleData);
                     setHorariosExistentes(existentes);
 
-                    console.log('✅ Horarios cargados (solo semana actual):', {
+                    console.log('? Horarios cargados (solo semana actual):', {
                         empleados: Object.keys(newScheduleData).length,
                         dias_total: existentes.size
                     });
                 }
             } catch (error) {
-                console.error('❌ Error cargando horarios:', error);
+                console.error('? Error cargando horarios:', error);
             }
         };
 
@@ -627,19 +625,19 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
             // Si el día ya existe en la BD (existe: true), bloquear
             if (dayData?.existe) {
-                // console.log(`⛔ Día existente (existe: true): ${employeeId}-${date}`);
+                // console.log(`? Día existente (existe: true): ${employeeId}-${date}`);
                 return prev;
             }
 
             // También verificar en el Set por si acaso
             if (horariosExistentes.has(`${employeeId}-${date}`)) {
-                // console.log(`⛔ Día en horariosExistentes: ${employeeId}-${date}`);
+                // console.log(`? Día en horariosExistentes: ${employeeId}-${date}`);
                 return prev;
             }
 
 
 
-            // 🔥 CASO 1: Cambiar a NO LABORAL
+            // ?? CASO 1: Cambiar a NO LABORAL
             if (field === 'status' && value !== 'L') {
                 const shouldResetTimes = (value === 'D' || value === 'SP' || value === 'V' || value === 'M' || value === 'LM' || value === 'LP' || value === 'LF' || value === 'AI');
 
@@ -649,7 +647,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     status: value as DaySchedule['status'],
                 };
 
-                // 🔥 SI ES C O CA, CARGAR HORARIOS DE FERIADOS (PART TIME)
+                // ?? SI ES C O CA, CARGAR HORARIOS DE FERIADOS (PART TIME)
                 if (value === 'C' || value === 'CA') {
                     const feriadosDelEmpleado = feriadosData[employeeId];
 
@@ -666,19 +664,19 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         }
                     }
 
-                    // 🔥🔥 NUEVO: CARGAR HORARIOS DE MARCACIONES PARA PART TIME
+                    // ???? NUEVO: CARGAR HORARIOS DE MARCACIONES PARA PART TIME
                     (async () => {
                         try {
                             const empleado = empleadosList.find(e => e.id === employeeId);
 
                             if (empleado && empleado.jornada_id === 2 || empleado.jornada_id === 1) { // Solo Part Time
-                                console.log('🔍 Cargando horarios de feriado para PT:', empleado.nombres);
+                                console.log('?? Cargando horarios de feriado para PT:', empleado.nombres);
 
                                 const response = await fetch(`/horarios/getFeriadosEmpleado?empleado_id=${employeeId}`);
                                 if (!response.ok) throw new Error('Error al cargar feriados');
 
                                 const data = await response.json();
-                                console.log('📦 Datos de feriados recibidos:', data);
+                                console.log('?? Datos de feriados recibidos:', data);
 
                                 if (data.es_part_time && data.horarios_feriados) {
                                     const fechasFeriados = Object.keys(data.horarios_feriados).sort();
@@ -687,10 +685,10 @@ export default function App({ empleados, empresas, url, supervisores }) {
                                         const primeraFecha = fechasFeriados[0];
                                         const horario = data.horarios_feriados[primeraFecha];
 
-                                        console.log(`✅ Aplicando horario del feriado ${primeraFecha}:`, horario);
+                                        console.log(`? Aplicando horario del feriado ${primeraFecha}:`, horario);
 
                                         if (horario.entrada && horario.salida) {
-                                            // 🔥 ACTUALIZAR ESTADO CON LAS HORAS DEL FERIADO
+                                            // ?? ACTUALIZAR ESTADO CON LAS HORAS DEL FERIADO
                                             setScheduleData(prevSchedule => ({
                                                 ...prevSchedule,
                                                 [employeeId]: {
@@ -711,7 +709,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                                 }
                             }
                         } catch (error) {
-                            console.error('❌ Error cargando horarios de feriado:', error);
+                            console.error('? Error cargando horarios de feriado:', error);
                         }
                     })();
                 }
@@ -725,7 +723,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 };
             }
 
-            // 🔥 CASO 2: Cambiar a LABORAL desde otro estado
+            // ?? CASO 2: Cambiar a LABORAL desde otro estado
             if (field === 'status' && value === 'L' && dayData.status !== 'L') {
                 return {
                     ...prev,
@@ -740,7 +738,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 };
             }
 
-            // 🔥 CASO 3: Comportamiento normal
+            // ?? CASO 3: Comportamiento normal
             return {
                 ...prev,
                 [employeeId]: {
@@ -797,13 +795,13 @@ export default function App({ empleados, empresas, url, supervisores }) {
         inicioSemanaActual.setHours(0, 0, 0, 0);
         /*
           if (currentWeekStart < inicioSemanaActual) {
-                    toast.error('❌ No se pueden crear ni editar horarios de semanas anteriores');
+                    toast.error('? No se pueden crear ni editar horarios de semanas anteriores');
                     return;
                 }
         */
         const entries = [];
         let hasValidationErrors = false;
-        //  console.log('🔍 SCHEDULE DATA COMPLETO:', scheduleData);
+        //  console.log('?? SCHEDULE DATA COMPLETO:', scheduleData);
 
         // -------------- Función auxiliar: Verificar si ingresó esta semana
         const debeValidarEmpleado = (employee: Empleado): boolean => {
@@ -818,19 +816,19 @@ export default function App({ empleados, empresas, url, supervisores }) {
             const finSemana = new Date(weekDates[6]);
             finSemana.setHours(23, 59, 59, 999);
 
-            // 🔥 CASO 1: Ingresa DESPUÉS de la semana → NO VALIDAR
+            // ?? CASO 1: Ingresa DESPUÉS de la semana ? NO VALIDAR
             if (fechaIngreso > finSemana) {
-                console.log(`🔴 ${employee.apellidos} - Ingresa DESPUÉS de la semana (${fechaIngreso.toISOString().split('T')[0]}) → NO validar`);
+                console.log(`?? ${employee.apellidos} - Ingresa DESPUÉS de la semana (${fechaIngreso.toISOString().split('T')[0]}) ? NO validar`);
                 return false;
             }
 
-            // 🔥 CASO 2: Ingresa DURANTE la semana → NO VALIDAR
+            // ?? CASO 2: Ingresa DURANTE la semana ? NO VALIDAR
             if (fechaIngreso >= inicioSemana && fechaIngreso <= finSemana) {
-                console.log(`🟡 ${employee.apellidos} - Ingresa DURANTE la semana (${fechaIngreso.toISOString().split('T')[0]}) → NO validar`);
+                console.log(`?? ${employee.apellidos} - Ingresa DURANTE la semana (${fechaIngreso.toISOString().split('T')[0]}) ? NO validar`);
                 return false;
             }
 
-            // 🔥 CASO 3: Calcular semana de ingreso
+            // ?? CASO 3: Calcular semana de ingreso
             const diaIngreso = fechaIngreso.getDay();
             const diffToMonday = (diaIngreso + 6) % 7;
 
@@ -838,13 +836,13 @@ export default function App({ empleados, empresas, url, supervisores }) {
             inicioSemanaIngreso.setDate(fechaIngreso.getDate() - diffToMonday);
             inicioSemanaIngreso.setHours(0, 0, 0, 0);
 
-            // 🔥 CASO 3a: Estamos creando horarios para la semana de ingreso → NO VALIDAR
+            // ?? CASO 3a: Estamos creando horarios para la semana de ingreso ? NO VALIDAR
             if (inicioSemana.getTime() === inicioSemanaIngreso.getTime()) {
-                // console.log(`🟢 ${employee.apellidos} - Semana de ingreso → NO validar`);
+                // console.log(`?? ${employee.apellidos} - Semana de ingreso ? NO validar`);
                 return false;
             }
-            // ✅ CASO 4: Ingresó en una semana ANTERIOR → SÍ VALIDAR
-            // console.log(`✅ ${employee.apellidos} - Ingresó hace ${Math.floor((inicioSemana.getTime() - fechaIngreso.getTime()) / (1000 * 60 * 60 * 24))} días → SÍ validar`);
+            // ? CASO 4: Ingresó en una semana ANTERIOR ? SÍ VALIDAR
+            // console.log(`? ${employee.apellidos} - Ingresó hace ${Math.floor((inicioSemana.getTime() - fechaIngreso.getTime()) / (1000 * 60 * 60 * 24))} días ? SÍ validar`);
             return true;
         };
         // ==================== VALIDACIONES DE HORAS SEMANALES ====================
@@ -867,59 +865,96 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     return; // se salta TODAS las validaciones
                 }
 
-                // 🔥 NUEVO: Verificar si TODOS los días son VACACIONES o Descanso Medico
+                // ?? NUEVO: Verificar si TODOS los días son VACACIONES o Descanso Medico
                 const todosSonVacaciones = Object.values(employeeSchedule).some(day =>
                     day?.status === 'V' || day?.estado === 'D' || day?.status === 'M' || day?.status === 'LP' || day?.status === 'LM' || day?.status === 'LF' || day?.estado === 'AI'
                 );
 
-                // 🔥 EXCEPCIÓN: Si todos son V, no validar mínimo de horas
+                // ?? EXCEPCIÓN: Si todos son V, no validar mínimo de horas
                 if (todosSonVacaciones) {
                     // Solo validar máximo (por si acaso)
                     if (horasSemanales > MAX_HORAS) {
                         const excedente = horasSemanales - MAX_HORAS;
-                        toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
+                        toast.error(`?? ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
                         hasValidationErrors = true;
                         return;
                     }
                     // Si pasa, CONTINUAR sin validar mínimo
                     return;
                 }
-                // 🔥 VALIDACIÓN NORMAL (para NO vacaciones completas)
+                // ?? VALIDACIÓN NORMAL (para NO vacaciones completas)
                 if (horasSemanales > MAX_HORAS) {
                     const excedente = horasSemanales - MAX_HORAS;
-                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
+                    toast.error(`?? ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | EXCEDENTE: +${formatearHoras(excedente)}`);
                     hasValidationErrors = true;
                     return;
                 }
                 /*
                  if (horasSemanales < MIN_HORAS) {
                     const deficit = MIN_HORAS - horasSemanales;
-                    toast.error(`🚨 ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | DIFERENCIA: -${formatearHoras(deficit)}`);
+                    toast.error(`?? ${employee.apellidos} ${employee.nombres}: TOTAL: ${formatearHoras(horasSemanales)} | DIFERENCIA: -${formatearHoras(deficit)}`);
                     hasValidationErrors = true;
                     return;
                 }
                 */
             }
+
+
         });
+
+        // -------------- Bloquear cuando llega a las 93h
+        for (const employee of filteredEmployees) {
+            if (employee.jornada_id !== 2) continue; // Solo PT
+
+            const empSchedule = scheduleData[employee.id] || {};
+
+            // Calcular horas de ESTA semana que se van a agregar
+            const horasEstaSemana = calcularHorasSemanalesFrontend(empSchedule, employee);
+
+            // Pedir al backend las horas YA acumuladas este mes
+            const mes = currentWeekStart.getMonth() + 1;
+            const anio = currentWeekStart.getFullYear();
+            const res = await fetch(
+                `/horarios/getHorasMensualesPT?empleado_id=${employee.id}&mes=${mes}&anio=${anio}`
+            );
+            const data = await res.json();
+
+            const MAX_MINUTOS_MES = 93 * 60; // 5580 minutos
+            const acumuladoMinutos = Math.round(data.total_mes * 60);
+            const totalConEstaSemana = acumuladoMinutos + horasEstaSemana;
+
+            if (totalConEstaSemana > MAX_MINUTOS_MES) {
+                const excedente = totalConEstaSemana - MAX_MINUTOS_MES;
+                toast.error(
+                    `🚨 ${employee.apellidos} ${employee.nombres}: ` +
+                    `Superaría las 93h mensuales. ` +
+                    `Acumulado: ${formatearHoras(acumuladoMinutos)} | ` +
+                    `Esta semana suma: ${formatearHoras(horasEstaSemana)} | ` +
+                    `Excedente: +${formatearHoras(excedente)}`,
+                    { duration: 8000 }
+                );
+                hasValidationErrors = true;
+            }
+        }
 
         if (hasValidationErrors) return;
         // ==================== CARGAR DATOS DE FERIADOS Y TD ====================
-        // 🔥 1. Detectar empleados con C/CA
+        // ?? 1. Detectar empleados con C/CA
         const empleadosConCompensacion = filteredEmployees.filter(emp => {
             const schedule = scheduleData[emp.id] || {};
             return Object.values(schedule).some(day => day.status === 'C' || day.status === 'CA');
         });
 
-        // 🔥 2. Detectar empleados con TD
+        // ?? 2. Detectar empleados con TD
         const empleadosConTD = filteredEmployees.filter(emp => {
             const schedule = scheduleData[emp.id] || {};
             return Object.values(schedule).some(day => day.status === 'TD');
         });
 
-        // console.log('👥 Empleados con C/CA:', empleadosConCompensacion.length);
-        //console.log('👥 Empleados con TD:', empleadosConTD.length);
+        // console.log('?? Empleados con C/CA:', empleadosConCompensacion.length);
+        //console.log('?? Empleados con TD:', empleadosConTD.length);
 
-        // 🔥 3. Cargar feriados en paralelo
+        // ?? 3. Cargar feriados en paralelo
         const feriadosMap = {};
         if (empleadosConCompensacion.length > 0) {
             await Promise.all(
@@ -935,26 +970,26 @@ export default function App({ empleados, empresas, url, supervisores }) {
             );
         }
 
-        // 🔥 4. Cargar permisos TD en paralelo - CORREGIDO
+        // ?? 4. Cargar permisos TD en paralelo - CORREGIDO
         const permisosTDMap = {};
         if (empleadosConTD.length > 0) {
             await Promise.all(
                 empleadosConTD.map(async (emp) => {
                     try {
                         const permisosTD = await getTDPermisosEmpleado(emp.id);
-                        // ✅ Asegurar que siempre sea un array
+                        // ? Asegurar que siempre sea un array
                         permisosTDMap[emp.id] = Array.isArray(permisosTD) ? permisosTD : [];
-                        // console.log(`📋 Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
+                        // console.log(`?? Permisos TD cargados para ${emp.nombres}:`, permisosTDMap[emp.id]);
                     } catch (error) {
                         //  console.error(`Error cargando permisos TD para empleado ${emp.id}:`, error);
-                        permisosTDMap[emp.id] = []; // ✅ Array vacío en caso de error
+                        permisosTDMap[emp.id] = []; // ? Array vacío en caso de error
                     }
                 })
             );
         }
 
-        //    console.log('📦 Feriados cargados:', feriadosMap);
-        //  console.log('📦 Permisos TD cargados:', permisosTDMap);
+        //    console.log('?? Feriados cargados:', feriadosMap);
+        //  console.log('?? Permisos TD cargados:', permisosTDMap);
 
         // ==================== TRACKING DE FERIADOS Y TD USADOS ====================
         const feriadosUsadosPorEmpleado = {};
@@ -1003,7 +1038,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
             /* SI YA TIENE HORARIOS REGISTRADOS Y ES FT (Jornada ID 1) */
             if (employee.jornada_id === 1) {
 
-                // 🔥 VERIFICAR SI DEBE VALIDARSE (misma lógica que arriba)
+                // ?? VERIFICAR SI DEBE VALIDARSE (misma lógica que arriba)
                 const debeValidar = (() => {
                     if (!employee.fecha_ingreso) return true;
 
@@ -1016,19 +1051,19 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     const finSemana = new Date(weekDates[6]);
                     finSemana.setHours(23, 59, 59, 999);
 
-                    // ❌ Ingresa DESPUÉS de la semana → NO validar
+                    // ? Ingresa DESPUÉS de la semana ? NO validar
                     if (fechaIngreso > finSemana) {
-                        //   console.log(`🔴 ${employee.apellidos} - Ingresa DESPUÉS → NO validar descanso`);
+                        //   console.log(`?? ${employee.apellidos} - Ingresa DESPUÉS ? NO validar descanso`);
                         return false;
                     }
 
-                    // ❌ Ingresa DURANTE la semana → NO validar
+                    // ? Ingresa DURANTE la semana ? NO validar
                     if (fechaIngreso >= inicioSemana && fechaIngreso <= finSemana) {
-                        //  console.log(`🟡 ${employee.apellidos} - Ingresa DURANTE → NO validar descanso`);
+                        //  console.log(`?? ${employee.apellidos} - Ingresa DURANTE ? NO validar descanso`);
                         return false;
                     }
 
-                    // ❌ Calcular semana de ingreso
+                    // ? Calcular semana de ingreso
                     const diaIngreso = fechaIngreso.getDay();
                     const diffToMonday = (diaIngreso + 6) % 7;
 
@@ -1036,22 +1071,22 @@ export default function App({ empleados, empresas, url, supervisores }) {
                     inicioSemanaIngreso.setDate(fechaIngreso.getDate() - diffToMonday);
                     inicioSemanaIngreso.setHours(0, 0, 0, 0);
 
-                    // ❌ Semana de ingreso → NO validar
+                    // ? Semana de ingreso ? NO validar
                     if (inicioSemana.getTime() === inicioSemanaIngreso.getTime()) {
-                        //    console.log(`🟢 ${employee.apellidos} - Semana de ingreso → NO validar descanso`);
+                        //    console.log(`?? ${employee.apellidos} - Semana de ingreso ? NO validar descanso`);
                         return false;
                     }
 
-                    // ✅ Cualquier otra semana → SÍ validar
+                    // ? Cualquier otra semana ? SÍ validar
                     return true;
                 })();
 
-                // 🔥 SI NO DEBE VALIDARSE, SALTAR
+                // ?? SI NO DEBE VALIDARSE, SALTAR
                 if (!debeValidar) {
-                    // console.log(`⏭️ ${employee.apellidos} - Saltando validación de descanso (empleado nuevo/futuro)`);
+                    // console.log(`?? ${employee.apellidos} - Saltando validación de descanso (empleado nuevo/futuro)`);
                     // NO hacer nada, continuar al siguiente
                 } else {
-                    // 🔥 VALIDACIÓN NORMAL DE DESCANSO
+                    // ?? VALIDACIÓN NORMAL DE DESCANSO
 
                     // Verificar si ya tiene días registrados
                     const tieneDiasRegistrados = weekDates.some(date => {
@@ -1072,7 +1107,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             return; // O continue si estás en un forEach
                         }
                     } else {
-                        // console.log(`⏭️ Saltando validación de descanso para ${employee.apellidos}: ya tiene días registrados`);
+                        // console.log(`?? Saltando validación de descanso para ${employee.apellidos}: ya tiene días registrados`);
                     }
                 }
             } // Fin de jornada_id === 1
@@ -1123,7 +1158,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         const totalDisponibles = listaFeriados.length;
                         const yaUsados = feriadosUsadosPorEmpleado[employee.id][status].length;
                         toast.error(
-                            `❌ ${employee.apellidos} ${employee.nombres}: No puede marcar más días como "${status}". ` +
+                            `? ${employee.apellidos} ${employee.nombres}: No puede marcar más días como "${status}". ` +
                             `Solo tiene ${totalDisponibles} ${tipoTexto} y ya usó ${yaUsados}.`,
                             { duration: 8000 }
                         );
@@ -1149,7 +1184,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                         const totalPermisos = permisosTD.length;
                         const yaUsados = permisosTDUsados[employee.id].length;
                         toast.error(
-                            `❌ ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
+                            `? ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
                             `Solo tiene ${totalPermisos} permisos TD disponibles y ya usó ${yaUsados}.`,
                             { duration: 8000 }
                         );
@@ -1172,7 +1207,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
             }); // Fin de Object.keys(empSchedule).forEach
 
-            // 🔥 Verificar si hubo un error en el forEach interno para detener el externo
+            // ?? Verificar si hubo un error en el forEach interno para detener el externo
             if (tieneHorariosInvalidos) {
                 hasValidationErrors = true;
                 continue; // Saltar al siguiente empleado
@@ -1186,26 +1221,26 @@ export default function App({ empleados, empresas, url, supervisores }) {
             return;
         }
         // ==================== DEBUG Y ENVÍO ====================
-        //console.log('🧾 Enviando al backend:', entries);
-        //console.log('📊 Total registros:', entries.length);
+        //console.log('?? Enviando al backend:', entries);
+        //console.log('?? Total registros:', entries.length);
         const conFeriado = entries.filter(e => e.feriado);
         const conPermisoTD = entries.filter(e => e.permiso_td_id);
 
         if (conFeriado.length > 0) {
-            // console.log('🎯 Registros con feriado:', conFeriado);
+            // console.log('?? Registros con feriado:', conFeriado);
         }
 
         if (conPermisoTD.length > 0) {
-            // console.log('🟡 Registros con permiso TD:', conPermisoTD);
+            // console.log('?? Registros con permiso TD:', conPermisoTD);
         }
 
 
         // ==================== ENVÍO AL BACKEND ====================
-        //console.log("📦 ENTRIES QUE SE ESTÁN ENVIANDO:", JSON.parse(JSON.stringify(entries)));
-        console.log("📤 ENTRIES ENVIADOS:");
+        //console.log("?? ENTRIES QUE SE ESTÁN ENVIANDO:", JSON.parse(JSON.stringify(entries)));
+        console.log("?? ENTRIES ENVIADOS:");
         Object.entries(entries).forEach(([index, entry]) => {
             console.log(
-                `#${index} → ${entry.fecha} | estado: ${entry.estado} | ` +
+                `#${index} ? ${entry.fecha} | estado: ${entry.estado} | ` +
                 `ingreso: ${entry.ingreso || '—'} | salida: ${entry.salida || '—'}`
             );
         });
@@ -1213,13 +1248,13 @@ export default function App({ empleados, empresas, url, supervisores }) {
             preserveScroll: true,
             preserveState: true,
             onStart: () => {
-                //  console.log('▶️ Inicio: guardando horarios...');
+                //  console.log('?? Inicio: guardando horarios...');
                 setIsSaving(true);
                 toast.loading('Guardando horarios...', { id: 'guardando-horarios' });
             },
 
             onSuccess: (page) => {
-                //    console.log('🟢 onSuccess - page.props:', page.props);
+                //    console.log('?? onSuccess - page.props:', page.props);
 
                 // 1) Si el backend devolvió errores en props.errors -> mostrar error y NO success
                 const errors = page.props?.errors || {};
@@ -1251,13 +1286,13 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 if (successMessage) {
                     toast.success(successMessage, { duration: 8000 });
                 } else {
-                    toast.success('✅ Horarios guardados correctamente', { duration: 4000 });
+                    toast.success('? Horarios guardados correctamente', { duration: 4000 });
                 }
             },
 
             onError: (errorsFromServer) => {
                 // onError se ejecuta para respuestas HTTP 422 / validación AJAX
-                //   console.log('🔴 onError (422?) - errores:', errorsFromServer);
+                //   console.log('?? onError (422?) - errores:', errorsFromServer);
                 toast.dismiss('guardando-horarios');
 
                 // mostrar bloqueo semanal si vino por este canal (por si acaso)
@@ -1284,7 +1319,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 // quitar loading siempre
                 toast.dismiss('guardando-horarios');
                 setIsSaving(false);
-                console.log('⏹️ Finish');
+                console.log('?? Finish');
             },
         });
     }
@@ -1308,13 +1343,13 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
                 let minutosDia = 0;
 
-                // ⬇⬇⬇ NUEVA LÓGICA: manejar turnos que pasan medianoche ⬇⬇⬇
+                // ??? NUEVA LÓGICA: manejar turnos que pasan medianoche ???
                 if (salidaMin < entradaMin) {
                     minutosDia = (1440 - entradaMin) + salidaMin; // cruza medianoche
                 } else {
                     minutosDia = salidaMin - entradaMin; // turno normal
                 }
-                // ⬆⬆⬆ FIN DE LA CORRECCIÓN ⬆⬆⬆
+                // ??? FIN DE LA CORRECCIÓN ???
 
                 // Restar 1h (60min) si trabaja más de 6h por día
                 if (empleados?.jornada_id == 1) {
@@ -1373,7 +1408,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
         // Solo limpiar si la semana REALMENTE cambió
         if (prevWeekRef.current !== currentWeekStr) {
-            console.log('🧹 Semana cambió de verdad, limpiando');
+            console.log('?? Semana cambió de verdad, limpiando');
             setScheduleData({});
             setHorariosExistentes(new Set());
             prevWeekRef.current = currentWeekStr;
@@ -1438,6 +1473,9 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             </div>
                         )}
 
+
+
+
                         {/* Fila: Selector de Semana + Gestión de Horarios Base */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             <WeekNavigator
@@ -1501,7 +1539,7 @@ export default function App({ empleados, empresas, url, supervisores }) {
                                 size="lg"
                                 onClick={handleSaveSchedules}
                                 className="min-w-[250px]"
-                                disabled={isSaving} // 🚩 Bloqueo físico del botón
+                                disabled={isSaving} // ?? Bloqueo físico del botón
                             >
                                 {isSaving ? (
                                     <>

@@ -874,6 +874,68 @@ class HorarioController extends Controller
 
             $contadorProcesados = 0;
 
+            // ----------- logica de excedente de 93h
+            $empleadosPT = Empleado::whereIn('id', $empleadosIds)
+                ->where('jornada_id', 2)
+                ->pluck('id');
+
+            $excedentes = [];
+
+            foreach ($empleadosPT as $empId) {
+                $fechaRef = Carbon::parse($entries[0]['fecha']);
+                $mes = $fechaRef->month;
+                $anio = $fechaRef->year;
+
+                // Horas ya guardadas este mes
+                $minutosGuardados = Horario::where('empleado_id', $empId)
+                    ->whereYear('fecha', $anio)
+                    ->whereMonth('fecha', $mes)
+                    ->whereIn('estado', ['L', 'C', 'CA', 'TD', 'FL', 'CHE', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'PE'])
+                    ->get()
+                    ->sum(function ($h) {
+                        if (! $h->ingreso || ! $h->salida) {
+                            return 0;
+                        }
+                        $entrada = Carbon::parse($h->ingreso);
+                        $salida = Carbon::parse($h->salida);
+                        $min = $salida->gt($entrada)
+                            ? $salida->diffInMinutes($entrada)
+                            : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
+
+                        return $min > 360 ? $min - 60 : $min;
+                    });
+
+                // Horas de ESTA semana que viene en el request
+                $minutosRequest = collect($entries)
+                    ->where('empleado_id', $empId)
+                    ->filter(fn ($e) => ! in_array($e['estado'], ['D', 'SP', 'AI', 'V', 'M', 'LF', 'LP', 'LM']))
+                    ->sum(function ($e) {
+                        if (! $e['ingreso'] || ! $e['salida']) {
+                            return 0;
+                        }
+                        $entrada = Carbon::parse($e['ingreso']);
+                        $salida = Carbon::parse($e['salida']);
+                        $min = $salida->gt($entrada)
+                            ? $salida->diffInMinutes($entrada)
+                            : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
+
+                        return $min > 360 ? $min - 60 : $min;
+                    });
+
+                if (($minutosGuardados + $minutosRequest) > 5580) { // 93h * 60
+                    $emp = Empleado::find($empId);
+                    $excedentes[] = "{$emp->apellidos} {$emp->nombres}";
+                }
+            }
+
+            if (! empty($excedentes)) {
+                return back()->withErrors([
+                    'bloqueo_93h' => '🚨 Los siguientes empleados superarían las 93h mensuales: '.implode(', ', $excedentes),
+                ]);
+            }
+            // ----------- logica de excedente de 93h
+
+
             foreach ($entries as $data) {
                 $empId = $data['empleado_id'];
                 $EmpleadosNombre = Empleado::find($empId);
@@ -1030,59 +1092,8 @@ class HorarioController extends Controller
 
         return $horario;
     }
+
     // ==================== MÉTODOS AUXILIARES OPTIMIZADOS ====================
-
-    private function calcularMinutosTrabajados(string $ingreso, string $salida, int $jornadaId): int
-    {
-        $ingresoCarbon = Carbon::parse($ingreso);
-        $salidaCarbon = Carbon::parse($salida);
-        $minutos = $ingresoCarbon->diffInMinutes($salidaCarbon);
-
-        if ($jornadaId === 1) {
-            $minutos = max(0, $minutos - 60);
-        } elseif ($minutos > 360) {
-            $minutos = max(0, $minutos - 60);
-        }
-
-        return $minutos;
-    }
-
-    // 🔥 OPTIMIZADO: usa DB::table con SUM
-    private function calcularHorasSemanalesAnteriores_Optimizado(
-        int $empleadoId,
-        int $jornadaId,
-        Carbon $fechaActual,
-        Carbon $inicioSemana,
-        Carbon $finSemana
-    ): int {
-        // Query optimizado con SUM
-        $resultado = DB::table('horarios')
-            ->where('empleado_id', $empleadoId)
-            ->where('estado', 'L')
-            ->whereBetween('fecha', [
-                $inicioSemana->toDateString(),
-                $finSemana->toDateString(),
-            ])
-            ->where('fecha', '<', $fechaActual->toDateString())
-            ->select(DB::raw('
-            COUNT(*) as dias,
-            SUM(TIMESTAMPDIFF(MINUTE, ingreso, salida)) as minutos_total
-        '))
-            ->first();
-
-        $minutosTotal = $resultado->minutos_total ?? 0;
-        $diasContados = $resultado->dias ?? 0;
-
-        // Restar refrigerio
-        if ($jornadaId === 1) {
-            $minutosTotal -= ($diasContados * 60);
-        } else {
-            // PT: aproximación (restar 60min por día trabajado)
-            $minutosTotal -= ($diasContados * 60);
-        }
-
-        return max(0, $minutosTotal);
-    }
 
     private function consumirTD(
         int $empleadoId,
@@ -1197,6 +1208,58 @@ class HorarioController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function calcularMinutosTrabajados(string $ingreso, string $salida, int $jornadaId): int
+    {
+        $ingresoCarbon = Carbon::parse($ingreso);
+        $salidaCarbon = Carbon::parse($salida);
+        $minutos = $ingresoCarbon->diffInMinutes($salidaCarbon);
+
+        if ($jornadaId === 1) {
+            $minutos = max(0, $minutos - 60);
+        } elseif ($minutos > 360) {
+            $minutos = max(0, $minutos - 60);
+        }
+
+        return $minutos;
+    }
+
+    // 🔥 OPTIMIZADO: usa DB::table con SUM
+    private function calcularHorasSemanalesAnteriores_Optimizado(
+        int $empleadoId,
+        int $jornadaId,
+        Carbon $fechaActual,
+        Carbon $inicioSemana,
+        Carbon $finSemana
+    ): int {
+        // Query optimizado con SUM
+        $resultado = DB::table('horarios')
+            ->where('empleado_id', $empleadoId)
+            ->where('estado', 'L')
+            ->whereBetween('fecha', [
+                $inicioSemana->toDateString(),
+                $finSemana->toDateString(),
+            ])
+            ->where('fecha', '<', $fechaActual->toDateString())
+            ->select(DB::raw('
+            COUNT(*) as dias,
+            SUM(TIMESTAMPDIFF(MINUTE, ingreso, salida)) as minutos_total
+        '))
+            ->first();
+
+        $minutosTotal = $resultado->minutos_total ?? 0;
+        $diasContados = $resultado->dias ?? 0;
+
+        // Restar refrigerio
+        if ($jornadaId === 1) {
+            $minutosTotal -= ($diasContados * 60);
+        } else {
+            // PT: aproximación (restar 60min por día trabajado)
+            $minutosTotal -= ($diasContados * 60);
+        }
+
+        return max(0, $minutosTotal);
     }
 
     // ------------------------------------------------------------------------- LOGICA DEL INSERTAR -------------------------------------------------------------------------
@@ -1314,6 +1377,152 @@ class HorarioController extends Controller
                 'es_part_time' => false, // 🔊 VALOR POR DEFECTO EN ERROR
             ]);
         }
+    }
+
+    public function getHorasMensualesPT(Request $request)
+    {
+        try {
+            $empleadoId = $request->query('empleado_id');
+            $mes = $request->query('mes', now()->month);
+            $anio = $request->query('anio', now()->year);
+
+            if (! $empleadoId) {
+                return response()->json([
+                    'total_mes' => 0,
+                    'faltante_93h' => 93,
+                    'empleado_id' => null,
+                ]);
+            }
+
+            $empleado = Empleado::find($empleadoId);
+
+            if (! $empleado || $empleado->jornada_id != 2) {
+                return response()->json([
+                    'total_mes' => 0,
+                    'faltante_93h' => 93,
+                    'empleado_id' => $empleadoId,
+                    'es_part_time' => false,
+                ]);
+            }
+
+            // 🔥 OBTENER HORARIOS DEL MES
+            $horarios = Horario::where('empleado_id', $empleadoId)
+                ->whereYear('fecha', $anio)
+                ->whereMonth('fecha', $mes)
+                ->whereIn('estado', [
+                    'L',
+                    'AHE',
+                    'TD',
+                    'FL',
+                    'C',
+                    'CA',
+                    'CHE',
+                    'F',
+                    // 'V',
+                    // 'M',
+                    'SN',
+                    'ST',
+                    'SFI',
+                    'FI',
+                    'FJ',
+                    'LCG',
+                    'LSG',
+                    // 'LP',
+                    // 'LM',
+                    // 'LF',
+                    'PE',
+                ])
+                ->get(); // Menso D y SP
+
+            // 🔥 DEBUG HORARIOS
+            /*
+                  \Log::info("🔍 DEBUG Horarios para empleado {$empleadoId}", [
+                'mes' => $mes,
+                'anio' => $anio,
+                'total_registros' => $horarios->count(),
+                'horarios' => $horarios->map(fn ($h) => [
+                    'id' => $h->id,
+                    'fecha' => $h->fecha->format('Y-m-d'),
+                    'ingreso' => $h->ingreso,
+                    'salida' => $h->salida,
+                    'estado' => $h->estado,
+                ]),
+            ]);
+            */
+
+            $totalMinutos = 0;
+
+            foreach ($horarios as $horario) {
+                if ($horario->ingreso && $horario->salida) {
+
+                    // 🔥 EXTRAER SOLO LA HORA
+                    $ingreso = \Carbon\Carbon::parse($horario->ingreso);
+                    $salida = \Carbon\Carbon::parse($horario->salida);
+
+                    $horaIngreso = $ingreso->hour * 60 + $ingreso->minute;
+                    $horaSalida = $salida->hour * 60 + $salida->minute;
+
+                    // Calcular diferencia
+                    if ($horaSalida > $horaIngreso) {
+                        $minutos = $horaSalida - $horaIngreso; // Normal
+                    } elseif ($horaSalida < $horaIngreso) {
+                        $minutos = (1440 - $horaIngreso) + $horaSalida; // Turno nocturno
+                    } else {
+                        $minutos = 0; // Mismo horario
+                    }
+
+                    // 🔥 DESCONTAR 1H SI TRABAJA MÁS DE 6H (360 minutos)
+                    if ($empleado->jornada_id === 1 && $minutosDelDia > 0) {
+                        // FULL TIME: siempre -1h
+
+                        $minutosDelDia -= 60;
+                    } elseif ($minutos > 360) {
+                        $minutos -= 60; // Restar 1 hora de refrigerio
+                    }
+
+                    $totalMinutos += $minutos;
+
+                    // 🔥 DEBUG POR DÍA
+                    // \Log::info("  📅 Día {$horario->fecha->format('Y-m-d')}: {$horaIngreso} → {$horaSalida} = {$minutos} minutos");
+                }
+            }
+
+            // 🔥 DEBUG FINAL
+            // \Log::info("🎯 TOTAL: {$totalMinutos} minutos = ".($totalMinutos / 60).' horas');
+
+            $totalHoras = $totalMinutos / 60;
+            $faltante = max(0, 93 - $totalHoras);
+
+            return response()->json([
+                'total_mes' => round($totalHoras, 2),
+                'total_mes_formato' => $this->minutosAHoraFormato($totalMinutos),
+                'faltante_93h' => round($faltante, 2),
+                'faltante_formato' => $this->minutosAHoraFormato($faltante * 60),
+                'empleado_id' => $empleadoId,
+                'es_part_time' => true,
+                'mes' => $mes,
+                'anio' => $anio,
+                'debug_total_registros' => $horarios->count(),
+            ]);
+
+        } catch (\Exception $e) {
+
+            // \Log::error("❌ Error en getHorasMensualesPT: {$e->getMessage()}");
+
+            return response()->json([
+                'error' => $e->getMessage(),
+                'total_mes' => 0,
+                'faltante_93h' => 93,
+            ], 500);
+        }
+    }
+
+    private function minutosAHoraFormato($minutos)
+    {
+        $horas = floor($minutos / 60);
+        $minutosRestantes = $minutos % 60;
+
+        return sprintf('%d:%02d', $horas, $minutosRestantes);
     }
 
     public function edit(Request $request, Horario $horario)
@@ -1599,151 +1808,5 @@ class HorarioController extends Controller
         } catch (Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
         }
-    }
-
-    public function getHorasMensualesPT(Request $request)
-    {
-        try {
-            $empleadoId = $request->query('empleado_id');
-            $mes = $request->query('mes', now()->month);
-            $anio = $request->query('anio', now()->year);
-
-            if (! $empleadoId) {
-                return response()->json([
-                    'total_mes' => 0,
-                    'faltante_93h' => 93,
-                    'empleado_id' => null,
-                ]);
-            }
-
-            $empleado = Empleado::find($empleadoId);
-
-            if (! $empleado || $empleado->jornada_id != 2) {
-                return response()->json([
-                    'total_mes' => 0,
-                    'faltante_93h' => 93,
-                    'empleado_id' => $empleadoId,
-                    'es_part_time' => false,
-                ]);
-            }
-
-            // 🔥 OBTENER HORARIOS DEL MES
-            $horarios = Horario::where('empleado_id', $empleadoId)
-                ->whereYear('fecha', $anio)
-                ->whereMonth('fecha', $mes)
-                ->whereIn('estado', [
-                    'L',
-                    'AHE',
-                    'TD',
-                    'FL',
-                    'C',
-                    'CA',
-                    'CHE',
-                    'F',
-                    // 'V',
-                    // 'M',
-                    'SN',
-                    'ST',
-                    'SFI',
-                    'FI',
-                    'FJ',
-                    'LCG',
-                    'LSG',
-                    // 'LP',
-                    // 'LM',
-                    // 'LF',
-                    'PE',
-                ])
-                ->get(); // Menso D y SP
-
-            // 🔥 DEBUG HORARIOS
-            /*
-                  \Log::info("🔍 DEBUG Horarios para empleado {$empleadoId}", [
-                'mes' => $mes,
-                'anio' => $anio,
-                'total_registros' => $horarios->count(),
-                'horarios' => $horarios->map(fn ($h) => [
-                    'id' => $h->id,
-                    'fecha' => $h->fecha->format('Y-m-d'),
-                    'ingreso' => $h->ingreso,
-                    'salida' => $h->salida,
-                    'estado' => $h->estado,
-                ]),
-            ]);
-            */
-
-            $totalMinutos = 0;
-
-            foreach ($horarios as $horario) {
-                if ($horario->ingreso && $horario->salida) {
-
-                    // 🔥 EXTRAER SOLO LA HORA
-                    $ingreso = \Carbon\Carbon::parse($horario->ingreso);
-                    $salida = \Carbon\Carbon::parse($horario->salida);
-
-                    $horaIngreso = $ingreso->hour * 60 + $ingreso->minute;
-                    $horaSalida = $salida->hour * 60 + $salida->minute;
-
-                    // Calcular diferencia
-                    if ($horaSalida > $horaIngreso) {
-                        $minutos = $horaSalida - $horaIngreso; // Normal
-                    } elseif ($horaSalida < $horaIngreso) {
-                        $minutos = (1440 - $horaIngreso) + $horaSalida; // Turno nocturno
-                    } else {
-                        $minutos = 0; // Mismo horario
-                    }
-
-                    // 🔥 DESCONTAR 1H SI TRABAJA MÁS DE 6H (360 minutos)
-                    if ($empleado->jornada_id === 1 && $minutosDelDia > 0) {
-                        // FULL TIME: siempre -1h
-
-                        $minutosDelDia -= 60;
-                    } elseif ($minutos > 360) {
-                        $minutos -= 60; // Restar 1 hora de refrigerio
-                    }
-
-                    $totalMinutos += $minutos;
-
-                    // 🔥 DEBUG POR DÍA
-                    // \Log::info("  📅 Día {$horario->fecha->format('Y-m-d')}: {$horaIngreso} → {$horaSalida} = {$minutos} minutos");
-                }
-            }
-
-            // 🔥 DEBUG FINAL
-            // \Log::info("🎯 TOTAL: {$totalMinutos} minutos = ".($totalMinutos / 60).' horas');
-
-            $totalHoras = $totalMinutos / 60;
-            $faltante = max(0, 93 - $totalHoras);
-
-            return response()->json([
-                'total_mes' => round($totalHoras, 2),
-                'total_mes_formato' => $this->minutosAHoraFormato($totalMinutos),
-                'faltante_93h' => round($faltante, 2),
-                'faltante_formato' => $this->minutosAHoraFormato($faltante * 60),
-                'empleado_id' => $empleadoId,
-                'es_part_time' => true,
-                'mes' => $mes,
-                'anio' => $anio,
-                'debug_total_registros' => $horarios->count(),
-            ]);
-
-        } catch (\Exception $e) {
-
-            // \Log::error("❌ Error en getHorasMensualesPT: {$e->getMessage()}");
-
-            return response()->json([
-                'error' => $e->getMessage(),
-                'total_mes' => 0,
-                'faltante_93h' => 93,
-            ], 500);
-        }
-    }
-
-    private function minutosAHoraFormato($minutos)
-    {
-        $horas = floor($minutos / 60);
-        $minutosRestantes = $minutos % 60;
-
-        return sprintf('%d:%02d', $horas, $minutosRestantes);
     }
 }
