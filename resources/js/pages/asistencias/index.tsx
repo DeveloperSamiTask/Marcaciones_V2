@@ -130,7 +130,7 @@ export default function IndexAsistencia({
                             <h2 className="text-2xl font-bold tracking-tight sm:text-4xl">Validaciones</h2>
                         </div>
                         <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-3">
-                            {auth.user.rol_id != 4 && (
+                            {(auth.user.rol_id != 4 || auth.user.empleado_id == 397) && (
                                 <SelectFilter
                                     items={empresas}
                                     selected={selectedEmpresa}

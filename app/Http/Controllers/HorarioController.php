@@ -278,7 +278,7 @@ class HorarioController extends Controller
         $empresaId = $request->get('empresa_id');
 
         // Supervisores especiales (multiempresa)
-        $MULTI_EMPRESA = [383];
+        $MULTI_EMPRESA = [383,397];
 
         // Empresas donde NO se incluye al supervisor en la lista
         $EXCLUDE_SUPERVISOR_COMPANIES = [1, 5];
@@ -874,67 +874,67 @@ class HorarioController extends Controller
 
             $contadorProcesados = 0;
 
+            // ----------- logica de excedente de 93h : debe cambiar por la logica de no
+            // $empleadosPT = Empleado::whereIn('id', $empleadosIds)
+            //     ->where('jornada_id', 2)
+            //     ->whereNull('fecha_cese')
+            //     ->pluck('id');
+
+            // $excedentes = [];
+
+            // foreach ($empleadosPT as $empId) {
+            //     $fechaRef = Carbon::parse($entries[0]['fecha']);
+            //     $mes = $fechaRef->month;
+            //     $anio = $fechaRef->year;
+
+            //     // Horas ya guardadas este mes
+            //     $minutosGuardados = Horario::where('empleado_id', $empId)
+            //         ->whereYear('fecha', $anio)
+            //         ->whereMonth('fecha', $mes)
+            //         ->whereIn('estado', ['L', 'C', 'CA', 'TD', 'FL', 'CHE', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'PE'])
+            //         ->get()
+            //         ->sum(function ($h) {
+            //             if (! $h->ingreso || ! $h->salida) {
+            //                 return 0;
+            //             }
+            //             $entrada = Carbon::parse($h->ingreso);
+            //             $salida = Carbon::parse($h->salida);
+            //             $min = $salida->gt($entrada)
+            //                 ? $salida->diffInMinutes($entrada)
+            //                 : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
+
+            //             return $min > 360 ? $min - 60 : $min;
+            //         });
+
+            //     // Horas de ESTA semana que viene en el request
+            //     $minutosRequest = collect($entries)
+            //         ->where('empleado_id', $empId)
+            //         ->filter(fn ($e) => ! in_array($e['estado'], ['D', 'SP', 'AI', 'V', 'M', 'LF', 'LP', 'LM']))
+            //         ->sum(function ($e) {
+            //             if (! $e['ingreso'] || ! $e['salida']) {
+            //                 return 0;
+            //             }
+            //             $entrada = Carbon::parse($e['ingreso']);
+            //             $salida = Carbon::parse($e['salida']);
+            //             $min = $salida->gt($entrada)
+            //                 ? $salida->diffInMinutes($entrada)
+            //                 : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
+
+            //             return $min > 360 ? $min - 60 : $min;
+            //         });
+
+            //     if (($minutosGuardados + $minutosRequest) > 5580) { // 93h * 60
+            //         $emp = Empleado::find($empId);
+            //         $excedentes[] = "{$emp->apellidos} {$emp->nombres}";
+            //     }
+            // }
+
+            // if (!empty($excedentes)) {
+            //     return back()->withErrors([
+            //         'bloqueo_93h' => '🚨 Los siguientes empleados superarían las 93h mensuales: '.implode(', ', $excedentes),
+            //     ]);
+            // }
             // ----------- logica de excedente de 93h
-            $empleadosPT = Empleado::whereIn('id', $empleadosIds)
-                ->where('jornada_id', 2)
-                ->pluck('id');
-
-            $excedentes = [];
-
-            foreach ($empleadosPT as $empId) {
-                $fechaRef = Carbon::parse($entries[0]['fecha']);
-                $mes = $fechaRef->month;
-                $anio = $fechaRef->year;
-
-                // Horas ya guardadas este mes
-                $minutosGuardados = Horario::where('empleado_id', $empId)
-                    ->whereYear('fecha', $anio)
-                    ->whereMonth('fecha', $mes)
-                    ->whereIn('estado', ['L', 'C', 'CA', 'TD', 'FL', 'CHE', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'PE'])
-                    ->get()
-                    ->sum(function ($h) {
-                        if (! $h->ingreso || ! $h->salida) {
-                            return 0;
-                        }
-                        $entrada = Carbon::parse($h->ingreso);
-                        $salida = Carbon::parse($h->salida);
-                        $min = $salida->gt($entrada)
-                            ? $salida->diffInMinutes($entrada)
-                            : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
-
-                        return $min > 360 ? $min - 60 : $min;
-                    });
-
-                // Horas de ESTA semana que viene en el request
-                $minutosRequest = collect($entries)
-                    ->where('empleado_id', $empId)
-                    ->filter(fn ($e) => ! in_array($e['estado'], ['D', 'SP', 'AI', 'V', 'M', 'LF', 'LP', 'LM']))
-                    ->sum(function ($e) {
-                        if (! $e['ingreso'] || ! $e['salida']) {
-                            return 0;
-                        }
-                        $entrada = Carbon::parse($e['ingreso']);
-                        $salida = Carbon::parse($e['salida']);
-                        $min = $salida->gt($entrada)
-                            ? $salida->diffInMinutes($entrada)
-                            : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
-
-                        return $min > 360 ? $min - 60 : $min;
-                    });
-
-                if (($minutosGuardados + $minutosRequest) > 5580) { // 93h * 60
-                    $emp = Empleado::find($empId);
-                    $excedentes[] = "{$emp->apellidos} {$emp->nombres}";
-                }
-            }
-
-            if (! empty($excedentes)) {
-                return back()->withErrors([
-                    'bloqueo_93h' => '🚨 Los siguientes empleados superarían las 93h mensuales: '.implode(', ', $excedentes),
-                ]);
-            }
-            // ----------- logica de excedente de 93h
-
 
             foreach ($entries as $data) {
                 $empId = $data['empleado_id'];
@@ -1406,9 +1406,32 @@ class HorarioController extends Controller
             }
 
             // 🔥 OBTENER HORARIOS DEL MES
+            $fechaReferencia = Carbon::create($anio, $mes, 1);
+
+            if ($fechaReferencia->day >= 30) {
+
+                $inicioCorte = $fechaReferencia->copy()->day(30);
+                $finCorte = $fechaReferencia->copy()->addMonth()->day(29);
+
+            } else {
+
+                $inicioCorte = $fechaReferencia->copy()->subMonth()->day(30);
+                $finCorte = $fechaReferencia->copy()->day(29);
+
+            }
+
+            \Log::info('CORTE PT', [
+                'mes_recibido' => $mes,
+                'anio' => $anio,
+                'inicio' => $inicioCorte->format('Y-m-d'),
+                'fin' => $finCorte->format('Y-m-d'),
+            ]);
+
             $horarios = Horario::where('empleado_id', $empleadoId)
-                ->whereYear('fecha', $anio)
-                ->whereMonth('fecha', $mes)
+                ->whereBetween('fecha', [
+                    $inicioCorte->toDateString(),
+                    $finCorte->toDateString(),
+                ])
                 ->whereIn('estado', [
                     'L',
                     'AHE',
@@ -1418,8 +1441,6 @@ class HorarioController extends Controller
                     'CA',
                     'CHE',
                     'F',
-                    // 'V',
-                    // 'M',
                     'SN',
                     'ST',
                     'SFI',
@@ -1427,12 +1448,9 @@ class HorarioController extends Controller
                     'FJ',
                     'LCG',
                     'LSG',
-                    // 'LP',
-                    // 'LM',
-                    // 'LF',
                     'PE',
                 ])
-                ->get(); // Menso D y SP
+                ->get();
 
             // 🔥 DEBUG HORARIOS
             /*

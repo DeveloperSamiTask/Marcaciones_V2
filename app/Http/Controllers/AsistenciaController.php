@@ -17,6 +17,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class AsistenciaController extends Controller
@@ -37,15 +38,44 @@ class AsistenciaController extends Controller
         $isJefe = $user->rol_id == 4;
         $isSupervisor = $user->rol_id == 5;
 
+        // 🔴 LOG 1: Verificar el Request entrante
+        Log::info('=== ENTRANDO A VALIDACIONES ===', [
+            'user_id' => $user->id,
+            'empleado_id' => $user->empleado_id,
+            'rol_id' => $user->rol_id,
+            'filters_request' => $request->all(),
+        ]);
+
+        // ============================================
+        // ÁRBOL DE JERARQUÍA (Para Jefes multinivel)
+        // ============================================
+        $todoElArbolIds = [];
+        if ($isJefe) {
+            // Hijos directos (Ej: Miluska)
+            $subordinadosDirectosIds = Empleado::where('jefe_id', $user->empleado_id)->pluck('id')->toArray();
+            // Nietos indirectos (Ej: Miguel, cuyo jefe es Miluska)
+            $subordinadosIndirectosIds = Empleado::whereIn('jefe_id', $subordinadosDirectosIds)->pluck('id')->toArray();
+            // Unimos todo el árbol de pertenencia
+            $todoElArbolIds = array_merge($subordinadosDirectosIds, $subordinadosIndirectosIds);
+        }
+
         // ============================================
         // EMPRESAS
         // ============================================
-        $empresas = $isSupervisor
-            ? $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial'])
-            : Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        if ($isSupervisor) {
+            $empresas = $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial']);
+        } elseif ($isJefe) {
+            // Las empresas se calculan basándose en TODO su árbol de personal asignado
+            $empresasIds = Empleado::whereIn('id', $todoElArbolIds)->pluck('empresa_id')->unique();
+            $empresas = Empresa::whereIn('id', $empresasIds)->where('estado', 1)->get(['id', 'razonsocial']);
+
+            Log::info('Empresas detectadas para Jefe', ['empresas_ids' => $empresasIds->toArray()]);
+        } else {
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
+        }
 
         // ============================================
-        // ENCARGADOS
+        // ENCARGADOS (Dropdown)
         // ============================================
         if ($isSupervisor) {
             $empleadosAsignadosIds = $user->empleadosACargo()
@@ -66,13 +96,17 @@ class AsistenciaController extends Controller
         } elseif ($isJefe) {
             $encargados = User::with('empleado')
                 ->where('estado', true)
-                ->whereHas('empleado', function ($q) use ($user) {
-                    $q->where('jefe_id', $user->empleado_id);
+                ->whereHas('empleado', function ($q) use ($todoElArbolIds, $request) {
+                    $q->whereIn('id', $todoElArbolIds)
+                        ->when($request->empresa, function ($subQ) use ($request) {
+                            $subQ->where('empresa_id', $request->empresa);
+                        });
                 })
                 ->get()
                 ->sortBy(fn ($u) => $u->empleado->apellidos)
                 ->values();
 
+            Log::info('Encargados encontrados para Jefe', ['cantidad' => $encargados->count()]);
         } else {
             $encargados = User::with('empleado')
                 ->where('estado', true)
@@ -96,42 +130,50 @@ class AsistenciaController extends Controller
                 $q->where('empresa_id', $request->empresa);
             });
 
-        // Filtro por encargado según el rol
-        if ($request->encargado) {
+        // EVITAR AUTO-FILTRO: Si el front manda su propio ID (397), lo ignoramos para ver a todos
+        $encargadoFiltrado = $request->encargado;
+        if ($isJefe && $encargadoFiltrado == $user->empleado_id) {
+            $encargadoFiltrado = null;
+        }
+
+        // CASO A: No hay un encargado específico seleccionado -> Trae todo su árbol herencial
+        if ($isJefe && !$encargadoFiltrado) {
+            $asistenciasQuery->whereIn('empleado_id', $todoElArbolIds);
+        }
+
+        // CASO B: Sí seleccionaron a alguien puntual en el dropdown
+        if ($encargadoFiltrado) {
             if ($isSupervisor) {
-                // SUPERVISOR: Obtener IDs de empleados a cargo del supervisor
                 $empleadosACargo = $user->empleadosACargo()
                     ->when($request->empresa, function ($q) use ($request) {
                         $q->where('supervisor_empleado.empresa_id', $request->empresa);
                     })
                     ->pluck('empleados.id');
 
-                // Filtrar asistencias donde CUALQUIERA de los empleados a cargo esté en los detalles
                 $asistenciasQuery->whereHas('detalles', function ($q) use ($empleadosACargo) {
                     $q->whereIn('empleado_id', $empleadosACargo);
                 });
-
-            } elseif ($isJefe) {
-                // JEFE: Filtrar por empleado_id directamente
-                $asistenciasQuery->where('empleado_id', $request->encargado);
-
             } else {
-                // ADMIN: Filtrar por empleado_id directamente
-                $asistenciasQuery->where('empleado_id', $request->encargado);
+                // Aplica tanto para Admin como para un subordinado específico del Jefe
+                $asistenciasQuery->where('empleado_id', $encargadoFiltrado);
             }
         }
 
-        // Filtro especial para Jefe en empresas permitidas
+        // Filtro especial de seguridad para las empresas restringidas (4, 10, 11)
         $empresasJefePermitidas = [4, 10, 11];
         if ($isJefe && $request->empresa && in_array($request->empresa, $empresasJefePermitidas)) {
             $asistenciasQuery
-                ->whereHas('empleado', function ($q) use ($user) {
-                    $q->where('jefe_id', $user->empleado_id);
-                })
+                ->whereIn('empleado_id', $todoElArbolIds)
                 ->whereDoesntHave('detalles', function ($q) use ($user) {
                     $q->where('empleado_id', $user->empleado_id);
                 });
         }
+
+        // 🔴 LOG 4: Inspección del SQL Final armado
+        Log::info('SQL de Asistencias generado', [
+            'sql' => $asistenciasQuery->toSql(),
+            'bindings' => $asistenciasQuery->getBindings(),
+        ]);
 
         $asistencias = $asistenciasQuery
             ->orderBy('fecha', 'desc')
@@ -141,6 +183,13 @@ class AsistenciaController extends Controller
                 1 => 'aprobados',
                 2 => 'rechazados',
             });
+
+        // 🔴 LOG 5: Conteo real de colecciones enviadas
+        Log::info('Asistencias devueltas', [
+            'pendientes' => $asistencias->get('pendientes', collect())->count(),
+            'aprobados' => $asistencias->get('aprobados', collect())->count(),
+            'rechazados' => $asistencias->get('rechazados', collect())->count(),
+        ]);
 
         session(['asistencias_url' => $request->fullUrl()]);
 
@@ -192,7 +241,7 @@ class AsistenciaController extends Controller
                     $tardanza = max(0, $p_ingreso->diffInMinutes($h_ingreso, false));
 
                     // Extra
-                    $extra_ingreso = max(0,$h_ingreso->diffInMinutes($p_ingreso , false));
+                    $extra_ingreso = max(0, $h_ingreso->diffInMinutes($p_ingreso, false));
                     $extra_salida = max(0, $p_salida->diffInMinutes($h_salida, false));
 
                     $extra = $extra_ingreso + $extra_salida;
@@ -271,7 +320,6 @@ class AsistenciaController extends Controller
             'url' => session('asistencias_url', route('asistencias.index')),
         ]);
     }
-
 
     // metodo para enviar
     public function store(Request $request)

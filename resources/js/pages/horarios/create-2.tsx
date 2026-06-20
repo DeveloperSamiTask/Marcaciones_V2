@@ -24,6 +24,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Horarios',
@@ -902,16 +904,20 @@ export default function App({ empleados, empresas, url, supervisores }) {
 
         });
 
-        // -------------- Bloquear cuando llega a las 93h
+
+
+
+        if (hasValidationErrors) return;
+
+        // -------------- Bloquear cuando llega a las 93hempleadosExcedidos93h
+        const empleadosExcedidos93h = new Set<string>();
+
         for (const employee of filteredEmployees) {
-            if (employee.jornada_id !== 2) continue; // Solo PT
+            if (employee.jornada_id !== 2) continue;
 
             const empSchedule = scheduleData[employee.id] || {};
-
-            // Calcular horas de ESTA semana que se van a agregar
             const horasEstaSemana = calcularHorasSemanalesFrontend(empSchedule, employee);
 
-            // Pedir al backend las horas YA acumuladas este mes
             const mes = currentWeekStart.getMonth() + 1;
             const anio = currentWeekStart.getFullYear();
             const res = await fetch(
@@ -919,25 +925,24 @@ export default function App({ empleados, empresas, url, supervisores }) {
             );
             const data = await res.json();
 
-            const MAX_MINUTOS_MES = 93 * 60; // 5580 minutos
+            const MAX_MINUTOS_MES = 93 * 60;
             const acumuladoMinutos = Math.round(data.total_mes * 60);
             const totalConEstaSemana = acumuladoMinutos + horasEstaSemana;
 
             if (totalConEstaSemana > MAX_MINUTOS_MES) {
                 const excedente = totalConEstaSemana - MAX_MINUTOS_MES;
                 toast.error(
-                    `🚨 ${employee.apellidos} ${employee.nombres}: ` +
+                    `AVISO: 🚨 ${employee.apellidos} ${employee.nombres}: ` +
                     `Superaría las 93h mensuales. ` +
                     `Acumulado: ${formatearHoras(acumuladoMinutos)} | ` +
                     `Esta semana suma: ${formatearHoras(horasEstaSemana)} | ` +
                     `Excedente: +${formatearHoras(excedente)}`,
                     { duration: 8000 }
                 );
-                hasValidationErrors = true;
+                empleadosExcedidos93h.add(employee.id); // ⬅️ solo lo marcamos, no bloqueamos todo
             }
         }
 
-        if (hasValidationErrors) return;
         // ==================== CARGAR DATOS DE FERIADOS Y TD ====================
         // ?? 1. Detectar empleados con C/CA
         const empleadosConCompensacion = filteredEmployees.filter(emp => {
@@ -1009,6 +1014,10 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 hasValidationErrors = true;
                 break; // Detener el ciclo completo de inmediato
             }
+
+            // if (empleadosExcedidos93h.has(employee.id)) {
+            //     continue; // este empleado no se guarda, pero los demás siguen
+            // }
 
             // --- LOG y CÁLCULOS PRELIMINARES (Sin cambios) ---
 
