@@ -25,6 +25,7 @@ class Horario extends Model
         'destino_compensacion',
         'fecha_compensacion',
         'extra_consumido',
+        'aprobado_93h' ,
     ];
 
     protected function casts(): array
