@@ -86,7 +86,7 @@ class HorarioController extends Controller
     {
         $isJefe = $request->user()->rol_id == 4;
         $empleados = Empleado::whereNull('fecha_cese')
-            ->when($isJefe, fn ($query) => $query->where('jefe_id', $request->user()->empleado_id))
+            ->when($isJefe, fn($query) => $query->where('jefe_id', $request->user()->empleado_id))
             ->orderBy('apellidos')
             ->get(['id', 'jornada_id', 'apellidos', 'nombres']);
 
@@ -101,20 +101,20 @@ class HorarioController extends Controller
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
         $isJefe = $request->user()->rol_id == 4;
         $empleados = Empleado::whereNull('fecha_cese')
-            ->when($isJefe, fn ($query) => $query->where('jefe_id', $request->user()->empleado_id))
+            ->when($isJefe, fn($query) => $query->where('jefe_id', $request->user()->empleado_id))
             ->orderBy('apellidos')
             ->get(['id', 'jornada_id', 'apellidos', 'nombres']);
 
         $supervisores = User::with('empleado')
             ->where('estado', true)
             ->get()
-            ->filter(fn ($u) => $u->empleado) // evitar nulos
+            ->filter(fn($u) => $u->empleado) // evitar nulos
             ->map(function ($u) {
                 return [
                     'id' => $u->empleado->id,
                     'apellidos' => $u->empleado->apellidos,
                     'nombres' => $u->empleado->nombres,
-                    'nombre' => $u->empleado->apellidos.' '.$u->empleado->nombres,
+                    'nombre' => $u->empleado->apellidos . ' ' . $u->empleado->nombres,
                 ];
             })
             ->sortBy('nombre')
@@ -278,7 +278,7 @@ class HorarioController extends Controller
         $empresaId = $request->get('empresa_id');
 
         // Supervisores especiales (multiempresa)
-        $MULTI_EMPRESA = [383,397];
+        $MULTI_EMPRESA = [383, 397];
 
         // Empresas donde NO se incluye al supervisor en la lista
         $EXCLUDE_SUPERVISOR_COMPANIES = [1, 5];
@@ -626,195 +626,18 @@ class HorarioController extends Controller
 
     // ------------------------------------------------------------------------- LOGICA DEL INSERTAR -------------------------------------------------------------------------
 
-    /*
-    //Respaldo
-     public function storeMultiple(Request $request)
-    {
-        $requestId = (string) Str::uuid();
-
-        Log::info(
-            "🚀 INICIO storeMultiple\n".
-            "request_id: {$requestId}\n".
-            '----------------------------------'
-        );
-
-        $data = $request->validate([
-            'entries' => 'required|array|min:1',
-            'entries.*.empleado_id' => 'required|integer|exists:empleados,id',
-            'entries.*.fecha' => 'required|date',
-            'entries.*.ingreso' => 'required|date_format:H:i',
-            'entries.*.salida' => 'required|date_format:H:i',
-            'entries.*.estado' => 'required|string',
-            'entries.*.feriado' => 'nullable|integer',
-            'entries.*.permiso_td_id' => 'nullable|integer',
-        ]);
-
-        $entries = collect($data['entries']);
-
-        // ======================================================
-        // 1️⃣ DEFINIR SEMANA OFICIAL (LUNES → DOMINGO)
-        // ======================================================
-        $fechaRef = Carbon::parse($entries->min('fecha'), 'America/Lima')->startOfDay();
-        $inicioSemana = $fechaRef->copy()->startOfWeek(Carbon::MONDAY);
-        $finSemana = $fechaRef->copy()->endOfWeek(Carbon::SUNDAY);
-
-        // Generamos las 7 fechas oficiales de la semana
-        $fechasSemana = collect();
-        for ($i = 0; $i < 7; $i++) {
-            $fechasSemana->push(
-                $inicioSemana->copy()->addDays($i)->toDateString()
-            );
-        }
-
-        Log::info(
-            "📅 SEMANA CALCULADA\n".
-            "inicio: {$inicioSemana->toDateString()}\n".
-            "fin: {$finSemana->toDateString()}\n".
-            'fechas: '.implode(', ', $fechasSemana->toArray())."\n".
-            '----------------------------------'
-        );
-
-        // ======================================================
-        // 2️⃣ AGRUPAR POR EMPLEADO
-        // ======================================================
-        $porEmpleado = $entries->groupBy('empleado_id');
-
-        foreach ($porEmpleado as $empleadoId => $entriesEmpleado) {
-
-            $lockKey = "horarios_semana_{$empleadoId}_{$inicioSemana->toDateString()}";
-            $lock = Cache::lock($lockKey, 120);
-
-            if (! $lock->get()) {
-                Log::warning(
-                    "⛔ BLOQUEADO POR LOCK\n".
-                    "empleado_id: {$empleadoId}\n".
-                    "request_id: {$requestId}\n".
-                    '----------------------------------'
-                );
-
-                continue;
-            }
-
-            try {
-
-                // ======================================================
-                // 3️⃣ TRANSACCIÓN + BLOQUEO REAL EN BD
-                // ======================================================
-                DB::transaction(function () use (
-                    $empleadoId,
-                    $inicioSemana,
-                    $finSemana,
-                    $fechasSemana,
-                    $entriesEmpleado
-
-                ) {
-
-                    // 🔒 Bloqueo REAL: nadie más puede tocar esta semana
-                    $diasExistentes = DB::table('horarios')
-                        ->where('empleado_id', $empleadoId)
-                        ->whereBetween('fecha', [
-                            $inicioSemana->toDateString(),
-                            $finSemana->toDateString(),
-                        ])
-                        ->lockForUpdate()
-                        ->pluck('fecha')
-                        ->map(fn ($f) => Carbon::parse($f)->toDateString())
-                        ->toArray();
-
-                    Log::info(
-                        "📊 ESTADO ACTUAL BD\n".
-                        "empleado_id: {$empleadoId}\n".
-                        'dias_existentes: '.implode(', ', $diasExistentes)."\n".
-                        '----------------------------------'
-                    );
-
-                    // 🚫 Semana completa → no tocar
-                    if (count($diasExistentes) === 7) {
-                        Log::warning(
-                            "🚫 SEMANA COMPLETA - SE OMITE\n".
-                            "empleado_id: {$empleadoId}\n".
-                            '----------------------------------'
-                        );
-
-                        return;
-                    }
-
-                    // ======================================================
-                    // 4️⃣ DÍAS QUE REALMENTE FALTAN (SEGÚN SEMANA OFICIAL)
-                    // ======================================================
-                    $diasFaltantes = $fechasSemana->diff($diasExistentes);
-
-                    Log::info(
-                        "🛠️ DÍAS A CREAR\n".
-                        "empleado_id: {$empleadoId}\n".
-                        'faltantes: '.implode(', ', $diasFaltantes->toArray())."\n".
-                        '----------------------------------'
-                    );
-
-                    foreach ($diasFaltantes as $fecha) {
-
-                        // Tomamos datos del request SOLO como referencia
-                        $entry = $entriesEmpleado
-                            ->first(fn ($e) => Carbon::parse($e['fecha'])->toDateString() === $fecha);
-
-                        Log::info(
-                            "✍️ CREANDO DÍA\n".
-                            "empleado_id: {$empleadoId}\n".
-                            "fecha: {$fecha}\n".
-                            '----------------------------------'
-                        );
-
-                        $this->procesarUnDia(
-                            $empleadoId,
-                            $fecha,
-                            $entry['ingreso'] ?? '00:00',
-                            $entry['salida'] ?? '00:00',
-                            $entry['estado'] ?? 'L',
-                            '',
-                            $entry['feriado'] ?? null,
-                            $entry['permiso_td_id'] ?? null
-                        );
-                    }
-
-                    Log::info(
-                        "✅ SEMANA COMPLETADA\n".
-                        "empleado_id: {$empleadoId}\n".
-                        '----------------------------------'
-                    );
-                }, 2); // 🔁 retry 1 vez si hay deadlock
-
-            } catch (\Throwable $e) {
-                Log::error(
-                    "💥 ERROR GRAVE\n".
-                    "empleado_id: {$empleadoId}\n".
-                    "request_id: {$requestId}\n".
-                    "error: {$e->getMessage()}\n".
-                    '----------------------------------'
-                );
-            } finally {
-                $lock->release();
-            }
-        }
-
-        Log::info(
-            "🏁 FIN storeMultiple\n".
-            "request_id: {$requestId}\n".
-            '----------------------------------'
-        );
-
-        return back()->with('success', 'Proceso ejecutado');
-    }
-    */
     public function storeMultiple(Request $request)
     {
         // 1. VALIDACIÓN ORIGINAL (Mantenemos tu seguridad)
-        \Log::info("\n".
-            "🚀 STORE MULTIPLE - INICIO DE PROCESO\n".
-            "\n".
-            "📥 Datos recibidos del request:\n".
-            '  Total de entries: '.count($request->input('entries', []))."\n".
-            '  Fecha/hora: '.now()->format('Y-m-d H:i:s')."\n".
+        \Log::info("\n" .
+            "🚀 STORE MULTIPLE - INICIO DE PROCESO\n" .
+            "\n" .
+            "📥 Datos recibidos del request:\n" .
+            '  Total de entries: ' . count($request->input('entries', [])) . "\n" .
+            '  Fecha/hora: ' . now()->format('Y-m-d H:i:s') . "\n" .
             '');
+
+
 
         $validated = $request->validate([
             'entries' => 'required|array|min:1',
@@ -837,18 +660,18 @@ class HorarioController extends Controller
         $inicioSemana = $fechaReferencia->copy()->startOfWeek(Carbon::MONDAY);
         $finSemana = $fechaReferencia->copy()->endOfWeek(Carbon::SUNDAY);
 
-        \Log::info("📅 CÁLCULO DE SEMANA OFICIAL:\n".
-            '  Fecha referencia (primera entry): '.$entries[0]['fecha']."\n".
-            '  Lunes de la semana: '.$inicioSemana->format('d/m/Y')."\n".
-            '  Domingo de la semana: '.$finSemana->format('d/m/Y')."\n".
-            "  Días de la semana:\n".
-            '    Lunes: '.$inicioSemana->format('d/m/Y')."\n".
-            '    Martes: '.$inicioSemana->copy()->addDay()->format('d/m/Y')."\n".
-            '    Miércoles: '.$inicioSemana->copy()->addDays(2)->format('d/m/Y')."\n".
-            '    Jueves: '.$inicioSemana->copy()->addDays(3)->format('d/m/Y')."\n".
-            '    Viernes: '.$inicioSemana->copy()->addDays(4)->format('d/m/Y')."\n".
-            '    Sábado: '.$inicioSemana->copy()->addDays(5)->format('d/m/Y')."\n".
-            '    Domingo: '.$inicioSemana->copy()->addDays(6)->format('d/m/Y')."\n".
+        \Log::info("📅 CÁLCULO DE SEMANA OFICIAL:\n" .
+            '  Fecha referencia (primera entry): ' . $entries[0]['fecha'] . "\n" .
+            '  Lunes de la semana: ' . $inicioSemana->format('d/m/Y') . "\n" .
+            '  Domingo de la semana: ' . $finSemana->format('d/m/Y') . "\n" .
+            "  Días de la semana:\n" .
+            '    Lunes: ' . $inicioSemana->format('d/m/Y') . "\n" .
+            '    Martes: ' . $inicioSemana->copy()->addDay()->format('d/m/Y') . "\n" .
+            '    Miércoles: ' . $inicioSemana->copy()->addDays(2)->format('d/m/Y') . "\n" .
+            '    Jueves: ' . $inicioSemana->copy()->addDays(3)->format('d/m/Y') . "\n" .
+            '    Viernes: ' . $inicioSemana->copy()->addDays(4)->format('d/m/Y') . "\n" .
+            '    Sábado: ' . $inicioSemana->copy()->addDays(5)->format('d/m/Y') . "\n" .
+            '    Domingo: ' . $inicioSemana->copy()->addDays(6)->format('d/m/Y') . "\n" .
             '');
 
         // 4. TRANSACCIÓN Y PROCESAMIENTO (Movimos la Foto aquí adentro con LOCK)
@@ -864,77 +687,17 @@ class HorarioController extends Controller
                 ->groupBy('empleado_id');
 
             // LOG DE EXISTENTES ENCONTRADOS (Dentro de la transacción para ver la realidad post-bloqueo)
-            \Log::info("🔍 HORARIOS EXISTENTES ENCONTRADOS EN BD (LOCK ACTIVADO):\n".
-                '  Empleados con registros existentes: '.$horariosExistentes->count()."\n".
-                "  Distribución por empleado:\n".
+            \Log::info("🔍 HORARIOS EXISTENTES ENCONTRADOS EN BD (LOCK ACTIVADO):\n" .
+                '  Empleados con registros existentes: ' . $horariosExistentes->count() . "\n" .
+                "  Distribución por empleado:\n" .
                 collect($horariosExistentes)->map(function ($registros, $empleadoId) {
-                    return "    • Empleado {$empleadoId}: ".$registros->count().' registros';
-                })->implode("\n")."\n".
+                    return "    • Empleado {$empleadoId}: " . $registros->count() . ' registros';
+                })->implode("\n") . "\n" .
                 '');
 
             $contadorProcesados = 0;
 
-            // ----------- logica de excedente de 93h : debe cambiar por la logica de no
-            // $empleadosPT = Empleado::whereIn('id', $empleadosIds)
-            //     ->where('jornada_id', 2)
-            //     ->whereNull('fecha_cese')
-            //     ->pluck('id');
 
-            // $excedentes = [];
-
-            // foreach ($empleadosPT as $empId) {
-            //     $fechaRef = Carbon::parse($entries[0]['fecha']);
-            //     $mes = $fechaRef->month;
-            //     $anio = $fechaRef->year;
-
-            //     // Horas ya guardadas este mes
-            //     $minutosGuardados = Horario::where('empleado_id', $empId)
-            //         ->whereYear('fecha', $anio)
-            //         ->whereMonth('fecha', $mes)
-            //         ->whereIn('estado', ['L', 'C', 'CA', 'TD', 'FL', 'CHE', 'SN', 'ST', 'SFI', 'FI', 'FJ', 'LCG', 'LSG', 'PE'])
-            //         ->get()
-            //         ->sum(function ($h) {
-            //             if (! $h->ingreso || ! $h->salida) {
-            //                 return 0;
-            //             }
-            //             $entrada = Carbon::parse($h->ingreso);
-            //             $salida = Carbon::parse($h->salida);
-            //             $min = $salida->gt($entrada)
-            //                 ? $salida->diffInMinutes($entrada)
-            //                 : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
-
-            //             return $min > 360 ? $min - 60 : $min;
-            //         });
-
-            //     // Horas de ESTA semana que viene en el request
-            //     $minutosRequest = collect($entries)
-            //         ->where('empleado_id', $empId)
-            //         ->filter(fn ($e) => ! in_array($e['estado'], ['D', 'SP', 'AI', 'V', 'M', 'LF', 'LP', 'LM']))
-            //         ->sum(function ($e) {
-            //             if (! $e['ingreso'] || ! $e['salida']) {
-            //                 return 0;
-            //             }
-            //             $entrada = Carbon::parse($e['ingreso']);
-            //             $salida = Carbon::parse($e['salida']);
-            //             $min = $salida->gt($entrada)
-            //                 ? $salida->diffInMinutes($entrada)
-            //                 : (1440 - $entrada->diffInMinutes(Carbon::parse('00:00'))) + $salida->diffInMinutes(Carbon::parse('00:00'));
-
-            //             return $min > 360 ? $min - 60 : $min;
-            //         });
-
-            //     if (($minutosGuardados + $minutosRequest) > 5580) { // 93h * 60
-            //         $emp = Empleado::find($empId);
-            //         $excedentes[] = "{$emp->apellidos} {$emp->nombres}";
-            //     }
-            // }
-
-            // if (!empty($excedentes)) {
-            //     return back()->withErrors([
-            //         'bloqueo_93h' => '🚨 Los siguientes empleados superarían las 93h mensuales: '.implode(', ', $excedentes),
-            //     ]);
-            // }
-            // ----------- logica de excedente de 93h
 
             foreach ($entries as $data) {
                 $empId = $data['empleado_id'];
@@ -979,10 +742,135 @@ class HorarioController extends Controller
                 }
             }
 
+
+            // ----------- logica de excedente de 93h : envia a crear a otro metodo.
+            // DESPUÉS del foreach de entries, antes del return
+            $empleadosPT = Empleado::whereIn('id', $empleadosIds)
+                ->where('jornada_id', 2)
+                ->whereNull('fecha_cese')
+                ->pluck('id');
+
+            $empleadosPT = Empleado::whereIn('id', $empleadosIds)
+                ->where('jornada_id', 2)
+                ->whereNull('fecha_cese')
+                ->pluck('id');
+
+            // ✅ AGREGA ESTO
+            \Log::info('🔍 DEBUG PT', [
+                'empleados_en_entries' => $empleadosIds->toArray(),
+                'pt_encontrados'       => $empleadosPT->toArray(),
+            ]);
+
+            foreach ($empleadosPT as $empId) {
+                $fechaRef = Carbon::parse($entries[0]['fecha']);
+                $mes = $fechaRef->month;
+                $anio = $fechaRef->year;
+
+
+
+                // Horas ya guardadas este mes (incluyendo las que acabamos de insertar)
+                $minutosGuardados = Horario::where('empleado_id', $empId)
+                    ->whereYear('fecha', $anio)
+                    ->whereMonth('fecha', $mes)
+                    ->whereIn('estado', ['L','C','CA','TD','FL','CHE','SN','ST','SFI','FI','FJ','LCG','LSG','PE'])
+                    ->get()
+                    ->sum(function ($h) {
+                        if (!$h->ingreso || !$h->salida) return 0;
+
+                        // ✅ EXTRAE SOLO LA HORA, ignora la fecha que trae el cast
+                        $entrada = Carbon::parse($h->ingreso)->format('H:i');
+                        $salida  = Carbon::parse($h->salida)->format('H:i');
+
+                        $entradaMin = (int)explode(':', $entrada)[0] * 60 + (int)explode(':', $entrada)[1];
+                        $salidaMin  = (int)explode(':', $salida)[0] * 60  + (int)explode(':', $salida)[1];
+
+                        if ($salidaMin > $entradaMin) {
+                            $min = $salidaMin - $entradaMin;
+                        } elseif ($salidaMin < $entradaMin) {
+                            $min = (1440 - $entradaMin) + $salidaMin; // turno nocturno
+                        } else {
+                            return 0;
+                        }
+
+                        return $min > 360 ? $min - 60 : $min;
+                    });
+
+                $MAX_MINUTOS = 93 * 60; // 5580
+
+
+                \Log::info("🕐 PT MINUTOS", [
+                    'empleado_id'       => $empId,
+                    'mes'               => $mes,
+                    'anio'              => $anio,
+                    'minutos_guardados' => $minutosGuardados,
+                    'horas'             => round($minutosGuardados / 60, 2),
+                    'excede_93h'        => $minutosGuardados > 5580 ? 'SÍ' : 'NO',
+                    'limite'            => 5580,
+                ]);
+
+                if ($minutosGuardados > $MAX_MINUTOS) {
+                    $excedente = $minutosGuardados - $MAX_MINUTOS;
+
+                    // Entries de este empleado para el permiso
+                    $entriesEmpleado = collect($entries)
+                        ->where('empleado_id', $empId)
+                        ->values()
+                        ->toArray();
+
+                    $this->crearPermiso93h(
+                        $empId,
+                        $inicioSemana,
+                        $finSemana,
+                        $minutosGuardados,
+                        $excedente,
+                        $entriesEmpleado
+                    );
+                }
+            }
+            // ----------- logica de excedente de 93h
+
             \Log::info('--- FIN PROCESAMIENTO ---', ['insertados' => $contadorProcesados]);
 
             return redirect()->back()->with('success', "Se han procesado {$contadorProcesados} registros correctamente.");
         });
+    }
+
+    private function crearPermiso93h(
+        int $empleadoId,
+        Carbon $inicioSemana,
+        Carbon $finSemana,
+        int $minutosGuardados,
+        int $minutosExcedente,
+        array $entries
+    ): void {
+        // Evitar duplicados — si ya existe permiso para esta semana, no crear otro
+        $existe = DB::table('excedencias_pt')
+            ->where('empleado_id', $empleadoId)
+            ->where('semana_inicio', $inicioSemana->toDateString())
+            ->exists();
+
+        if ($existe) {
+            \Log::info("⏭️ Excedencia ya registrada para empleado {$empleadoId} semana {$inicioSemana->toDateString()}");
+            return;
+        }
+
+        DB::table('excedencias_pt')->insert([
+            'empleado_id'           => $empleadoId,
+            'semana_inicio'         => $inicioSemana->toDateString(),
+            'semana_fin'            => $finSemana->toDateString(),
+            'minutos_mes_acumulado' => $minutosGuardados,
+            'minutos_excedente'     => $minutosExcedente,
+            'entries_json'          => json_encode($entries),
+            'estado'                => 0 ,
+            'created_at'            => now(),
+            'updated_at'            => now(),
+        ]);
+
+        
+
+        \Log::info("✅ Excedencia 93h creada para empleado {$empleadoId}");
+
+        // Aquí después va la llamada al correo — paso 4
     }
 
     private function procesarUnDia(
@@ -996,10 +884,10 @@ class HorarioController extends Controller
         $permiso_td_id = null
     ) {
 
-        \Log::info("\n".
-        "🚀 PROCESAR UN DIA  - INICIO DE PROCESO\n".
-        "\n".
-        '');
+        \Log::info("\n" .
+            "🚀 PROCESAR UN DIA  - INICIO DE PROCESO\n" .
+            "\n" .
+            '');
 
         // 🔥 Cache de empleado (evita repetir la misma consulta 7 veces por empleado)
         static $empleadosCache = [];
@@ -1110,7 +998,7 @@ class HorarioController extends Controller
             if ($permiso) {
                 $permiso->update([
                     'estado' => 1,
-                    'motivo' => 'TD consumido - '.$fecha->format('d/m/Y'),
+                    'motivo' => 'TD consumido - ' . $fecha->format('d/m/Y'),
                     'fecha' => $fecha->toDateString(),
                 ]);
 
@@ -1130,7 +1018,7 @@ class HorarioController extends Controller
         if ($permiso) {
             $permiso->update([
                 'estado' => 1,
-                'motivo' => 'TD consumido - '.$fecha->format('d/m/Y'),
+                'motivo' => 'TD consumido - ' . $fecha->format('d/m/Y'),
                 'fecha' => $fecha->toDateString(),
             ]);
 
@@ -1194,7 +1082,7 @@ class HorarioController extends Controller
         if (in_array($estado, ['C', 'CA']) && $feriado) {
             $feriadoObj = Feriado::find($feriado, ['fecha']);
             if ($feriadoObj) {
-                $motivo .= ' del '.Carbon::parse($feriadoObj->fecha)->format('d/m/Y');
+                $motivo .= ' del ' . Carbon::parse($feriadoObj->fecha)->format('d/m/Y');
             }
         }
 
@@ -1281,7 +1169,6 @@ class HorarioController extends Controller
                 ->get(['id', 'fecha', 'motivo', 'estado', 'tipo_id']);
 
             return response()->json($permisosTD);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener TD disponibles:', [
                 'empleado_id' => $empleadoId ?? 'null',
@@ -1320,12 +1207,12 @@ class HorarioController extends Controller
             $feriadoFuturo = Feriado::query()
                 ->whereYear('fecha', now()->year)
                 ->whereDate('fecha', '>=', now())
-                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleadoId))
+                ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $empleadoId))
                 ->orderBy('fecha', 'asc')
                 ->get();
 
             $feriadoDisponible = Feriado::query()
-                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $empleadoId))
+                ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $empleadoId))
                 ->whereIn('fecha', $fechasLaborables)
                 ->orderBy('fecha', 'asc')
                 ->get();
@@ -1334,13 +1221,13 @@ class HorarioController extends Controller
 
             if ($feriadoDisponible->isNotEmpty()) {
                 // Obtener fechas de feriados
-                $fechas = $feriadoDisponible->map(fn ($f) => $f->fecha->format('Y-m-d'));
+                $fechas = $feriadoDisponible->map(fn($f) => $f->fecha->format('Y-m-d'));
 
                 // 🔥 CAMBIO: Buscar HORARIOS PROGRAMADOS del PT para esas fechas
                 $horariosProgramados = Horario::where('empleado_id', $empleadoId)
                     ->whereIn('fecha', $fechas)
                     ->get()
-                    ->keyBy(fn ($h) => $h->fecha->format('Y-m-d'));
+                    ->keyBy(fn($h) => $h->fecha->format('Y-m-d'));
 
                 // Preparar datos de entrada/salida
                 foreach ($feriadoDisponible as $feriado) {
@@ -1365,7 +1252,6 @@ class HorarioController extends Controller
                 'horarios_feriados' => $horariosFeriados,
                 'es_part_time' => $esPartTime, // 🔥 AGREGAR ESTO, PENDEJO
             ]);
-
         } catch (\Exception $e) {
             // Log del error para debugging
             // \Log::error('Error en getFeriadosEmpleado: ' . $e->getMessage());
@@ -1412,20 +1298,18 @@ class HorarioController extends Controller
 
                 $inicioCorte = $fechaReferencia->copy()->day(30);
                 $finCorte = $fechaReferencia->copy()->addMonth()->day(29);
-
             } else {
 
                 $inicioCorte = $fechaReferencia->copy()->subMonth()->day(30);
                 $finCorte = $fechaReferencia->copy()->day(29);
-
             }
 
-            \Log::info('CORTE PT', [
-                'mes_recibido' => $mes,
-                'anio' => $anio,
-                'inicio' => $inicioCorte->format('Y-m-d'),
-                'fin' => $finCorte->format('Y-m-d'),
-            ]);
+            // \Log::info('CORTE PT', [
+            //     'mes_recibido' => $mes,
+            //     'anio' => $anio,
+            //     'inicio' => $inicioCorte->format('Y-m-d'),
+            //     'fin' => $finCorte->format('Y-m-d'),
+            // ]);
 
             $horarios = Horario::where('empleado_id', $empleadoId)
                 ->whereBetween('fecha', [
@@ -1522,7 +1406,6 @@ class HorarioController extends Controller
                 'anio' => $anio,
                 'debug_total_registros' => $horarios->count(),
             ]);
-
         } catch (\Exception $e) {
 
             // \Log::error("❌ Error en getHorasMensualesPT: {$e->getMessage()}");
@@ -1656,7 +1539,7 @@ class HorarioController extends Controller
             $feriadoFuturo = Feriado::query()
                 ->whereYear('fecha', $anioHorario)  // Solo del año del horario
                 ->whereDate('fecha', '<=', $horario->fecha)  // Desde la fecha del horario
-                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
+                ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $horario->empleado_id))
                 ->select(['id', 'fecha', 'nombre'])
                 ->orderBy('fecha', 'desc')
                 ->limit(1)
@@ -1666,7 +1549,7 @@ class HorarioController extends Controller
             $feriadoFuturo = Feriado::query()
                 ->whereYear('fecha', $anioActual)
                 ->whereDate('fecha', '>=', now())  // Desde HOY
-                ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
+                ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $horario->empleado_id))
                 ->select(['id', 'fecha', 'nombre'])
                 ->orderBy('fecha', 'asc')
                 ->limit(1)
@@ -1674,7 +1557,7 @@ class HorarioController extends Controller
         }
 
         $feriadoDisponible = Feriado::query() // feriados en los que los empleados tienen estado L, antes de la fecha actual para "COMPENSACION"
-            ->whereDoesntHave('horarios', fn ($q) => $q->where('empleado_id', $horario->empleado_id))
+            ->whereDoesntHave('horarios', fn($q) => $q->where('empleado_id', $horario->empleado_id))
             ->whereIn('fecha', $fechasLorables) // filtra solo las fechas que coinidan que tengan estado L
             ->select(['id', 'fecha', 'nombre'])
             ->orderBy('fecha', 'asc')
@@ -1776,7 +1659,7 @@ class HorarioController extends Controller
                             $permisoConsumido->update(['estado' => 1]);
 
                             // 3. Opcional: Establecemos el motivo del Permiso consumido para registrar la fecha del consumo
-                            $permisoConsumido->update(['motivo' => 'Consumido en Horario: '.$horario->fecha->format('d/m/Y')]);
+                            $permisoConsumido->update(['motivo' => 'Consumido en Horario: ' . $horario->fecha->format('d/m/Y')]);
 
                             // 4. Establecemos el horario a estado 'TD' o 'PE' si aún requiere un paso final de aprobación.
                             // Dado que está consumiendo un día que ya tenía disponible (estado 0),
@@ -1811,7 +1694,7 @@ class HorarioController extends Controller
                             $feriado = Feriado::find($data['feriado']); // obtenemos la tabla feriado
                             $existe = $horario->feriados()->where('horario_id', $horario->id)->exists(); // verificamos si existe en la tabla pivot
                             if (! $existe) {
-                                $permiso->update(['motivo' => $tipoPermiso->nombre.' del '.$feriado->fecha->format('d/m/Y')]);
+                                $permiso->update(['motivo' => $tipoPermiso->nombre . ' del ' . $feriado->fecha->format('d/m/Y')]);
                                 $horario->feriados()->attach($data['feriado']); // se registra el feriado en el horario indicado
                             }
                         }

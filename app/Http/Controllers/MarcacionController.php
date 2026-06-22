@@ -4,14 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Exports\MarcacionExport;
 use App\Http\Requests\Marcacion\StoreMarcacionRequest;
+use App\Models\Area;
 use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Horario;
+use App\Models\Jornada;
 use App\Models\Marcacion;
 use App\Models\MarcacionEdicion;
 use App\Models\Permiso;
-use App\Models\Area;
-use App\Models\Jornada;
 use App\Models\ReporteHeConsumida;
 use App\Models\User;
 use App\Models\Zktimems;
@@ -41,7 +41,7 @@ class MarcacionController extends Controller
         $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
         $empleados = Empleado::query()
-            ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id')
+            ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id', 'fecha_ingreso')
             ->with(['area:id,nombre', 'jornada:id,nombre'])
             ->where('empresa_id', $request->empresa)
             ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
@@ -52,20 +52,29 @@ class MarcacionController extends Controller
             ->orderBy('apellidos')
             ->get();
 
-        $horarios = Horario::whereIn('empleado_id', $empleados->pluck('id'))
+        $empleadosIds = $empleados->pluck('id');
+
+        // 2. CORRECCIÓN CLAVE PARA HORARIOS:
+        // Buscamos los horarios del rango, pero CONDICIONADOS a que la fecha del horario sea >= a la fecha_ingreso del empleado
+        $horarios = Horario::whereIn('empleado_id', $empleadosIds)
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->whereHas('empleado', function ($query) {
+                // Usamos el nombre real de la tabla de horarios dinámicamente
+                $tablaHorarios = (new Horario)->getTable();
+                $query->whereRaw("{$tablaHorarios}.fecha >= empleados.fecha_ingreso");
+            })
             ->get()
             ->groupBy('empleado_id');
 
-        /*
-        $horariosExtra = Horario::whereIn('empleado_id', $empleados->pluck('id'))
-        ->whereNotNull('extra')
-        ->get()
-        ->groupBy('empleado_id');
-        */
-
-        $marcaciones = Marcacion::whereIn('empleado_id', $empleados->pluck('id'))
+        // 3. CORRECCIÓN CLAVE PARA MARCACIONES:
+        // Lo mismo para las marcaciones, no buscar nada antes de su fecha de ingreso
+        $marcaciones = Marcacion::whereIn('empleado_id', $empleadosIds)
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
+            ->whereHas('empleado', function($query) {
+                // Usamos el nombre real de la tabla de marcaciones dinámicamente (así sea marcacions o marcaciones)
+                $tablaMarcaciones = (new Marcacion)->getTable();
+                $query->whereRaw("{$tablaMarcaciones}.fecha >= empleados.fecha_ingreso");
+            })
             ->get()
             ->groupBy('empleado_id');
 
@@ -196,7 +205,7 @@ class MarcacionController extends Controller
                             Si ingreso antes de su HI entonces cuenta
                             HIP - HIR : positivo toma , si es negativo 0
                         */
-                        $extra_ingreso =  max(0,$m_ingreso->diffInMinutes($h_ingreso,false));
+                        $extra_ingreso = max(0, $m_ingreso->diffInMinutes($h_ingreso, false));
 
                         $extra = $extra_salida + $extra_ingreso;
 
@@ -625,8 +634,8 @@ class MarcacionController extends Controller
 
             $total_he = $this->calcularHorasExtraDisponibles($empleado->id);
 
-			/*
-				\Log::info('DEBUG COMPENSAR DIA: '.json_encode([
+            /*
+                \Log::info('DEBUG COMPENSAR DIA: '.json_encode([
                 'marcacion' => $marcaciones,
                 'horario' => $horario,
                 'fecha parseada' => $fecha,
@@ -634,34 +643,30 @@ class MarcacionController extends Controller
                 'empleado' => $empleado,
                 '$total_he' => $total_he,
             ], JSON_PRETTY_PRINT));
-			*/
-
+            */
 
             // 2. comparar si hay suciente HE
             $inicio = \Carbon\Carbon::parse($horario->ingreso);
             $fin = \Carbon\Carbon::parse($horario->salida);
             $minutos_programados = $inicio->diffInMinutes($fin);
 
+            if ($minutos_programados > 360) {
+                $minutos_programados -= 60;
+            }
 
-			if ($minutos_programados > 360) {
-				$minutos_programados -= 60;
-			}
-
-
-			/*
-			log::info('tiempos ingreso y salida : '.json_encode([
+            /*
+            log::info('tiempos ingreso y salida : '.json_encode([
                  'inicio' => $inicio,
                  'fin' => $fin,
                  'programado' => $minutos_programados,
              ], JSON_PRETTY_PRINT));
-			*/
-
+            */
 
             if ($total_he < $minutos_programados) {
-				log::info('Tiempos insuficientes : '.json_encode([
-					 'Total HE' => $total_he,
-					 'Programado' => $minutos_programados,
-				 ], JSON_PRETTY_PRINT));
+                log::info('Tiempos insuficientes : '.json_encode([
+                    'Total HE' => $total_he,
+                    'Programado' => $minutos_programados,
+                ], JSON_PRETTY_PRINT));
 
                 return back()->with('error', "Saldo insuficiente. Tienes {$total_he} min y necesitas {$minutos_programados} min.");
             } else {
@@ -692,12 +697,11 @@ class MarcacionController extends Controller
                     ->orderBy('m.fecha', 'asc')
                     ->get();
 
-				/*
-					log::info('horas extras : '.json_encode([
-					'Horas extras' => $extras,
-				], JSON_PRETTY_PRINT));
-				*/
-
+                /*
+                    log::info('horas extras : '.json_encode([
+                    'Horas extras' => $extras,
+                ], JSON_PRETTY_PRINT));
+                */
 
                 foreach ($extras as $e) {
 
@@ -745,12 +749,9 @@ class MarcacionController extends Controller
                         'falta_por_pagar (programado)' => $deuda_pendiente,
                     ];
 
-
-					log::info('Resumen del cobro: '.json_encode([
+                    log::info('Resumen del cobro: '.json_encode([
                         'detalle descuento' => $detalles_descuento,
                     ], JSON_PRETTY_PRINT));
-
-
 
                     $reporte = ReporteHeConsumida::create([
                         'empleado_id' => $empleado->id,
@@ -763,20 +764,18 @@ class MarcacionController extends Controller
                         'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
                         'extra_consumido' => $consumido_formateado,
                         'extra_restante' => $extra_formateado,
-                        'destino_compensacin' => 'Compensa total del dia: '. $fecha,
+                        'destino_compensacin' => 'Compensa total del dia: '.$fecha,
                         'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
                         'fecha_edicin' => now()->format('Y-m-d H:i:s'),
                     ]);
 
-					/*
-						log::info(
+                    /*
+                        log::info(
                         'reporte HE: ' . json_encode([
                             'reporte HE' => $reporte,
                         ], JSON_PRETTY_PRINT)
                     );
-					*/
-
-
+                    */
 
                 }
 

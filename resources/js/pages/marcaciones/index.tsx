@@ -138,10 +138,20 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
     });
 
 
-    const marcacionesConHorario = marcaciones.filter(marcacion =>
-        marcacion.horario !== null &&
-        marcacion.horario !== undefined
-    );
+    const marcacionesFiltradas = marcaciones.filter((marcacion) => {
+        // Si por alguna razón no viene el empleado o su fecha de ingreso, lo dejamos pasar por seguridad
+        if (!marcacion.empleado || !marcacion.empleado.fecha_ingreso) {
+            return true;
+        }
+
+        // Comparamos el día de la fila contra la fecha de ingreso del trabajador
+        // Si la fecha de la marcación/asistencia es MENOR que su fecha de ingreso, la ELIMINAMOS (false)
+        if (marcacion.fecha < marcacion.empleado.fecha_ingreso) {
+            return false;
+        }
+
+        return true; // Si es igual o mayor, pasa limpio
+    });
 
 
 
@@ -169,7 +179,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                                 fechaFin={dateRange?.to?.toISOString().split('T')[0]}
                                                 disabled={isFiltering}
                                                 empresas={empresas} // <--- ¡IMPORTANTE!
-                                                // encargados={encargados}
+                                            // encargados={encargados}
                                             />
                                         )}
                                     </>
@@ -218,7 +228,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                             ) : isFiltering ? (
                                 <LoadingSkeleton />
                             ) : (
-                                <DataTable key="datatable-marcaciones" columns={columns} data={marcaciones} ref={dataTableRef} filters={{
+                                <DataTable key="datatable-marcaciones" columns={columns} data={marcacionesFiltradas} ref={dataTableRef} filters={{
                                     fechaInicio: filters.fechaInicio,
                                     fechaFin: filters.fechaFin
                                 }} />
