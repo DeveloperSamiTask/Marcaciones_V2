@@ -871,9 +871,38 @@ class HorarioController extends Controller
                 'updated_at' => now(),
             ]);
 
+        $excedencia = \App\Models\ExcedenciaPt::where('empleado_id', $empleadoId)
+            ->where('semana_inicio', $inicioSemana->toDateString())
+            ->with('empleado.empresa')
+            ->first();
+
+        if ($excedencia) {
+            $usuarioTemporal = new \App\Models\User;
+            $usuarioTemporal->email = $this->getCorreoEmpresa($excedencia->empleado->empresa_id);
+
+            $usuarioTemporal->notify(
+                new \App\Notifications\NotificacionExcedencia93h(collect([$excedencia]))
+            );
+
+            \Log::info("📧 Email enviado por excedencia 93h - empleado {$empleadoId}");
+        }
+
         \Log::info("✅ Excedencia 93h creada para empleado {$empleadoId}");
 
         // Aquí después va la llamada al correo — paso 4
+    }
+
+    private function getCorreoEmpresa(int $empresaId): string
+    {
+        $mapa = [
+            1  => 'cordovasandro99@gmail.com',
+            3  => 'sandrocordova99@hotmail.com',
+            5  => 'sandrocordova99@hotmail.com',
+            10 => 'sandrocordova99@hotmail.com',
+            11 => 'sandrocordova99@hotmail.com',
+        ];
+
+        return $mapa[$empresaId] ?? 'cordovasandro99@gmail.com';
     }
 
     private function procesarUnDia(

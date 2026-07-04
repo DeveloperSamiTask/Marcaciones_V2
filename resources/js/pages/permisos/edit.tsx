@@ -57,8 +57,22 @@ export default function EditPermiso({
     const marcacion_dia = permiso?.marcacion_dia || { ingreso: '00:00', salida: '00:00' };
     const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     // 1.Extra anticipado , extra salida
-    const realAnticipo = Math.max(0, toMin(horario_dia.ingreso) - toMin(marcacion_dia.ingreso));
-    const realSalida = Math.max(0, toMin(marcacion_dia.salida) - toMin(horario_dia.salida));
+    //const realAnticipo = Math.max(0, toMin(horario_dia.ingreso) - toMin(marcacion_dia.ingreso));
+    //const realSalida = Math.max(0, toMin(marcacion_dia.salida) - toMin(horario_dia.salida));
+
+    const progIngreso = toMin(horario_dia.ingreso);
+    const realIngreso = toMin(marcacion_dia.ingreso);
+    const realAnticipo = Math.max(0, progIngreso - realIngreso);
+
+    // --- LÓGICA CORREGIDA PARA SALIDA ---
+    const progSalidaMin = toMin(horario_dia.salida);
+    let realSalidaMin = toMin(marcacion_dia.salida);
+
+    if (realSalidaMin < progSalidaMin && progSalidaMin >= 1320) {
+        realSalidaMin += 1440;
+    }
+
+    const realSalida = Math.max(0, realSalidaMin - progSalidaMin);
 
     const esModoHE = permiso?.tipo_id === 20;
 
