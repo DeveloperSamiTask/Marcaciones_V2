@@ -70,7 +70,7 @@ class MarcacionController extends Controller
         // Lo mismo para las marcaciones, no buscar nada antes de su fecha de ingreso
         $marcaciones = Marcacion::whereIn('empleado_id', $empleadosIds)
             ->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin])
-            ->whereHas('empleado', function($query) {
+            ->whereHas('empleado', function ($query) {
                 // Usamos el nombre real de la tabla de marcaciones dinámicamente (así sea marcacions o marcaciones)
                 $tablaMarcaciones = (new Marcacion)->getTable();
                 $query->whereRaw("{$tablaMarcaciones}.fecha >= empleados.fecha_ingreso");
@@ -824,9 +824,7 @@ class MarcacionController extends Controller
                 $horarioFuente = Horario::find($idBolsa);
             } else {
                 // Si no mandan ID, buscamos la bolsa más antigua con saldo real
-
                 $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
-
                 $horarioFuente = \DB::table('horarios as h')
                     ->join('marcacions as m', function ($join) {
                         $join->on('m.empleado_id', '=', 'h.empleado_id')
@@ -839,7 +837,6 @@ class MarcacionController extends Controller
                     ->orderBy('h.fecha', 'asc')
                     ->select('h.*')
                     ->first();
-
                 if ($horarioFuente) {
                     $horarioFuente = Horario::find($horarioFuente->id);
                 }
@@ -1133,6 +1130,55 @@ class MarcacionController extends Controller
         return response()->json([
             'total_minutos' => $minutosTotales,
             'label' => floor($minutosTotales / 60).'h '.($minutosTotales % 60).'min disponibles',
+        ]);
+    }
+
+    private function calcularFeriadosDisponibles($empleadoId): int
+    {
+        // 1. Obtenemos las fechas de los feriados del año actual
+        $feriados = \DB::table('feriados')
+            ->whereYear('fecha', date('Y'))
+            ->pluck('fecha')
+            ->toArray();
+
+        $registros = \DB::table('horarios as h')
+            ->where('h.empleado_id', $empleadoId)
+            ->whereIn('h.fecha', $feriados)
+            ->where('h.estado', 'F') // <-- AQUÍ ESTÁ LA CLAVE: Filtrar solo los que fueron a trabajar
+             ->where('h.feriado', '0')
+            ->select('h.ingreso', 'h.salida')
+            ->get();
+
+        $empleado = Empleado::find($empleadoId);
+
+        Log::info('empleados : '.$empleado->apellidos);
+
+        // 3. Calculamos la diferencia en minutos de cada registro
+        return $registros->reduce(function ($carry, $registro) {
+            $inicio = \Carbon\Carbon::parse($registro->ingreso);
+            $fin = \Carbon\Carbon::parse($registro->salida);
+
+            // Calculamos los minutos brutos
+            $minutosTrabajados = $inicio->diffInMinutes($fin);
+
+            if ($minutosTrabajados > 360) {
+                $minutosTrabajados -= 60;
+            }
+
+            \Log::info('DEBUG FERIADO - Minutos Finales: '.$minutosTrabajados);
+
+            return $carry + $minutosTrabajados;
+        }, 0);
+    }
+
+    public function getFeriadosDisponibles($empleadoId)
+    {
+        $minutosTotales = $this->calcularFeriadosDisponibles($empleadoId);
+
+        return response()->json([
+            'total_minutos' => $minutosTotales,
+            'label' => floor($minutosTotales / 60).'h '.($minutosTotales % 60).'min disponibles',
+            'raw_data' => $minutosTotales, // Útil para que tu frontend haga el cálculo de "Día completo"
         ]);
     }
 

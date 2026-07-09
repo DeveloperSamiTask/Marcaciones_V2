@@ -110,6 +110,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('marcaciones', MarcacionController::class)->except(['show']);
 
     Route::group(['prefix' => 'marcaciones', 'as' => 'marcaciones.'], function () {
+
+        Route::get('{empleado}/feriados', [MarcacionController::class, 'getFeriadosDisponibles'])->name('feriados');
+
         Route::get('reales', [MarcacionController::class, 'real'])->name('reales');
 
         Route::get('reales/miluska', [MarcacionController::class, 'realMiluska'])->name('reales.miluska');
@@ -125,8 +128,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{empleado}/extras', [MarcacionController::class, 'getHorasExtraDisponibles'])->name('extras');
 
         Route::post('recalcular-extras', [MarcacionController::class, 'recalcularExtras'])->name('recalcular-extras');
-
-
     });
 
     Route::post('/marcaciones/compensar-dia', [MarcacionController::class, 'storeCompensarDia'])
