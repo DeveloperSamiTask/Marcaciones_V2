@@ -149,7 +149,6 @@ export default function EditMarcacion({
                 </div>
 
                 <form className="space-y-4" onSubmit={updateMarcacion}>
-                    {/* Input de Hora */}
 
                     {modoEdicion === 'feriado' && (
                         <div className="flex bg-slate-100 p-1 rounded-md mb-4">
@@ -162,7 +161,7 @@ export default function EditMarcacion({
                         </div>
                     )}
 
-                    {!['compensarDia', 'feriado'].includes(modoEdicion) || subModoFeriado === 'compensarFeriado' && (
+                    {(['libre', 'compensar'].includes(modoEdicion) || subModoFeriado === 'compensarFeriado') && (
                         <div className="grid gap-2">
                             <label className="text-sm font-medium text-muted-foreground">
                                 Hora actual de {tipo}
@@ -226,16 +225,6 @@ export default function EditMarcacion({
 
                     {modoEdicion === 'feriado' && (
                         <div className="space-y-4">
-                            {/* 1. Botones de selección */}
-                            {/* <div className="flex bg-slate-100 p-1 rounded-md mb-4">
-                                <button type="button" onClick={() => { setSubModoFeriado('compensarFeriado'); setData('modo', 'compensarFeriado'); }}>
-                                    Compensar con Feriado
-                                </button>
-                                <button type="button" onClick={() => { setSubModoFeriado('compensarDiaFeriado'); setData('modo', 'compensarDiaFeriado'); }}>
-                                    Compensar Dia con Feriado
-                                </button>
-                            </div> */}
-
 
                             {subModoFeriado === 'compensarFeriado' && (
                                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in">
@@ -295,7 +284,7 @@ export default function EditMarcacion({
                     </div>
 
                     <DialogFooter>
-                        <Button type="submit" disabled={processing || (modoEdicion === 'compensar' && bolsaExtra.total_minutos <= 0)}>
+                        <Button type="submit" disabled={processing || ((modoEdicion === 'compensar' || modoEdicion === 'compensarDia') && bolsaExtra.total_minutos <= 0)}>
                             {processing ? 'Procesando...' : 'Aplicar Ajuste'}
                         </Button>
                     </DialogFooter>
