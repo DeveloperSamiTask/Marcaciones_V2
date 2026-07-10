@@ -123,19 +123,19 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
     );
     //console.log('Marcaciones de OPERACIONES:', marcacionesOperaciones.length);
 
-    const marcacionesOperacionesSinHorario = marcacionesOperaciones.filter(m => !m.horario);
+    // const marcacionesOperacionesSinHorario = marcacionesOperaciones.filter(m => !m.horario);
     //console.log('Operaciones SIN horario:', marcacionesOperacionesSinHorario.length);
 
     // Mostrar detalles de los empleados afectados
-    marcacionesOperacionesSinHorario.forEach(marcacion => {
-        console.log('Empleado sin horario:', {
-            id: marcacion.empleado?.id,
-            nombre: `${marcacion.empleado?.nombres} ${marcacion.empleado?.apellidos}`,
-            area: marcacion.empleado?.area?.nombre,
-            jornada: marcacion.empleado?.jornada?.nombre,
-            fecha: marcacion.fecha
-        });
-    });
+    // marcacionesOperacionesSinHorario.forEach(marcacion => {
+    //     console.log('Empleado sin horario:', {
+    //         id: marcacion.empleado?.id,
+    //         nombre: `${marcacion.empleado?.nombres} ${marcacion.empleado?.apellidos}`,
+    //         area: marcacion.empleado?.area?.nombre,
+    //         jornada: marcacion.empleado?.jornada?.nombre,
+    //         fecha: marcacion.fecha
+    //     });
+    // });
 
 
     const marcacionesFiltradas = marcaciones.filter((marcacion) => {

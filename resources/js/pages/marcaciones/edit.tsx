@@ -82,20 +82,18 @@ export default function EditMarcacion({
         total_he_disponibles: bolsaExtra.total_minutos,
     });
 
-    useEffect(() => {
 
+
+    useEffect(() => {
         /*Evitar llamadas innecesarias */
         if (!open || !empleadoId) return;
-
         // Determinamos qué ruta consultar según el modo
         let ruta = '';
-
         if (modoEdicion === 'compensar' || modoEdicion === 'compensarDia') {
             ruta = route('marcaciones.extras', { empleado: empleadoId });
         } else if (modoEdicion === 'feriado') {
             ruta = route('marcaciones.feriados', { empleado: empleadoId });
         }
-
         if (ruta) {
             setCargandoExtras(true);
             axios.get(ruta)
@@ -105,11 +103,14 @@ export default function EditMarcacion({
         }
     }, [open, modoEdicion, empleadoId]);
 
+
     const updateMarcacion = (e) => {
         e.preventDefault();
 
         // Sincronizamos el modo actual del modal con el formulario
         setData('modo', modoEdicion);
+
+        console.log("🚀 Enviando datos al servidor:", JSON.stringify(data, null, 2));
 
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
@@ -143,7 +144,7 @@ export default function EditMarcacion({
 
                     <button type="button"
                         className={`flex-1 py-1 text-xs rounded ${modoEdicion === 'feriado' ? 'bg-white shadow' : ''}`}
-                        onClick={() => { setModoEdicion('feriado'); setData('modo', 'feriado'); }}
+                        onClick={() => { setModoEdicion('feriado'); setData('modo', 'feriado'); setSubModoFeriado(null); }}
                     >Feriado</button>
 
                 </div>
@@ -284,7 +285,7 @@ export default function EditMarcacion({
                     </div>
 
                     <DialogFooter>
-                        <Button type="submit" disabled={processing || ((modoEdicion === 'compensar' || modoEdicion === 'compensarDia') && bolsaExtra.total_minutos <= 0)}>
+                        <Button type="submit" disabled={processing || ((modoEdicion === 'compensar' || modoEdicion === 'compensarDia' || subModoFeriado === 'compensarFeriado' || subModoFeriado === 'compensarDiaFeriado') && bolsaExtra.total_minutos <= 0)}>
                             {processing ? 'Procesando...' : 'Aplicar Ajuste'}
                         </Button>
                     </DialogFooter>

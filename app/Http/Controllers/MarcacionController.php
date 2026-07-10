@@ -554,11 +554,12 @@ class MarcacionController extends Controller
         $data = $request->all();
 
         try {
-            if (isset($data['modo']) && $data['modo'] === 'compensar') {
+            /* Existe el modo y es compesar O compensarFeriado */
+            if (isset($data['modo']) && ($data['modo'] === 'compensar' || $data['modo'] === 'compensarFeriado')) {
                 return $this->updateModoCompensar($data, $marcacione);
             }
 
-            if (isset($data['modo']) && $data['modo'] === 'compensarDia') {
+            if (isset($data['modo']) && ($data['modo'] === 'compensar' || $data['modo'] === 'compensarDiaFeriado')) {
                 return $this->updateModoCompensarDia($data, $marcacione);
             }
 
@@ -570,6 +571,7 @@ class MarcacionController extends Controller
         }
     }
 
+    /* Este metodo es para cuando no existe marcacion */
     public function storeCompensarDia(Request $request)
     {
         try {
@@ -617,8 +619,12 @@ class MarcacionController extends Controller
                 $marcacione = null;
             }
 
+            Log::info('Data : '.json_encode([
+                'Data' => $data,
+                'Marcacion' => $marcacione,
+            ], JSON_PRETTY_PRINT));
+
             // 1. datos
-            $marcaciones = Marcacion::find($data['marcacion_id']);
             $fecha = isset($data['fecha']) ? \Carbon\Carbon::parse($data['fecha'])->format('Y-m-d') : \Carbon\Carbon::parse($marcacione->fecha)->format('Y-m-d');
             $horario = \DB::table('horarios as h')
                 ->where('h.fecha', $fecha)
@@ -632,7 +638,11 @@ class MarcacionController extends Controller
             $area = Area::find($empleado->area_id);
             $jornada = Jornada::find($empleado->jornada_id);
 
-            $total_he = $this->calcularHorasExtraDisponibles($empleado->id);
+            if($data['modo'] === 'feriado'){
+                $total_he = $this->calcularFeriadosDisponibles($empleado->id);
+            } else {
+                $total_he = $this->calcularHorasExtraDisponibles($empleado->id);
+            }
 
             /*
                 \Log::info('DEBUG COMPENSAR DIA: '.json_encode([
@@ -649,7 +659,6 @@ class MarcacionController extends Controller
             $inicio = \Carbon\Carbon::parse($horario->ingreso);
             $fin = \Carbon\Carbon::parse($horario->salida);
             $minutos_programados = $inicio->diffInMinutes($fin);
-
             if ($minutos_programados > 360) {
                 $minutos_programados -= 60;
             }
@@ -679,23 +688,38 @@ class MarcacionController extends Controller
                 */
                 $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
                 $finAnio = \Carbon\Carbon::now()->endOfYear()->toDateString();
+
                 $bolsa_acumulada = 0;
                 $deuda_pendiente = $minutos_programados;
                 $detalles_descuento = []; // Para tu log
 
-                $extras = \DB::table('marcacions as m')
-                    ->join('horarios as h', function ($join) {
-                        $join->on('h.fecha', '=', 'm.fecha')
-                            ->on('h.empleado_id', '=', 'm.empleado_id');
-                    })
-                    ->where('m.empleado_id', $empleado->id)
-                    ->where('m.estado_horas_extra', 1)
-                    ->whereNotNull('h.extra')
-                    ->where('h.extra', '!=', '00:00:00')
-                    ->whereBetween('m.fecha', [$inicioAnio, $finAnio])
-                    ->select('h.id', 'h.extra as extra_db', 'h.extra_consumido', 'h.fecha')
-                    ->orderBy('m.fecha', 'asc')
-                    ->get();
+                if ($data['modo'] === 'compensarDiaFeriado') {
+                    $extras = \DB::table('horarios as h')
+                        ->where('h.feriados', '=', '0')
+                        ->whereBetween('h.fecha', [$inicioAnio, $finAnio])
+                        ->select('h.id', 'h.ingreso as ingreso', 'h.salida as salida', 'h.fecha')
+                        ->orderBy('m.fecha', 'asc')
+                        ->get();
+
+                    log::info('Extra log : '.json_encode([
+                        'Total extra feriado' => $extras,
+                    ], JSON_PRETTY_PRINT));
+
+                } else {
+                    $extras = \DB::table('marcacions as m')
+                        ->join('horarios as h', function ($join) {
+                            $join->on('h.fecha', '=', 'm.fecha')
+                                ->on('h.empleado_id', '=', 'm.empleado_id');
+                        })
+                        ->where('m.empleado_id', $empleado->id)
+                        ->where('m.estado_horas_extra', 1)
+                        ->whereNotNull('h.extra')
+                        ->where('h.extra', '!=', '00:00:00')
+                        ->whereBetween('m.fecha', [$inicioAnio, $finAnio])
+                        ->select('h.id', 'h.extra as extra_db', 'h.extra_consumido', 'h.fecha')
+                        ->orderBy('m.fecha', 'asc')
+                        ->get();
+                }
 
                 /*
                     log::info('horas extras : '.json_encode([
@@ -713,6 +737,7 @@ class MarcacionController extends Controller
                     }
 
                     $tiempo = \Carbon\Carbon::parse($e->extra_db);
+
                     $disponible_en_registro = ($tiempo->hour * 60) + $tiempo->minute;
                     // Tomamos el MINIMO entre lo que hay en el registro y lo que todavía debemos.
                     // Ejemplo: Si hay 60 min pero solo debo 10, min(60, 10) devolverá 10.
@@ -837,6 +862,7 @@ class MarcacionController extends Controller
                     ->orderBy('h.fecha', 'asc')
                     ->select('h.*')
                     ->first();
+
                 if ($horarioFuente) {
                     $horarioFuente = Horario::find($horarioFuente->id);
                 }
@@ -859,13 +885,12 @@ class MarcacionController extends Controller
                 throw new \Exception('No hay horario programado para el día de la marcación.');
             }
 
-            $horaProgramada = \Carbon\Carbon::parse($campoHora === 'ingreso' ? $horarioDestino->ingreso : $horarioDestino->salida);
-
             $horaProg = \Carbon\Carbon::createFromFormat('H:i:s',
                 $campoHora === 'ingreso'
                     ? $horarioDestino->getRawOriginal('ingreso')
                     : $horarioDestino->getRawOriginal('salida')
             );
+
             $horaReal = \Carbon\Carbon::createFromFormat('H:i:s',
                 $marcacione->getRawOriginal($campoHora)
             );
@@ -1145,7 +1170,7 @@ class MarcacionController extends Controller
             ->where('h.empleado_id', $empleadoId)
             ->whereIn('h.fecha', $feriados)
             ->where('h.estado', 'F') // <-- AQUÍ ESTÁ LA CLAVE: Filtrar solo los que fueron a trabajar
-             ->where('h.feriado', '0')
+            ->where('h.feriado', '0')
             ->select('h.ingreso', 'h.salida')
             ->get();
 
