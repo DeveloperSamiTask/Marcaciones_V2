@@ -1256,45 +1256,6 @@ class ReporteController extends Controller
             'fechaFin' => 'nullable|date',
         ]);
 
-        /*
-            $extraUsado = \DB::table('horarios as h')
-            ->join('empleados as e', 'e.id', '=', 'h.empleado_id')
-            ->join('areas as a', 'a.id', '=', 'e.area_id')
-            ->join('jornadas as j', 'j.id', '=', 'e.jornada_id')
-            ->leftJoin('marcacion_edicions as mse', function ($join) {
-                $join->on('mse.empleado_id', '=', 'e.id')
-                    ->on('mse.fecha', '=', 'h.fecha_compensacion') // para que coincida el dia que se compensó
-                    ->where('mse.es_consolidado', '=', 1);
-            })
-            ->whereNotNull('h.extra_consumido')
-            ->where('h.extra_consumido', '!=', '00:00:00')
-            ->when($request->fechaInicio && $request->fechaFin, fn ($q) => $q->whereBetween('h.fecha_compensacion', [$request->fechaInicio, $request->fechaFin])
-            )
-            ->when($request->empresa, fn ($q) => $q->where('e.empresa_id', $request->empresa)
-            )
-            ->when($request->area, fn ($q) => $q->where('e.area_id', $request->area)
-            )
-            ->when($request->modalidad, fn ($q) => $q->where('e.jornada_id', $request->modalidad)
-            )
-            ->whereNull('e.fecha_cese')
-            ->select(
-                'e.id as empleado_id',
-                'e.apellidos',
-                'e.nombres',
-                'e.dni',
-                'a.nombre as area',
-                'j.nombre as jornada',
-                'h.fecha as fecha_he',
-                'h.extra as extra_restante',
-                'h.extra_consumido',
-                'h.destino_compensacion',
-                'mse.fecha as fecha_uso',
-                \DB::raw('DATE(mse.created_at) as fecha_edicion')
-            )
-            ->orderBy('e.apellidos')
-            ->get();
-        */
-
         $horarios = \DB::table('horarios as h')
             ->join('empleados as e', 'e.id', '=', 'h.empleado_id')
             ->join('areas as a', 'a.id', '=', 'e.area_id')

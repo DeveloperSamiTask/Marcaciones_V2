@@ -64,13 +64,17 @@ export default function EditMarcacion({
     const resultadoJornada = calcularTotalHoras(hip, hsp, true); // <--- Cambia a 'false' si no quieres descontar
 
     const [modoEdicion, setModoEdicion] = useState<'libre' | 'compensar' | 'compensarDia' | 'feriado'>('compensar');
+
     const [subModoFeriado, setSubModoFeriado] = useState<'compensarFeriado' | 'compensarDiaFeriado' | null>(null);
+
     const [open, setOpen] = useState(false);
-    // const ocultarInput = ['compensarDia', 'feriado'].includes(modoEdicion) || subModoFeriado === 'compensarDiaFeriado';
-    // CAMBIO CLAVE: Ahora es un objeto con el total, no un array
+
     const [bolsaExtra, setBolsaExtra] = useState({ total_minutos: 0, label: "" });
+
     const [cargandoExtras, setCargandoExtras] = useState(false);
+
     const [horaActual, setHoraActual] = useState(marcacionHora);
+
     const { data, patch, processing, setData, reset } = useForm({
         empleado_id: empleadoId,
         hora_original: marcacionHora,
@@ -85,9 +89,7 @@ export default function EditMarcacion({
 
 
     useEffect(() => {
-        /*Evitar llamadas innecesarias */
         if (!open || !empleadoId) return;
-        // Determinamos qué ruta consultar según el modo
         let ruta = '';
         if (modoEdicion === 'compensar' || modoEdicion === 'compensarDia') {
             ruta = route('marcaciones.extras', { empleado: empleadoId });
@@ -107,10 +109,7 @@ export default function EditMarcacion({
     const updateMarcacion = (e) => {
         e.preventDefault();
 
-        // Sincronizamos el modo actual del modal con el formulario
         setData('modo', modoEdicion);
-
-        console.log("🚀 Enviando datos al servidor:", JSON.stringify(data, null, 2));
 
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,

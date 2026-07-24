@@ -16,7 +16,6 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -222,8 +221,6 @@ class PermisoController extends Controller
                     $totalMinutos = $validated['he_anticipada'] + $validated['he_salida'];
                     $totalFormateado = sprintf('%02d:%02d', floor($totalMinutos / 60), $totalMinutos % 60);
 
-
-
                     AsistenciaDetalle::where('empleado_id', $permiso->empleado_id)
                         ->whereDate('fecha', $permiso->fecha)
                         ->update(['estado_horas_extra' => 1]);
@@ -232,11 +229,14 @@ class PermisoController extends Controller
                         ->whereDate('fecha', $permiso->fecha)
                         ->update(['estado_horas_extra' => 1]);
 
-                    $horario->update(['extra' => $totalFormateado]);
+                    $horario->update([
+                        'extra' => $totalFormateado,
+                        'calculo_manual' => 1
+                    ]);
 
                     $empleado = Empleado::find($permiso->empleado_id, 'id');
 
-                    Log:info('HE aprobadas: ' . json_encode([
+                    Log:info('HE aprobadas: '.json_encode([
                         'Emp: ' => $empleado->apellidos,
                         'Total: ' => $totalFormateado,
                         'Ant: ' => $validated['he_anticipada'],

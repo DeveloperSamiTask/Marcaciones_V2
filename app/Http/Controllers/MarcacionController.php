@@ -619,10 +619,10 @@ class MarcacionController extends Controller
                 $marcacione = null;
             }
 
-            Log::info('Data : '.json_encode([
-                'Data' => $data,
-                'Marcacion' => $marcacione,
-            ], JSON_PRETTY_PRINT));
+            // Log::info('Data : '.json_encode([
+            //     'Data' => $data,
+            //     'Marcacion' => $marcacione,
+            // ], JSON_PRETTY_PRINT));
 
             // 1. datos
             $fecha = isset($data['fecha']) ? \Carbon\Carbon::parse($data['fecha'])->format('Y-m-d') : \Carbon\Carbon::parse($marcacione->fecha)->format('Y-m-d');
@@ -638,22 +638,21 @@ class MarcacionController extends Controller
             $area = Area::find($empleado->area_id);
             $jornada = Jornada::find($empleado->jornada_id);
 
-            if($data['modo'] === 'feriado'){
+            if ($data['modo'] === 'compensarDiaFeriado') {
                 $total_he = $this->calcularFeriadosDisponibles($empleado->id);
             } else {
                 $total_he = $this->calcularHorasExtraDisponibles($empleado->id);
             }
 
-            /*
-                \Log::info('DEBUG COMPENSAR DIA: '.json_encode([
-                'marcacion' => $marcaciones,
-                'horario' => $horario,
-                'fecha parseada' => $fecha,
-                'horario_id' => $horario ? $horario->id : 'NO ENCONTRADO',
-                'empleado' => $empleado,
-                '$total_he' => $total_he,
-            ], JSON_PRETTY_PRINT));
-            */
+            // \Log::info('TOTAL DE HE: '.json_encode([
+            //     'marcacion' => $marcaciones,
+            //     'horario' => $horario,
+            //     'fecha parseada' => $fecha,
+            //     'horario_id' => $horario ? $horario->id : 'NO ENCONTRADO',
+            //     'empleado' => $empleado,
+            //     '$total_he' => $total_he,
+            //     '$modo' => $data['modo'],
+            // ], JSON_PRETTY_PRINT));
 
             // 2. comparar si hay suciente HE
             $inicio = \Carbon\Carbon::parse($horario->ingreso);
@@ -680,12 +679,6 @@ class MarcacionController extends Controller
                 return back()->with('error', "Saldo insuficiente. Tienes {$total_he} min y necesitas {$minutos_programados} min.");
             } else {
 
-                // 3. Empezar el calculo
-                /*
-                    Encontrar todos los horarios con HE aprobadas del inicio del año a hoy
-                    Esto me retorna un array supongo
-                    supongo que usar un forEach
-                */
                 $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
                 $finAnio = \Carbon\Carbon::now()->endOfYear()->toDateString();
 
@@ -694,18 +687,121 @@ class MarcacionController extends Controller
                 $detalles_descuento = []; // Para tu log
 
                 if ($data['modo'] === 'compensarDiaFeriado') {
+
                     $extras = \DB::table('horarios as h')
-                        ->where('h.feriados', '=', '0')
+                        ->join('marcacions as m', function ($q) {
+                            $q->on('m.fecha', '=', 'h.fecha')
+                                ->on('h.empleado_id', '=', 'm.empleado_id');
+                        })
+                        ->where('h.feriado', '=', '0')
+                        ->where('h.empleado_id', $empleado->id)
+                        ->where('h.estado', '=', 'F')
                         ->whereBetween('h.fecha', [$inicioAnio, $finAnio])
-                        ->select('h.id', 'h.ingreso as ingreso', 'h.salida as salida', 'h.fecha')
-                        ->orderBy('m.fecha', 'asc')
+                        ->select('h.id', 'h.ingreso as ingresoPro', 'h.salida as salidaPro', 'm.ingreso as ingresoMar', 'm.salida as salidaMar', 'h.fecha', 'm.empleado_id')
+                        ->orderBy('h.fecha', 'asc')
                         ->get();
 
-                    log::info('Extra log : '.json_encode([
-                        'Total extra feriado' => $extras,
-                    ], JSON_PRETTY_PRINT));
+                    // log::info('Extra log : '.json_encode([
+                    //     'Extra de Feriado' => $extras,
+                    // ], JSON_PRETTY_PRINT));
+
+                    // agarro el objeto deu n solo dia
+                    foreach ($extras as $e) {
+
+                        if ($deuda_pendiente <= 0) {
+                            break;
+                        }
+
+                        // programado de feriado -> centralizar el metodo en un solo dia
+                        $inicio = \Carbon\Carbon::parse($e->ingresoPro);
+                        $fin = \Carbon\Carbon::parse($e->salidaPro);
+
+                        // Calculamos los minutos brutos
+                        $totalFeriado = $inicio->diffInMinutes($fin);
+
+                        if ($totalFeriado > 360) {
+                            $totalFeriado -= 60;
+                        }
+
+                        // log::info('Extra Pre - calculo : '.json_encode([
+                        //     'Total feriado del dia' => $totalFeriado,
+                        //     'Fecha' => $e->fecha,
+                        // ], JSON_PRETTY_PRINT));
+
+                        $descuento = min($deuda_pendiente, $totalFeriado);
+
+                        // log::info('Logica de descuento : '.json_encode([
+                        //     'descuento' => $descuento,
+                        //     'deuda_pendiente' => $deuda_pendiente,
+                        // ], JSON_PRETTY_PRINT));
+
+                        $deuda_pendiente -= $descuento;
+
+                        // log::info('Post descuento : '.json_encode([
+                        //     'deuda_pendiente' => $deuda_pendiente,
+                        //     'descuento' => $descuento,
+                        // ], JSON_PRETTY_PRINT));
+
+                        $h_consumido = floor($descuento / 60);
+                        $m_consumido = $descuento % 60;
+                        $consumido_formateado = sprintf('%02d:%02d:00', $h_consumido, $m_consumido);
+                        // no abra sobrante en registro
+
+                        \DB::table('horarios')->where('id', $e->id)->update([
+                            'feriado' => 1,
+                            'destino_compensacion' => 'Compensa total del dia FERIADO : '.$fecha,
+                        ]);
+
+                        \DB::table('horarios')->where('fecha', $fecha)->update([
+                            'estado' => 'F',
+                        ]);
+
+                        $query = \DB::table('marcacions')
+                            ->whereDate('fecha', $fecha) // IMPORTANTE: usa whereDate en lugar de where
+                            ->where('empleado_id', $e->empleado_id);
+
+                        $count = $query->count();
+                        // Log::info('DEBUG: ¿Cuántos registros encontró para actualizar?: ' . $count);
+
+                        if ($count > 0) {
+                            $query->update([
+                                'ingreso' => $e->ingresoPro,
+                                'salida' => $e->salidaPro,
+                            ]);
+                            Log::info('DEBUG: Update ejecutado correctamente.');
+                        } else {
+                            Log::error('DEBUG: No se encontró NINGÚN registro para actualizar con fecha '.$fecha.' y empleado '.$e->id);
+                        }
+
+                        // log::info('Logica de reporte : '.json_encode([
+                        //     'ingresoPro' => $e->ingresoPro,
+                        //     'salidaPro' => $e->salidaPro,
+                        // ], JSON_PRETTY_PRINT));
+
+                        $reporte = ReporteHeConsumida::create([
+                            'empleado_id' => $empleado->id,
+                            'apellidos' => $empleado->apellidos,
+                            'nombres' => $empleado->nombres,
+                            'dni' => $empleado->dni,
+                            'area' => $area->nombre ?? 'N/A',
+                            'jornada' => $jornada->nombre ?? 'N/A',
+
+                            'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
+                            'extra_consumido' => $consumido_formateado, // <--- AQUÍ ESTÁ EL CAMBIO
+                            'extra_restante' => '00:00:00',
+                            'destino_compensacion' => 'Compensa total del dia (FERIADO): '.$fecha,
+                            'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
+                            'fecha_edicion' => now()->format('Y-m-d H:i:s'),
+                        ]);
+
+                        // log::info('Logica de reporte : '.json_encode([
+                        //     'reporte' => $reporte,
+                        // ], JSON_PRETTY_PRINT));
+
+                    }
 
                 } else {
+
                     $extras = \DB::table('marcacions as m')
                         ->join('horarios as h', function ($join) {
                             $join->on('h.fecha', '=', 'm.fecha')
@@ -719,113 +815,104 @@ class MarcacionController extends Controller
                         ->select('h.id', 'h.extra as extra_db', 'h.extra_consumido', 'h.fecha')
                         ->orderBy('m.fecha', 'asc')
                         ->get();
-                }
 
-                /*
-                    log::info('horas extras : '.json_encode([
-                    'Horas extras' => $extras,
-                ], JSON_PRETTY_PRINT));
-                */
+                    foreach ($extras as $e) {
 
-                foreach ($extras as $e) {
+                        /* voy sumando los minutos y RESTANDOLOS de horario.extras, mientras sea menor o igual que el programado se ira sumando
+                           el tema es como haria si por algun motivo , ya en las ultimas pues , sobra tiempo de la bolsa al momento de completar la hora_programada
+                        */
+                        if ($deuda_pendiente <= 0) {
+                            break;
+                        }
 
-                    /* voy sumando los minutos y RESTANDOLOS de horario.extras, mientras sea menor o igual que el programado se ira sumando
-                       el tema es como haria si por algun motivo , ya en las ultimas pues , sobra tiempo de la bolsa al momento de completar la hora_programada
-                    */
-                    if ($deuda_pendiente <= 0) {
-                        break;
+                        $tiempo = \Carbon\Carbon::parse($e->extra_db);
+
+                        $disponible_en_registro = ($tiempo->hour * 60) + $tiempo->minute;
+                        // Tomamos el MINIMO entre lo que hay en el registro y lo que todavía debemos.
+                        // Ejemplo: Si hay 60 min pero solo debo 10, min(60, 10) devolverá 10.
+                        $a_consumir = min($disponible_en_registro, $deuda_pendiente);
+
+                        $bolsa_acumulada += $a_consumir;
+                        $deuda_pendiente -= $a_consumir;
+
+                        $sobrante_en_registro = $disponible_en_registro - $a_consumir;
+
+                        // --- FORMATEO PARA EL "EXTRA" (lo que sobra) ---
+                        $h_sobra = floor($sobrante_en_registro / 60);
+                        $m_sobra = $sobrante_en_registro % 60;
+                        $extra_formateado = sprintf('%02d:%02d:00', $h_sobra, $m_sobra);
+
+                        // --- FORMATEO PARA EL "EXTRA_CONSUMIDO" (lo que usaste) ---
+                        $h_usado = floor($a_consumir / 60);
+                        $m_usado = $a_consumir % 60;
+                        $consumido_formateado = sprintf('%02d:%02d:00', $h_usado, $m_usado);
+
+                        \DB::table('horarios')->where('id', $e->id)->update([
+                            'extra' => $extra_formateado,
+                            'extra_consumido' => $consumido_formateado,
+                            'destino_compensacin' => 'Compensa total del dia : '.$fecha,
+                        ]);
+
+                        // actualizar las h.e
+
+                        $detalles_descuento[] = [
+                            'horario_id' => $e->id,
+                            'tenia' => $disponible_en_registro,
+                            'usamos' => $a_consumir,
+                            'sobro_en_este_dia' => $sobrante_en_registro,
+                            'falta_por_pagar (programado)' => $deuda_pendiente,
+                        ];
+
+                        // log::info('Resumen del cobro: '.json_encode([
+                        //     'detalle descuento' => $detalles_descuento,
+                        // ], JSON_PRETTY_PRINT));
+
+                        $reporte = ReporteHeConsumida::create([
+                            'empleado_id' => $empleado->id,
+                            'apellidos' => $empleado->apellidos,
+                            'nombres' => $empleado->nombres,
+                            'dni' => $empleado->dni,
+                            'area' => $area->nombre ?? 'N/A',
+                            'jornada' => $jornada->nombre ?? 'N/A',
+
+                            'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
+                            'extra_consumido' => $consumido_formateado,
+                            'extra_restante' => $extra_formateado,
+                            'destino_compensacion' => 'Compensa total del dia: '.$fecha,
+                            'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
+                            'fecha_edicion' => now()->format('Y-m-d H:i:s'),
+                        ]);
+
+                        /*
+                            log::info(
+                            'reporte HE: ' . json_encode([
+                                'reporte HE' => $reporte,
+                            ], JSON_PRETTY_PRINT)
+                        );
+                        */
+
                     }
 
-                    $tiempo = \Carbon\Carbon::parse($e->extra_db);
+                    \DB::table('horarios')
+                        ->where('id', $horario->id) // El ID del día que estamos compensando
+                        ->update(['estado' => 'CHE']);
 
-                    $disponible_en_registro = ($tiempo->hour * 60) + $tiempo->minute;
-                    // Tomamos el MINIMO entre lo que hay en el registro y lo que todavía debemos.
-                    // Ejemplo: Si hay 60 min pero solo debo 10, min(60, 10) devolverá 10.
-                    $a_consumir = min($disponible_en_registro, $deuda_pendiente);
+                    \DB::table('marcacions')
+                        ->where('empleado_id', $empleado->id)
+                        ->where('fecha', $fecha)
+                        ->update([
+                            'ingreso' => $horario->ingreso, // HI programada
+                            'salida' => $horario->salida,  // HS programada
+                        ]);
 
-                    $bolsa_acumulada += $a_consumir;
-                    $deuda_pendiente -= $a_consumir;
-
-                    $sobrante_en_registro = $disponible_en_registro - $a_consumir;
-
-                    // --- FORMATEO PARA EL "EXTRA" (lo que sobra) ---
-                    $h_sobra = floor($sobrante_en_registro / 60);
-                    $m_sobra = $sobrante_en_registro % 60;
-                    $extra_formateado = sprintf('%02d:%02d:00', $h_sobra, $m_sobra);
-
-                    // --- FORMATEO PARA EL "EXTRA_CONSUMIDO" (lo que usaste) ---
-                    $h_usado = floor($a_consumir / 60);
-                    $m_usado = $a_consumir % 60;
-                    $consumido_formateado = sprintf('%02d:%02d:00', $h_usado, $m_usado);
-
-                    \DB::table('horarios')->where('id', $e->id)->update([
-                        'extra' => $extra_formateado,
-                        'extra_consumido' => $consumido_formateado,
-                        'destino_compensacin' => 'Compensa total del dia : '.$fecha,
-                    ]);
-
-                    // actualizar las h.e
-
-                    $detalles_descuento[] = [
-                        'horario_id' => $e->id,
-                        'tenia' => $disponible_en_registro,
-                        'usamos' => $a_consumir,
-                        'sobro_en_este_dia' => $sobrante_en_registro,
-                        'falta_por_pagar (programado)' => $deuda_pendiente,
-                    ];
-
-                    log::info('Resumen del cobro: '.json_encode([
-                        'detalle descuento' => $detalles_descuento,
-                    ], JSON_PRETTY_PRINT));
-
-                    $reporte = ReporteHeConsumida::create([
-                        'empleado_id' => $empleado->id,
-                        'apellidos' => $empleado->apellidos,
-                        'nombres' => $empleado->nombres,
-                        'dni' => $empleado->dni,
-                        'area' => $area->nombre ?? 'N/A',
-                        'jornada' => $jornada->nombre ?? 'N/A',
-
-                        'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
-                        'extra_consumido' => $consumido_formateado,
-                        'extra_restante' => $extra_formateado,
-                        'destino_compensacin' => 'Compensa total del dia: '.$fecha,
-                        'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
-                        'fecha_edicin' => now()->format('Y-m-d H:i:s'),
-                    ]);
-
-                    /*
-                        log::info(
-                        'reporte HE: ' . json_encode([
-                            'reporte HE' => $reporte,
-                        ], JSON_PRETTY_PRINT)
-                    );
-                    */
+                    // \Log::info('COMPENSACIN COMPLETADA', [
+                    //     'empleado' => $empleado->nombres,
+                    //     'dia_compensado' => $fecha,
+                    //     'minutos_gastados' => $bolsa_acumulada,
+                    //     'detalles' => $detalles_descuento,
+                    // ]);
 
                 }
-
-                // Ajuste de tiempos y descuentos
-
-                \DB::table('horarios')
-                    ->where('id', $horario->id) // El ID del día que estamos compensando
-                    ->update(['estado' => 'CHE']);
-
-                \DB::table('marcacions')
-                    ->where('empleado_id', $empleado->id)
-                    ->where('fecha', $fecha)
-                    ->update([
-                        'ingreso' => $horario->ingreso, // HI programada
-                        'salida' => $horario->salida,  // HS programada
-                    ]);
-
-                // crear reportes
-
-                \Log::info('COMPENSACIN COMPLETADA', [
-                    'empleado' => $empleado->nombres,
-                    'dia_compensado' => $fecha,
-                    'minutos_gastados' => $bolsa_acumulada,
-                    'detalles' => $detalles_descuento,
-                ]);
 
                 return back()->with('success', 'Procesando lógica de compensacin...');
             }
@@ -897,6 +984,22 @@ class MarcacionController extends Controller
 
             // $minutosDeudaTotal = (int) abs($horaReal->diffInMinutes($horaProgramada));
 
+            /*
+                Este bloque no contempla horario nocturno , por eso si :
+                    HSR : 09:21 pm
+                    HSP : 00:00 am
+                    da error
+            */
+
+            $minProg = ($horaProg->hour * 60) + $horaProg->minute;
+            $minReal = ($horaReal->hour * 60) + $horaReal->minute;
+
+            // 2. Ajuste especial para turnos nocturnos
+            // Si la salida programada es 00:00 (0 minutos), la tratamos como 1440
+            if ($campoHora === 'salida' && $minProg === 0) {
+                $minProg = 1440;
+            }
+
             if ($campoHora === 'ingreso') {
                 if ($horaReal->gt($horaProg)) {
                     $minutosDeudaTotal = (int) abs($horaReal->diffInMinutes($horaProg));
@@ -904,10 +1007,12 @@ class MarcacionController extends Controller
                     throw new \Exception('No puedes compensar si no hay tardanza.');
                 }
             } else {
-                if ($horaReal->lt($horaProg)) {
-                    $minutosDeudaTotal = (int) abs($horaReal->diffInMinutes($horaProg));
+                // Si la salida real es menor que la programada, hay deuda
+                if ($minReal < $minProg) {
+                    $minutosDeudaTotal = $minProg - $minReal;
                 } else {
-                    throw new \Exception('No puedes compensar si no saliste antes de tu hora.');
+                    \Log::warning("Intento de compensar salida sin deuda. Real: $minReal, Prog: $minProg, Empleado: ".$marcacione->empleado_id);
+                    throw new \Exception("No puedes compensar. Marcaste a las {$horaReal->format('H:i')} y tu salida es {$horaProg->format('H:i')}.");
                 }
             }
 
@@ -1160,6 +1265,10 @@ class MarcacionController extends Controller
 
     private function calcularFeriadosDisponibles($empleadoId): int
     {
+
+        $inicioAnio = \Carbon\Carbon::now()->startOfYear()->toDateString();
+        $finAnio = \Carbon\Carbon::now()->endOfYear()->toDateString();
+
         // 1. Obtenemos las fechas de los feriados del año actual
         $feriados = \DB::table('feriados')
             ->whereYear('fecha', date('Y'))
@@ -1168,15 +1277,12 @@ class MarcacionController extends Controller
 
         $registros = \DB::table('horarios as h')
             ->where('h.empleado_id', $empleadoId)
-            ->whereIn('h.fecha', $feriados)
+            // ->whereIn('h.fecha', $feriados)
             ->where('h.estado', 'F') // <-- AQUÍ ESTÁ LA CLAVE: Filtrar solo los que fueron a trabajar
             ->where('h.feriado', '0')
-            ->select('h.ingreso', 'h.salida')
+            ->whereBetween('h.fecha', [$inicioAnio, $finAnio])
+            ->select('h.ingreso', 'h.salida', 'h.fecha')
             ->get();
-
-        $empleado = Empleado::find($empleadoId);
-
-        Log::info('empleados : '.$empleado->apellidos);
 
         // 3. Calculamos la diferencia en minutos de cada registro
         return $registros->reduce(function ($carry, $registro) {
@@ -1189,8 +1295,6 @@ class MarcacionController extends Controller
             if ($minutosTrabajados > 360) {
                 $minutosTrabajados -= 60;
             }
-
-            \Log::info('DEBUG FERIADO - Minutos Finales: '.$minutosTrabajados);
 
             return $carry + $minutosTrabajados;
         }, 0);
