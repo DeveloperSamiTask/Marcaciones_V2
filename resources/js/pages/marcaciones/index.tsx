@@ -19,7 +19,7 @@ import { DataTable, DataTableRef } from './data-table';
 import PullMarcacion from './pull';
 import { Card, CardContent } from '@/components/ui/card';
 import { RecalcularButton } from './recalcular-button'; // Agregar import
-
+import {RecalcularFeriadosButton} from './recalcularFeriadosButton';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Marcaciones',
@@ -180,6 +180,15 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                                 disabled={isFiltering}
                                                 empresas={empresas} // <--- ¡IMPORTANTE!
                                             // encargados={encargados}
+                                            />
+                                        )}
+                                        {auth.user.rol_id === 1 && (
+                                            <RecalcularFeriadosButton
+                                                empresa={selectedEmpresa as number}
+                                                fechaInicio={dateRange?.from?.toISOString().split('T')[0]}
+                                                fechaFin={dateRange?.to?.toISOString().split('T')[0]}
+                                                disabled={isFiltering}
+                                                empresas={empresas}
                                             />
                                         )}
                                     </>

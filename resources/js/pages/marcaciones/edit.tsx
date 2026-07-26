@@ -75,13 +75,20 @@ export default function EditMarcacion({
 
     const [horaActual, setHoraActual] = useState(marcacionHora);
 
-    const { data, patch, processing, setData, reset } = useForm({
+    const {
+        data,
+        patch,
+        processing,
+        setData,
+        reset,
+        transform,
+    } = useForm({
         empleado_id: empleadoId,
         hora_original: marcacionHora,
         hora_nueva: marcacionHora,
         tipo: tipo,
         motivo: '',
-        modo: 'compensar', // Enviamos el modo al back
+        modo: 'compensar',
         marcacion_id: marcacionId,
         total_he_disponibles: bolsaExtra.total_minutos,
     });
@@ -106,14 +113,38 @@ export default function EditMarcacion({
     }, [open, modoEdicion, empleadoId]);
 
 
+    // const updateMarcacion = (e) => {
+    //     e.preventDefault();
+
+    //     setData('modo', modoEdicion);
+
+    //     patch(route('marcaciones.update', marcacionId), {
+    //         preserveScroll: true,
+    //         onSuccess: () => { setOpen(false); reset(); },
+    //     });
+    // };
+
     const updateMarcacion = (e) => {
         e.preventDefault();
 
-        setData('modo', modoEdicion);
+        const modoFinal =
+            modoEdicion === 'feriado'
+                ? subModoFeriado
+                : modoEdicion;
+
+        if (!modoFinal) return;
+
+        transform((formData: typeof data) => ({
+            ...formData,
+            modo: modoFinal,
+        }));
 
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
-            onSuccess: () => { setOpen(false); reset(); },
+            onSuccess: () => {
+                setOpen(false);
+                reset();
+            },
         });
     };
 
@@ -243,7 +274,6 @@ export default function EditMarcacion({
                                 </div>
                             )}
 
-                            {/* Aquí podrías agregar el otro sub-modo si lo necesitas */}
                             {subModoFeriado === 'compensarDiaFeriado' && (
                                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in">
                                     {cargandoExtras ? (
