@@ -38,13 +38,13 @@ class MarcacionController extends Controller
         ]);
 
         $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
         $empleados = Empleado::query()
             ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id', 'fecha_ingreso')
             ->with(['area:id,nombre', 'jornada:id,nombre'])
             ->where('empresa_id', $request->empresa)
-            ->when($request->encargado, fn($query) => $query->where('jefe_id', $request->encargado))
+            ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
             ->when($request->fechaFin, function ($query) use ($request) {
                 $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
             })
@@ -240,7 +240,7 @@ class MarcacionController extends Controller
                         $inicioVentana = $m_ingreso->copy()->setTime(22, 0, 0);
                         $finVentana = $m_ingreso->copy()->addDay()->setTime(6, 0, 0);
                         $solo_hora_salida = \Carbon\Carbon::parse($horario->salida)->format('H:i:s');
-                        $h_salida_prog = \Carbon\Carbon::parse($m_ingreso->format('Y-m-d') . ' ' . $solo_hora_salida);
+                        $h_salida_prog = \Carbon\Carbon::parse($m_ingreso->format('Y-m-d').' '.$solo_hora_salida);
                         if ($h_salida_prog->hour < 10) {
                             $h_salida_prog->addDay();
                         }
@@ -300,7 +300,7 @@ class MarcacionController extends Controller
         ]);
 
         $user = $request->user();
-        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn($encargado) => $encargado->empleado->apellidos)->values();
+        $encargados = User::with('empleado')->where('estado', true)->get()->sortBy(fn ($encargado) => $encargado->empleado->apellidos)->values();
 
         // PASO 1: FILTRAR EMPRESAS SEG脷N USUARIO
         if ($user->name === 'ANGELES TERRONES MILUSKA') {
@@ -335,7 +335,7 @@ class MarcacionController extends Controller
 
             // CONSULTA NORMAL PARA OTROS USUARIOS - CON FILTRO DE ENCARGADO
             $empleadosDnis = Empleado::where('empresa_id', $request->empresa)
-                ->when($request->encargado, fn($query) => $query->where('jefe_id', $request->encargado))
+                ->when($request->encargado, fn ($query) => $query->where('jefe_id', $request->encargado))
                 ->when($request->fechaFin, function ($query) use ($request) {
                     $query->whereDate('fecha_ingreso', '<=', $request->fechaFin);
                 })
@@ -384,8 +384,8 @@ class MarcacionController extends Controller
 
                 // Si es la misma fecha l贸gica, aplicamos el truco de la hora virtual
                 // Las 00:06 se convierten en "24:00:06" para que vayan DESPU脡S de las 21:00
-                $horaA = ($a->hora < '05:00:00') ? '24:' . $a->hora : $a->hora;
-                $horaB = ($b->hora < '05:00:00') ? '24:' . $b->hora : $b->hora;
+                $horaA = ($a->hora < '05:00:00') ? '24:'.$a->hora : $a->hora;
+                $horaB = ($b->hora < '05:00:00') ? '24:'.$b->hora : $b->hora;
 
                 return strcmp($horaA, $horaB);
             })
@@ -494,8 +494,8 @@ class MarcacionController extends Controller
                         ? $marcacion->salida
                         : $marcacion->salida->format('H:i:s');
 
-                    $salidaProgramada = Carbon::parse($fechaSolo . ' ' . $horaSalidaProgramada);
-                    $salidaReal = Carbon::parse($fechaSolo . ' ' . $horaSalidaReal);
+                    $salidaProgramada = Carbon::parse($fechaSolo.' '.$horaSalidaProgramada);
+                    $salidaReal = Carbon::parse($fechaSolo.' '.$horaSalidaReal);
 
                     // Ajustar si cruza medianoche
                     if ($salidaReal->lt($salidaProgramada)) {
@@ -548,8 +548,10 @@ class MarcacionController extends Controller
         try {
             switch ($data['modo'] ?? null) {
                 case 'compensar':
-                case 'compensarFeriado':
                     return $this->updateModoCompensar($data, $marcacione);
+
+                case 'compensarFeriado':
+                    return $this->updateModoCompensarFeriado($data, $marcacione);
 
                 case 'compensarDia':
                 case 'compensarDiaFeriado':
@@ -559,9 +561,9 @@ class MarcacionController extends Controller
                     return $this->updateModoLibre($data, $marcacione);
             }
         } catch (\Exception $e) {
-            \Log::emergency('EXCEPCIÓN: ' . $e->getMessage());
+            \Log::emergency('EXCEPCIÓN: '.$e->getMessage());
 
-            return back()->withErrors(['message' => 'Error: ' . $e->getMessage()]);
+            return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
     }
 
@@ -623,8 +625,8 @@ class MarcacionController extends Controller
                 );
             }
 
-            \Log::emergency('extra_consumido raw: ' . $horarioFuente->extra_consumido);
-            \Log::emergency('extra raw: ' . $horarioFuente->extra);
+            \Log::emergency('extra_consumido raw: '.$horarioFuente->extra_consumido);
+            \Log::emergency('extra raw: '.$horarioFuente->extra);
 
             // 2. Calcular Deuda del día (Destino del tiempo)
             $campoHora = $data['tipo'];
@@ -668,7 +670,7 @@ class MarcacionController extends Controller
                 if ($minReal < $minProg) {
                     $minutosDeudaTotal = $minProg - $minReal;
                 } else {
-                    \Log::warning("Intento de compensar salida sin deuda. Real: $minReal, Prog: $minProg, Empleado: " . $marcacione->empleado_id);
+                    \Log::warning("Intento de compensar salida sin deuda. Real: $minReal, Prog: $minProg, Empleado: ".$marcacione->empleado_id);
                     throw new \Exception("No puedes compensar. Marcaste a las {$horaReal->format('H:i')} y tu salida es {$horaProg->format('H:i')}.");
                 }
             }
@@ -690,8 +692,8 @@ class MarcacionController extends Controller
 
             \Log::emergency("minutosDeudaTotal: $minutosDeudaTotal");
             \Log::emergency("minutosDisponibles: $minutosDisponibles");
-            \Log::emergency('horaReal: ' . $horaReal->format('H:i'));
-            \Log::emergency('horaProg: ' . $horaProg->format('H:i'));
+            \Log::emergency('horaReal: '.$horaReal->format('H:i'));
+            \Log::emergency('horaProg: '.$horaProg->format('H:i'));
 
             // Manejo de extra_consumido acumulativo
             $consumidoActual = $horarioFuente->getRawOriginal($campoConsumido) ?: '00:00:00';
@@ -719,7 +721,7 @@ class MarcacionController extends Controller
             $actualizacionBolsa = [
                 $campoSaldo => $nuevoExtraStr,
                 $campoConsumido => $consumidoStr,
-                'destino_compensacion' => 'Compensado día ' . $marcacione->fecha->format('Y-m-d'),
+                'destino_compensacion' => 'Compensado día '.$marcacione->fecha->format('Y-m-d'),
                 'fecha_compensacion' => $marcacione->fecha->format('Y-m-d'),
                 'updated_at' => now(),
             ];
@@ -747,7 +749,7 @@ class MarcacionController extends Controller
                 'fecha' => $marcacione->fecha,
                 'hora_original' => $marcacione->{$campoHora},
                 'hora' => $nuevaHora,
-                'motivo' => $data['motivo'] . ' (Edicion Compensa)',
+                'motivo' => $data['motivo'].' (Edicion Compensa)',
                 'es_consolidado' => 0,
                 'created_at' => now(), // <--- PARA QUE DATE-FNS NO EXPLOTE
                 'updated_at' => now(),
@@ -769,7 +771,7 @@ class MarcacionController extends Controller
                 'fecha_he' => \Carbon\Carbon::parse($horarioFuente->fecha)->format('Y-m-d'),
                 'extra_consumido' => sprintf('%02d:%02d:00', floor($minutosAConsumir / 60), $minutosAConsumir % 60),
                 'extra_restante' => sprintf('%02d:%02d:00', floor($saldoRestante / 60), $saldoRestante % 60),
-                'destino_compensacion' => 'Compensado dia ' . $marcacione->fecha->format('Y-m-d'),
+                'destino_compensacion' => 'Compensado dia '.$marcacione->fecha->format('Y-m-d'),
                 'fecha_uso' => $marcacione->fecha, // <-- CORREGIDO: ahora es una fecha
                 'fecha_edicion' => now()->format('Y-m-d H:i:s'),
             ]);
@@ -787,6 +789,186 @@ class MarcacionController extends Controller
             );
 
             return back()->with('success', "Compensados $minutosAConsumir minutos.");
+        });
+    }
+
+    private function updateModoCompensarFeriado(array $data, Marcacion $marcacione)
+    {
+        return DB::transaction(function () use ($data, $marcacione) {
+            $tipo = $data['tipo'] ?? null;
+
+            if (! in_array($tipo, ['ingreso', 'salida'], true)) {
+                throw new \Exception('Los feriados solo pueden compensar tardanzas o salidas anticipadas.');
+            }
+
+            $fechaDestino = Carbon::parse($marcacione->fecha)->format('Y-m-d');
+            $horarioDestino = Horario::query()
+                ->where('empleado_id', $marcacione->empleado_id)
+                ->whereDate('fecha', $fechaDestino)
+                ->first();
+
+            if (! $horarioDestino) {
+                throw new \Exception('No hay horario programado para el dia de la marcacion.');
+            }
+
+            $horaProgramadaRaw = $horarioDestino->getRawOriginal($tipo);
+            $horaRealRaw = $marcacione->getRawOriginal($tipo);
+            $ingresoProgramadoRaw = $horarioDestino->getRawOriginal('ingreso');
+
+            if (! $horaProgramadaRaw || ! $horaRealRaw || ! $ingresoProgramadoRaw) {
+                throw new \Exception('No se puede calcular la compensacion porque falta la hora programada o la marcacion.');
+            }
+
+            $ingresoProgramado = Carbon::parse(
+                $fechaDestino.' '.$ingresoProgramadoRaw
+            );
+            $horaProgramada = Carbon::parse($fechaDestino.' '.$horaProgramadaRaw);
+            $horaReal = Carbon::parse($fechaDestino.' '.$horaRealRaw);
+
+            if ($tipo === 'ingreso') {
+                if (! $horaReal->gt($horaProgramada)) {
+                    throw new \Exception('No puedes compensar si no hay tardanza.');
+                }
+
+                $minutosDeuda = (int) $horaProgramada->diffInMinutes($horaReal);
+                $concepto = 'tardanza';
+            } else {
+                if ($horaProgramada->lte($ingresoProgramado)) {
+                    $horaProgramada->addDay();
+                }
+
+                if ($horaReal->lt($ingresoProgramado)) {
+                    $horaReal->addDay();
+                }
+
+                if (! $horaReal->lt($horaProgramada)) {
+                    throw new \Exception('No puedes compensar si no hay salida anticipada.');
+                }
+
+                $minutosDeuda = (int) $horaReal->diffInMinutes($horaProgramada);
+                $concepto = 'salida anticipada';
+            }
+
+            if ($minutosDeuda <= 0) {
+                throw new \Exception('No hay minutos pendientes para compensar.');
+            }
+
+            $inicioAnio = now()->startOfYear()->toDateString();
+            $fuentesFeriado = Horario::query()
+                ->where('empleado_id', $marcacione->empleado_id)
+                ->where('estado', 'F')
+                ->where('calculo_manual_feriado', 1)
+                ->whereDate('fecha', '>=', $inicioAnio)
+                ->whereDate('fecha', '<=', today()->toDateString())
+                ->whereDate('fecha', '!=', $fechaDestino)
+                ->whereRaw('TIME_TO_SEC(feriado) > 0')
+                ->orderBy('fecha')
+                ->lockForUpdate()
+                ->get();
+
+            $aMinutos = static function (?string $tiempo): int {
+                if (! $tiempo) {
+                    return 0;
+                }
+
+                $partes = explode(':', $tiempo);
+
+                return ((int) ($partes[0] ?? 0) * 60) + (int) ($partes[1] ?? 0);
+            };
+
+            $saldoTotal = $fuentesFeriado->sum(
+                fn (Horario $horario) => $aMinutos($horario->getRawOriginal('feriado'))
+            );
+
+            if ($saldoTotal < $minutosDeuda) {
+                throw new \Exception(
+                    "Saldo de feriado insuficiente. Tienes {$saldoTotal} min y necesitas {$minutosDeuda} min."
+                );
+            }
+
+            $empleado = Empleado::with(['area', 'jornada'])->findOrFail($marcacione->empleado_id);
+            $deudaPendiente = $minutosDeuda;
+
+            foreach ($fuentesFeriado as $fuente) {
+                if ($deudaPendiente <= 0) {
+                    break;
+                }
+
+                $saldoRegistro = $aMinutos($fuente->getRawOriginal('feriado'));
+                $consumidoAnterior = $aMinutos($fuente->getRawOriginal('feriado_consumido'));
+                $minutosConsumidos = min($saldoRegistro, $deudaPendiente);
+                $saldoRestante = $saldoRegistro - $minutosConsumidos;
+                $consumidoTotal = $consumidoAnterior + $minutosConsumidos;
+                $fechaFeriado = Carbon::parse($fuente->fecha)->format('d/m/Y');
+                $fechaDestinoLabel = Carbon::parse($fechaDestino)->format('d/m/Y');
+                $descripcion = "Compensado con FERIADO {$fechaFeriado} para {$concepto} del {$fechaDestinoLabel}";
+
+                $fuente->update([
+                    'feriado' => sprintf('%02d:%02d:00', intdiv($saldoRestante, 60), $saldoRestante % 60),
+                    'feriado_consumido' => sprintf('%02d:%02d:00', intdiv($consumidoTotal, 60), $consumidoTotal % 60),
+                    'calculo_manual_feriado' => 1,
+                    'destino_compensacion' => $descripcion,
+                    'fecha_compensacion' => $fechaDestino,
+                ]);
+
+                ReporteHeConsumida::create([
+                    'empleado_id' => $empleado->id,
+                    'apellidos' => $empleado->apellidos,
+                    'nombres' => $empleado->nombres,
+                    'dni' => $empleado->dni,
+                    'area' => $empleado->area->nombre ?? 'N/A',
+                    'jornada' => $empleado->jornada->nombre ?? 'N/A',
+                    'fecha_he' => Carbon::parse($fuente->fecha)->format('Y-m-d'),
+                    'extra_consumido' => sprintf('%02d:%02d:00', intdiv($minutosConsumidos, 60), $minutosConsumidos % 60),
+                    'extra_restante' => sprintf('%02d:%02d:00', intdiv($saldoRestante, 60), $saldoRestante % 60),
+                    'destino_compensacion' => $descripcion,
+                    'fecha_uso' => $fechaDestino,
+                    'fecha_edicion' => now()->toDateString(),
+                ]);
+
+                $deudaPendiente -= $minutosConsumidos;
+            }
+
+            $horaOriginal = $marcacione->getRawOriginal($tipo);
+            $nuevaHora = $horarioDestino->getRawOriginal($tipo);
+
+            $marcacione->update([$tipo => $nuevaHora]);
+
+            MarcacionEdicion::create([
+                'empleado_id' => $marcacione->empleado_id,
+                'user_id' => Auth::id(),
+                'fecha' => $fechaDestino,
+                'hora_original' => $horaOriginal,
+                'hora' => $nuevaHora,
+                'motivo' => ($data['motivo'] ?? 'Compensacion').' (Compensa con feriado)',
+                'es_consolidado' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $mapa = ['ingreso' => 'hi', 'salida' => 'hs'];
+            $prefijo = $mapa[$tipo];
+
+            DB::table('marcacion_edicions')->updateOrInsert(
+                [
+                    'empleado_id' => $marcacione->empleado_id,
+                    'fecha' => $fechaDestino,
+                    'es_consolidado' => 1,
+                ],
+                [
+                    'user_id' => Auth::id(),
+                    "{$prefijo}_edit" => $nuevaHora,
+                    "{$prefijo}_orig" => $horaOriginal,
+                    'motivo' => 'Registro consolidado - Compensa con feriado',
+                    'created_at' => DB::raw('IFNULL(created_at, NOW())'),
+                    'updated_at' => now(),
+                ]
+            );
+
+            return back()->with(
+                'success',
+                "Se compensaron {$minutosDeuda} minutos de {$concepto} usando feriados."
+            );
         });
     }
 
@@ -821,7 +1003,7 @@ class MarcacionController extends Controller
 
             \DB::rollBack();
 
-            \Log::error('ERROR STORE COMPENSAR DIA: ' . $e->getMessage());
+            \Log::error('ERROR STORE COMPENSAR DIA: '.$e->getMessage());
 
             return back()->withErrors([
                 'message' => $e->getMessage(),
@@ -889,7 +1071,7 @@ class MarcacionController extends Controller
             */
 
             if ($total_he < $minutos_programados) {
-                log::info('Tiempos insuficientes : ' . json_encode([
+                log::info('Tiempos insuficientes : '.json_encode([
                     'Total HE' => $total_he,
                     'Programado' => $minutos_programados,
                 ], JSON_PRETTY_PRINT));
@@ -967,7 +1149,7 @@ class MarcacionController extends Controller
 
                         \DB::table('horarios')->where('id', $e->id)->update([
                             'feriado' => 1,
-                            'destino_compensacion' => 'Compensa total del dia FERIADO : ' . $fecha,
+                            'destino_compensacion' => 'Compensa total del dia FERIADO : '.$fecha,
                         ]);
 
                         \DB::table('horarios')
@@ -991,7 +1173,7 @@ class MarcacionController extends Controller
                             ]);
                             Log::info('DEBUG: Update ejecutado correctamente.');
                         } else {
-                            Log::error('DEBUG: No se encontró NINGÚN registro para actualizar con fecha ' . $fecha . ' y empleado ' . $e->id);
+                            Log::error('DEBUG: No se encontró NINGÚN registro para actualizar con fecha '.$fecha.' y empleado '.$e->id);
                         }
 
                         // log::info('Logica de reporte : '.json_encode([
@@ -1010,7 +1192,7 @@ class MarcacionController extends Controller
                             'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
                             'extra_consumido' => $consumido_formateado, // <--- AQUÍ ESTÁ EL CAMBIO
                             'extra_restante' => '00:00:00',
-                            'destino_compensacion' => 'Compensa total del dia (FERIADO): ' . $fecha,
+                            'destino_compensacion' => 'Compensa total del dia (FERIADO): '.$fecha,
                             'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
                             'fecha_edicion' => now()->format('Y-m-d H:i:s'),
                         ]);
@@ -1070,7 +1252,7 @@ class MarcacionController extends Controller
                         \DB::table('horarios')->where('id', $e->id)->update([
                             'extra' => $extra_formateado,
                             'extra_consumido' => $consumido_formateado,
-                            'destino_compensacin' => 'Compensa total del dia : ' . $fecha,
+                            'destino_compensacin' => 'Compensa total del dia : '.$fecha,
                         ]);
 
                         // actualizar las h.e
@@ -1098,7 +1280,7 @@ class MarcacionController extends Controller
                             'fecha_he' => \Carbon\Carbon::parse($e->fecha)->format('Y-m-d'),
                             'extra_consumido' => $consumido_formateado,
                             'extra_restante' => $extra_formateado,
-                            'destino_compensacion' => 'Compensa total del dia: ' . $fecha,
+                            'destino_compensacion' => 'Compensa total del dia: '.$fecha,
                             'fecha_uso' => $fecha, // <-- CORREGIDO: ahora es una fecha
                             'fecha_edicion' => now()->format('Y-m-d H:i:s'),
                         ]);
@@ -1136,14 +1318,13 @@ class MarcacionController extends Controller
                 return back()->with('success', 'Procesando lógica de compensacin...');
             }
         } catch (\Exception $e) {
-            \Log::emergency('EXCEPCIN CACHADA: ' . $e->getMessage());
+            \Log::emergency('EXCEPCIN CACHADA: '.$e->getMessage());
 
-            return back()->withErrors(['message' => 'Error: ' . $e->getMessage()]);
+            return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
 
         return back()->with('success', 'Procesando lógica de compensacin...');
     }
-
 
     private function updateModoLibre($data, Marcacion $marcacione)
     {
@@ -1174,7 +1355,7 @@ class MarcacionController extends Controller
                     'fecha' => $marcacione->fecha,
                     'hora_original' => $marcacione->{$tipo},
                     'hora' => $horaNueva,
-                    'motivo' => $data['motivo'] . ' (Edicion libre)',
+                    'motivo' => $data['motivo'].' (Edicion libre)',
 
                     'es_consolidado' => 0,
                     'created_at' => now(), // Forzado manual por si las moscas
@@ -1192,7 +1373,7 @@ class MarcacionController extends Controller
                     'user_id' => Auth::id(),
                     "{$pre}_edit" => $horaNueva,
                     'updated_at' => now(),
-                    'motivo' => $data['motivo'] . ' (Edicion libre)',
+                    'motivo' => $data['motivo'].' (Edicion libre)',
                 ];
 
                 if (! $edicionExistente || is_null($edicionExistente->{"{$pre}_orig"})) {
@@ -1277,7 +1458,7 @@ class MarcacionController extends Controller
 
         return response()->json([
             'total_minutos' => $minutosTotales,
-            'label' => floor($minutosTotales / 60) . 'h ' . ($minutosTotales % 60) . 'min disponibles',
+            'label' => floor($minutosTotales / 60).'h '.($minutosTotales % 60).'min disponibles',
         ]);
     }
 
@@ -1301,7 +1482,7 @@ class MarcacionController extends Controller
 
         return response()->json([
             'total_minutos' => $minutosTotales,
-            'label' => floor($minutosTotales / 60) . 'h ' . ($minutosTotales % 60) . 'min disponibles',
+            'label' => floor($minutosTotales / 60).'h '.($minutosTotales % 60).'min disponibles',
             'raw_data' => $minutosTotales, // Útil para que tu frontend haga el cálculo de "Día completo"
         ]);
     }
@@ -1357,7 +1538,7 @@ class MarcacionController extends Controller
                     ->whereNotNull('salida') // Validamos que exista marcación de salida real
                     ->get()
                     ->groupBy(function ($item) {
-                        return $item->empleado_id . '_' . $item->fecha;
+                        return $item->empleado_id.'_'.$item->fecha;
                     });
 
                 foreach ($empleados as $empleado) {
@@ -1367,7 +1548,7 @@ class MarcacionController extends Controller
                     $horariosEmpleado = $todosLosHorarios->get($empleado->id, []);
 
                     foreach ($horariosEmpleado as $horario) {
-                        $key = $empleado->id . '_' . $horario->fecha;
+                        $key = $empleado->id.'_'.$horario->fecha;
                         $marcacion = $todasLasMarcaciones->get($key)?->first();
 
                         // Solo entramos si existe la marcación (la validación de salida real ya se hizo en el query)
@@ -1409,6 +1590,7 @@ class MarcacionController extends Controller
 
     public function recalcularFeriados(Request $request)
     {
+
         \Log::info('INICIO RECALCULO FERIADOS', [
             'payload' => $request->all(),
         ]);
@@ -1566,7 +1748,7 @@ class MarcacionController extends Controller
                 if ($request->hasFile('sustento')) { // verificamos que haya un archivo comrpobante
                     $file = $request->file('sustento');
                     // $path = Storage::put('comprobantes', $file);
-                    $path = $file->store('asistencia/' . $marcacion->id, 'public'); // Almacenar el archivo en la carpeta public del storage
+                    $path = $file->store('asistencia/'.$marcacion->id, 'public'); // Almacenar el archivo en la carpeta public del storage
                     $marcacion->update(['sustento' => "storage/$path"]);
                 }
             });
@@ -1593,7 +1775,7 @@ class MarcacionController extends Controller
                 $horarios = Horario::whereIn('empleado_id', $dnis->values())
                     ->whereBetween('fecha', [$data['fecha'], now()->toDateString()])
                     ->get()
-                    ->keyBy(fn($h) => $h->fecha->format('Y-m-d') . '-' . $h->empleado_id);
+                    ->keyBy(fn ($h) => $h->fecha->format('Y-m-d').'-'.$h->empleado_id);
 
                 // 1. Recolectamos TODAS las marcas de los relojes involucrados
                 $todasLasMarcasRaw = Zktimems::whereIn('tarjeta', $dnis->keys())
@@ -1609,14 +1791,14 @@ class MarcacionController extends Controller
                     $empleadoId = $dnis->get($item->tarjeta);
                     $f = \Carbon\Carbon::parse($item->fecha);
                     $fechaLogica = ($item->hora < '05:00:00') ? $f->subDay()->format('Y-m-d') : $f->format('Y-m-d');
-                    $key = $fechaLogica . '-' . $empleadoId;
+                    $key = $fechaLogica.'-'.$empleadoId;
                     $grupos[$key][] = $item->hora;
                 }
 
                 // 3. Procesamos cada grupo con l贸gica antibug
                 foreach ($grupos as $key => $horasArray) {
                     $partes = explode('-', $key);
-                    $fechaLogica = $partes[0] . '-' . $partes[1] . '-' . $partes[2];
+                    $fechaLogica = $partes[0].'-'.$partes[1].'-'.$partes[2];
                     $empleadoId = end($partes);
 
                     if ($fechaLogica < '2026-04-23') {
@@ -1624,8 +1806,8 @@ class MarcacionController extends Controller
                     }
 
                     $marcas = collect($horasArray)->unique()->sort()->values();
-                    $madrugada = $marcas->filter(fn($h) => $h < '05:00:00')->values();
-                    $tarde = $marcas->filter(fn($h) => $h >= '05:00:00')->values();
+                    $madrugada = $marcas->filter(fn ($h) => $h < '05:00:00')->values();
+                    $tarde = $marcas->filter(fn ($h) => $h >= '05:00:00')->values();
 
                     $ingreso = null;
                     $salida = null;

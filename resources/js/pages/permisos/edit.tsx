@@ -53,9 +53,21 @@ export default function EditPermiso({
     // console.log("Permiso: " , permiso);
 
     // const { horario_dia, marcacion_dia } = permiso;
-    const horario_dia = permiso?.horario_dia || { ingreso: '00:00', salida: '00:00' };
-    const marcacion_dia = permiso?.marcacion_dia || { ingreso: '00:00', salida: '00:00' };
-    const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const horario_dia = permiso?.horario_dia || { ingreso: null, salida: null };
+    const marcacion_dia = permiso?.marcacion_dia || { ingreso: null, salida: null };
+    const horasCompletas = [
+        horario_dia.ingreso,
+        horario_dia.salida,
+        marcacion_dia.ingreso,
+        marcacion_dia.salida,
+    ].every((hora) => typeof hora === 'string' && /^\d{1,2}:\d{2}/.test(hora));
+    const toMin = (hora: string | null | undefined) => {
+        if (typeof hora !== 'string') return 0;
+
+        const [h = 0, m = 0] = hora.split(':').map(Number);
+
+        return h * 60 + m;
+    };
     // 1.Extra anticipado , extra salida
     //const realAnticipo = Math.max(0, toMin(horario_dia.ingreso) - toMin(marcacion_dia.ingreso));
     //const realSalida = Math.max(0, toMin(marcacion_dia.salida) - toMin(horario_dia.salida));
@@ -65,10 +77,14 @@ export default function EditPermiso({
     const realAnticipo = Math.max(0, progIngreso - realIngreso);
 
     // --- LÓGICA CORREGIDA PARA SALIDA ---
-    const progSalidaMin = toMin(horario_dia.salida);
+    let progSalidaMin = toMin(horario_dia.salida);
     let realSalidaMin = toMin(marcacion_dia.salida);
 
-    if (realSalidaMin < progSalidaMin && progSalidaMin >= 1320) {
+    if (progSalidaMin <= progIngreso) {
+        progSalidaMin += 1440;
+    }
+
+    if (realSalidaMin < realIngreso) {
         realSalidaMin += 1440;
     }
 
@@ -84,6 +100,7 @@ export default function EditPermiso({
 
     const esValido = esModoHE
         ? (
+            horasCompletas &&
             Number(data.he_anticipada) <= realAnticipo &&
             Number(data.he_salida) <= realSalida &&
             (Number(data.he_anticipada) + Number(data.he_salida) > 0)
@@ -135,7 +152,7 @@ export default function EditPermiso({
                                 </span>
                             </div>
                             <div className="flex items-center gap-4">
-                                <p className="text-xs text-slate-500 w-24">Prog: {permiso.horario_dia.ingreso} <br /> Real: {permiso.marcacion_dia.ingreso}</p>
+                                <p className="text-xs text-slate-500 w-24">Prog: {horario_dia.ingreso ?? '-'} <br /> Real: {marcacion_dia.ingreso ?? '-'}</p>
                                 <Input
                                     className="h-12 text-lg"
                                     type="number"
@@ -155,7 +172,7 @@ export default function EditPermiso({
                                 </span>
                             </div>
                             <div className="flex items-center gap-4">
-                                <p className="text-xs text-slate-500 w-24">Prog: {permiso.horario_dia.salida} <br /> Real: {permiso.marcacion_dia.salida}</p>
+                                <p className="text-xs text-slate-500 w-24">Prog: {horario_dia.salida ?? '-'} <br /> Real: {marcacion_dia.salida ?? '-'}</p>
                                 <Input
                                     className="h-12 text-lg"
                                     type="number"

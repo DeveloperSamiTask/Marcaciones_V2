@@ -64,31 +64,20 @@ export default function EditMarcacion({
     const resultadoJornada = calcularTotalHoras(hip, hsp, true); // <--- Cambia a 'false' si no quieres descontar
 
     const [modoEdicion, setModoEdicion] = useState<'libre' | 'compensar' | 'compensarDia' | 'feriado'>('compensar');
-
     const [subModoFeriado, setSubModoFeriado] = useState<'compensarFeriado' | 'compensarDiaFeriado' | null>(null);
-
     const [open, setOpen] = useState(false);
-
+    // const ocultarInput = ['compensarDia', 'feriado'].includes(modoEdicion) || subModoFeriado === 'compensarDiaFeriado';
+    // CAMBIO CLAVE: Ahora es un objeto con el total, no un array
     const [bolsaExtra, setBolsaExtra] = useState({ total_minutos: 0, label: "" });
-
     const [cargandoExtras, setCargandoExtras] = useState(false);
-
     const [horaActual, setHoraActual] = useState(marcacionHora);
-
-    const {
-        data,
-        patch,
-        processing,
-        setData,
-        reset,
-        transform,
-    } = useForm({
+    const { data, patch, processing, setData, reset } = useForm({
         empleado_id: empleadoId,
         hora_original: marcacionHora,
         hora_nueva: marcacionHora,
         tipo: tipo,
         motivo: '',
-        modo: 'compensar',
+        modo: 'compensar', // Enviamos el modo al back
         marcacion_id: marcacionId,
         total_he_disponibles: bolsaExtra.total_minutos,
     });
@@ -96,7 +85,9 @@ export default function EditMarcacion({
 
 
     useEffect(() => {
+        /*Evitar llamadas innecesarias */
         if (!open || !empleadoId) return;
+        // Determinamos qué ruta consultar según el modo
         let ruta = '';
         if (modoEdicion === 'compensar' || modoEdicion === 'compensarDia') {
             ruta = route('marcaciones.extras', { empleado: empleadoId });
@@ -113,38 +104,17 @@ export default function EditMarcacion({
     }, [open, modoEdicion, empleadoId]);
 
 
-    // const updateMarcacion = (e) => {
-    //     e.preventDefault();
-
-    //     setData('modo', modoEdicion);
-
-    //     patch(route('marcaciones.update', marcacionId), {
-    //         preserveScroll: true,
-    //         onSuccess: () => { setOpen(false); reset(); },
-    //     });
-    // };
-
     const updateMarcacion = (e) => {
         e.preventDefault();
 
-        const modoFinal =
-            modoEdicion === 'feriado'
-                ? subModoFeriado
-                : modoEdicion;
+        // Sincronizamos el modo actual del modal con el formulario
+        setData('modo', modoEdicion);
 
-        if (!modoFinal) return;
-
-        transform((formData: typeof data) => ({
-            ...formData,
-            modo: modoFinal,
-        }));
+        console.log("?? Enviando datos al servidor:", JSON.stringify(data, null, 2));
 
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
-            onSuccess: () => {
-                setOpen(false);
-                reset();
-            },
+            onSuccess: () => { setOpen(false); reset(); },
         });
     };
 
@@ -222,7 +192,7 @@ export default function EditMarcacion({
                                     </p>
                                 </div>
                             ) : (
-                                <p className="text-xs text-red-500 font-medium">⚠️ No tiene horas extras disponibles para compensar.</p>
+                                <p className="text-xs text-red-500 font-medium">?? No tiene horas extras disponibles para compensar.</p>
                             )}
                         </div>
                     )}
@@ -245,7 +215,7 @@ export default function EditMarcacion({
                                 </div>
                             ) : (
                                 <div className="space-y-1">
-                                    <p className="text-xs text-red-600 font-bold">⚠️ Saldo insuficiente</p>
+                                    <p className="text-xs text-red-600 font-bold">?? Saldo insuficiente</p>
                                     <p className="text-xs text-red-500">
                                         Necesitas {resultadoJornada.label} pero solo tienes {bolsaExtra.label}.
                                     </p>
@@ -269,11 +239,12 @@ export default function EditMarcacion({
                                             </p>
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-red-500 font-medium">⚠️ No tiene horas extras disponibles para compensar.</p>
+                                        <p className="text-xs text-red-500 font-medium">?? No tiene horas extras disponibles para compensar.</p>
                                     )}
                                 </div>
                             )}
 
+                            {/* Aquí podrías agregar el otro sub-modo si lo necesitas */}
                             {subModoFeriado === 'compensarDiaFeriado' && (
                                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in">
                                     {cargandoExtras ? (
@@ -292,7 +263,7 @@ export default function EditMarcacion({
                                         </div>
                                     ) : (
                                         <div className="space-y-1">
-                                            <p className="text-xs text-red-600 font-bold">⚠️ Saldo insuficiente</p>
+                                            <p className="text-xs text-red-600 font-bold">?? Saldo insuficiente</p>
                                             <p className="text-xs text-red-500">
                                                 Necesitas {resultadoJornada.label} pero solo tienes {bolsaExtra.label}.
                                             </p>
