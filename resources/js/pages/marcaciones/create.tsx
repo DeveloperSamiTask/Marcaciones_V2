@@ -21,7 +21,7 @@ export default function CreateMarcacion({
 }) {
     // 1. Estados necesarios para la lógica de modos
     const [open, setOpen] = useState(false);
-    const [modoEdicion, setModoEdicion] = useState<'libre' | 'compensarDia'>('libre');
+    const [modoEdicion, setModoEdicion] = useState<'libre' | 'compensarDia' | 'compensarDiaFeriado'>('libre');
     const [bolsaExtra, setBolsaExtra] = useState({ total_minutos: 0, label: "" });
     const [cargandoExtras, setCargandoExtras] = useState(false);
 
@@ -52,7 +52,7 @@ export default function CreateMarcacion({
     const resultadoJornada = calcularJornada(hip, hsp);
 
     // 2. useForm con los campos adicionales para el backend
-    const { data, post, processing, setData, reset, errors, clearErrors } = useForm({
+    const { data, post, processing, setData, reset, transform } = useForm({
         empleado_id: empleadoId,
         hora: '',
         tipo: tipo,
@@ -64,9 +64,13 @@ export default function CreateMarcacion({
 
     // 3. Efecto para cargar bolsa (copiado del Edit)
     useEffect(() => {
-        if (open && empleadoId && modoEdicion === 'compensarDia') {
+        if (open && empleadoId && modoEdicion !== 'libre') {
+            const rutaBolsa = modoEdicion === 'compensarDiaFeriado'
+                ? route('marcaciones.feriados', { empleado: empleadoId })
+                : route('marcaciones.extras', { empleado: empleadoId });
+
             setCargandoExtras(true);
-            axios.get(route('marcaciones.extras', { empleado: empleadoId }))
+            axios.get(rutaBolsa)
                 .then(res => setBolsaExtra(res.data))
                 .finally(() => setCargandoExtras(false));
         }
@@ -75,16 +79,18 @@ export default function CreateMarcacion({
     const createMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
 
-        // Sincronizar datos antes de enviar
-        const payload = { ...data, modo: modoEdicion, total_he_disponibles: bolsaExtra.total_minutos };
+        transform((formData) => ({
+            ...formData,
+            modo: modoEdicion,
+            total_he_disponibles: bolsaExtra.total_minutos,
+        }));
 
         // Router dinámico: si es compensarDia, va a su ruta; si no, al store normal
-        const url = modoEdicion === 'compensarDia'
+        const url = modoEdicion !== 'libre'
         ? route('marcaciones.compensarDiaStore')
         : route('marcaciones.store');
 
         post(url, {
-            data: payload,
             preserveScroll: true,
             onSuccess: () => { setOpen(false); reset(); toast.success('Operación exitosa'); },
             onError: (errs) => toast.error(errs.message || 'Error')
@@ -101,22 +107,30 @@ export default function CreateMarcacion({
 
                 {/* Selector de Modo */}
                 <div className="flex bg-slate-100 p-1 rounded-md mb-4">
-                    {['libre', 'compensarDia'].map((m) => (
-                        <button key={m} type="button"
-                            className={`flex-1 py-1 text-xs rounded ${modoEdicion === m ? 'bg-white shadow' : ''}`}
-                            onClick={() => { setModoEdicion(m as any); setData('modo', m); }}>
-                            {m.charAt(0).toUpperCase() + m.slice(1)}
-                        </button>
-                    ))}
+                    <button type="button"
+                        className={`flex-1 py-1 text-xs rounded ${modoEdicion === 'libre' ? 'bg-white shadow' : ''}`}
+                        onClick={() => { setModoEdicion('libre'); setData('modo', 'libre'); }}>
+                        Libre
+                    </button>
+                    <button type="button"
+                        className={`flex-1 py-1 text-xs rounded ${modoEdicion === 'compensarDia' ? 'bg-white shadow' : ''}`}
+                        onClick={() => { setModoEdicion('compensarDia'); setData('modo', 'compensarDia'); }}>
+                        Día con HE
+                    </button>
+                    <button type="button"
+                        className={`flex-1 py-1 text-xs rounded ${modoEdicion === 'compensarDiaFeriado' ? 'bg-white shadow' : ''}`}
+                        onClick={() => { setModoEdicion('compensarDiaFeriado'); setData('modo', 'compensarDiaFeriado'); }}>
+                        Día con feriado
+                    </button>
                 </div>
 
                 <form className="space-y-4" onSubmit={createMarcacion}>
                     {/* Input Hora solo si no es compensarDia */}
-                    {modoEdicion !== 'compensarDia' && (
+                    {modoEdicion === 'libre' && (
                         <Input type="time" value={data.hora} onChange={e => setData('hora', e.target.value)} required />
                     )}
 
-                    {modoEdicion === 'compensarDia' && (
+                    {modoEdicion !== 'libre' && (
                         <div className="p-3 bg-amber-50 text-xs text-amber-800 rounded">
                             <div className="space-y-1">
                                 <p className="text-sm font-bold text-amber-900">
@@ -126,8 +140,11 @@ export default function CreateMarcacion({
                                     Disponible: {bolsaExtra.label}
                                 </p>
                                 <p className="text-[10px] text-amber-700 italic">
-                                    * Se descontará el total de la jornada de tu bolsa de HE.
+                                    * Se descontará el total de la jornada de tu bolsa de {modoEdicion === 'compensarDiaFeriado' ? 'feriados' : 'HE'}.
                                 </p>
+                                {!cargandoExtras && bolsaExtra.total_minutos < resultadoJornada.totalMinutos && (
+                                    <p className="font-bold text-red-600">Saldo insuficiente para cubrir el día completo.</p>
+                                )}
                             </div>
                         </div>
                     )}
@@ -135,7 +152,12 @@ export default function CreateMarcacion({
                     <Textarea value={data.motivo} onChange={e => setData('motivo', e.target.value)} placeholder="Motivo..." required />
 
                     <DialogFooter>
-                        <Button type="submit" disabled={processing}>Crear</Button>
+                        <Button
+                            type="submit"
+                            disabled={processing || (modoEdicion !== 'libre' && (cargandoExtras || resultadoJornada.totalMinutos <= 0 || bolsaExtra.total_minutos < resultadoJornada.totalMinutos))}
+                        >
+                            Crear
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

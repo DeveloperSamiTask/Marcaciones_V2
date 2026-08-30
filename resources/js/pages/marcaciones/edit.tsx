@@ -71,7 +71,7 @@ export default function EditMarcacion({
     const [bolsaExtra, setBolsaExtra] = useState({ total_minutos: 0, label: "" });
     const [cargandoExtras, setCargandoExtras] = useState(false);
     const [horaActual, setHoraActual] = useState(marcacionHora);
-    const { data, patch, processing, setData, reset } = useForm({
+    const { data, patch, processing, setData, reset, transform } = useForm({
         empleado_id: empleadoId,
         hora_original: marcacionHora,
         hora_nueva: marcacionHora,
@@ -104,19 +104,34 @@ export default function EditMarcacion({
     }, [open, modoEdicion, empleadoId]);
 
 
-    const updateMarcacion = (e) => {
+    const updateMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
 
-        // Sincronizamos el modo actual del modal con el formulario
-        setData('modo', modoEdicion);
+        const modoFinal = modoEdicion === 'feriado' ? subModoFeriado : modoEdicion;
 
-        console.log("?? Enviando datos al servidor:", JSON.stringify(data, null, 2));
+        if (!modoFinal) return;
+
+        transform((formData) => ({
+            ...formData,
+            modo: modoFinal,
+            total_he_disponibles: bolsaExtra.total_minutos,
+        }));
 
         patch(route('marcaciones.update', marcacionId), {
             preserveScroll: true,
             onSuccess: () => { setOpen(false); reset(); },
         });
     };
+
+    const requiereBolsa = modoEdicion === 'compensar'
+        || modoEdicion === 'compensarDia'
+        || subModoFeriado === 'compensarFeriado'
+        || subModoFeriado === 'compensarDiaFeriado';
+    const esDiaCompleto = modoEdicion === 'compensarDia' || subModoFeriado === 'compensarDiaFeriado';
+    const saldoInsuficiente = esDiaCompleto
+        ? resultadoJornada.totalMinutos <= 0 || bolsaExtra.total_minutos < resultadoJornada.totalMinutos
+        : bolsaExtra.total_minutos <= 0;
+    const sinSubModoFeriado = modoEdicion === 'feriado' && subModoFeriado === null;
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -258,7 +273,7 @@ export default function EditMarcacion({
                                                 Disponible: {bolsaExtra.label}
                                             </p>
                                             <p className="text-[10px] text-amber-700 italic">
-                                                * Se descontará el total de la jornada de tu bolsa de HE.
+                                                * Se descontará el total de la jornada de tu bolsa de feriados.
                                             </p>
                                         </div>
                                     ) : (
@@ -285,7 +300,7 @@ export default function EditMarcacion({
                     </div>
 
                     <DialogFooter>
-                        <Button type="submit" disabled={processing || ((modoEdicion === 'compensar' || modoEdicion === 'compensarDia' || subModoFeriado === 'compensarFeriado' || subModoFeriado === 'compensarDiaFeriado') && bolsaExtra.total_minutos <= 0)}>
+                        <Button type="submit" disabled={processing || cargandoExtras || sinSubModoFeriado || (requiereBolsa && saldoInsuficiente)}>
                             {processing ? 'Procesando...' : 'Aplicar Ajuste'}
                         </Button>
                     </DialogFooter>

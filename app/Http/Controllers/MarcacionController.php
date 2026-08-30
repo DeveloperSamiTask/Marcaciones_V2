@@ -554,8 +554,10 @@ class MarcacionController extends Controller
                     return $this->updateModoCompensarFeriado($data, $marcacione);
 
                 case 'compensarDia':
-                case 'compensarDiaFeriado':
                     return $this->updateModoCompensarDia($data, $marcacione);
+
+                case 'compensarDiaFeriado':
+                    return $this->compensarDiaCompletoFeriado($data, $marcacione);
 
                 default:
                     return $this->updateModoLibre($data, $marcacione);
@@ -972,10 +974,184 @@ class MarcacionController extends Controller
         });
     }
 
+    private function compensarDiaCompletoFeriado(array $data, ?Marcacion $marcacion = null)
+    {
+        return DB::transaction(function () use ($data, $marcacion) {
+            $empleadoId = (int) ($data['empleado_id'] ?? $marcacion?->empleado_id);
+            $fechaRecibida = $data['fecha'] ?? $marcacion?->fecha;
+
+            if (! $empleadoId || ! $fechaRecibida) {
+                throw new \Exception('Falta el empleado o la fecha que se desea compensar.');
+            }
+
+            $fecha = Carbon::parse($fechaRecibida)->format('Y-m-d');
+
+            $horarioDestino = Horario::query()
+                ->where('empleado_id', $empleadoId)
+                ->whereDate('fecha', $fecha)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $horarioDestino) {
+                throw new \Exception('No existe un horario programado para ese dia.');
+            }
+
+            $ingresoRaw = $horarioDestino->getRawOriginal('ingreso');
+            $salidaRaw = $horarioDestino->getRawOriginal('salida');
+
+            if (! $ingresoRaw || ! $salidaRaw) {
+                throw new \Exception('El horario no tiene ingreso y salida programados.');
+            }
+
+            $ingresoProgramado = Carbon::parse($fecha.' '.$ingresoRaw);
+            $salidaProgramada = Carbon::parse($fecha.' '.$salidaRaw);
+
+            if ($salidaProgramada->lte($ingresoProgramado)) {
+                $salidaProgramada->addDay();
+            }
+
+            $minutosJornada = (int) $ingresoProgramado->diffInMinutes($salidaProgramada);
+
+            if ($minutosJornada > 360) {
+                $minutosJornada -= 60;
+            }
+
+            if ($minutosJornada <= 0) {
+                throw new \Exception('La jornada programada no tiene minutos para compensar.');
+            }
+
+            $inicioAnio = now()->startOfYear()->toDateString();
+            $fuentesFeriado = Horario::query()
+                ->where('empleado_id', $empleadoId)
+                ->where('estado', 'F')
+                ->where('calculo_manual_feriado', 1)
+                ->whereDate('fecha', '>=', $inicioAnio)
+                ->whereDate('fecha', '<=', today()->toDateString())
+                ->whereDate('fecha', '!=', $fecha)
+                ->whereRaw('TIME_TO_SEC(feriado) > 0')
+                ->orderBy('fecha')
+                ->lockForUpdate()
+                ->get();
+
+            $aMinutos = static function (?string $tiempo): int {
+                if (! $tiempo) {
+                    return 0;
+                }
+
+                $partes = explode(':', $tiempo);
+
+                return ((int) ($partes[0] ?? 0) * 60) + (int) ($partes[1] ?? 0);
+            };
+
+            $saldoTotal = $fuentesFeriado->sum(
+                fn (Horario $horario) => $aMinutos($horario->getRawOriginal('feriado'))
+            );
+
+            if ($saldoTotal < $minutosJornada) {
+                throw new \Exception(
+                    "Saldo de feriado insuficiente. Tienes {$saldoTotal} min y necesitas {$minutosJornada} min."
+                );
+            }
+
+            $empleado = Empleado::with(['area', 'jornada'])->findOrFail($empleadoId);
+            $deudaPendiente = $minutosJornada;
+            $fechaDestinoLabel = Carbon::parse($fecha)->format('d/m/Y');
+
+            foreach ($fuentesFeriado as $fuente) {
+                if ($deudaPendiente <= 0) {
+                    break;
+                }
+
+                $saldoRegistro = $aMinutos($fuente->getRawOriginal('feriado'));
+                $consumidoAnterior = $aMinutos($fuente->getRawOriginal('feriado_consumido'));
+                $minutosConsumidos = min($saldoRegistro, $deudaPendiente);
+                $saldoRestante = $saldoRegistro - $minutosConsumidos;
+                $consumidoTotal = $consumidoAnterior + $minutosConsumidos;
+                $fechaFeriado = Carbon::parse($fuente->fecha)->format('d/m/Y');
+                $descripcion = "Compensado dia completo con FERIADO {$fechaFeriado} para el {$fechaDestinoLabel}";
+
+                $fuente->update([
+                    'feriado' => sprintf('%02d:%02d:00', intdiv($saldoRestante, 60), $saldoRestante % 60),
+                    'feriado_consumido' => sprintf('%02d:%02d:00', intdiv($consumidoTotal, 60), $consumidoTotal % 60),
+                    'calculo_manual_feriado' => 1,
+                    'destino_compensacion' => $descripcion,
+                    'fecha_compensacion' => $fecha,
+                ]);
+
+                ReporteHeConsumida::create([
+                    'empleado_id' => $empleado->id,
+                    'apellidos' => $empleado->apellidos,
+                    'nombres' => $empleado->nombres,
+                    'dni' => $empleado->dni,
+                    'area' => $empleado->area->nombre ?? 'N/A',
+                    'jornada' => $empleado->jornada->nombre ?? 'N/A',
+                    'fecha_he' => Carbon::parse($fuente->fecha)->format('Y-m-d'),
+                    'extra_consumido' => sprintf('%02d:%02d:00', intdiv($minutosConsumidos, 60), $minutosConsumidos % 60),
+                    'extra_restante' => sprintf('%02d:%02d:00', intdiv($saldoRestante, 60), $saldoRestante % 60),
+                    'destino_compensacion' => $descripcion,
+                    'fecha_uso' => $fecha,
+                    'fecha_edicion' => now()->toDateString(),
+                ]);
+
+                $deudaPendiente -= $minutosConsumidos;
+            }
+
+            $marcacionDestino = Marcacion::query()
+                ->where('empleado_id', $empleadoId)
+                ->whereDate('fecha', $fecha)
+                ->lockForUpdate()
+                ->first();
+
+            $horaIngresoOriginal = $marcacionDestino?->getRawOriginal('ingreso');
+            $horaSalidaOriginal = $marcacionDestino?->getRawOriginal('salida');
+
+            if ($marcacionDestino) {
+                $marcacionDestino->update([
+                    'ingreso' => $ingresoRaw,
+                    'salida' => $salidaRaw,
+                ]);
+            } else {
+                $marcacionDestino = Marcacion::create([
+                    'empleado_id' => $empleadoId,
+                    'fecha' => $fecha,
+                    'ingreso' => $ingresoRaw,
+                    'salida' => $salidaRaw,
+                ]);
+            }
+
+            DB::table('marcacion_edicions')->updateOrInsert(
+                [
+                    'empleado_id' => $empleadoId,
+                    'fecha' => $fecha,
+                    'es_consolidado' => 1,
+                ],
+                [
+                    'user_id' => Auth::id(),
+                    'hi_orig' => $horaIngresoOriginal,
+                    'hi_edit' => $ingresoRaw,
+                    'hs_orig' => $horaSalidaOriginal,
+                    'hs_edit' => $salidaRaw,
+                    'motivo' => ($data['motivo'] ?? 'Compensacion').' (Dia completo con feriado)',
+                    'created_at' => DB::raw('IFNULL(created_at, NOW())'),
+                    'updated_at' => now(),
+                ]
+            );
+
+            return back()->with(
+                'success',
+                "Dia completo compensado con {$minutosJornada} minutos de feriados."
+            );
+        });
+    }
+
     /* Este metodo es para cuando no existe marcacion */
     public function storeCompensarDia(Request $request)
     {
         try {
+
+            if ($request->input('modo') === 'compensarDiaFeriado') {
+                return $this->compensarDiaCompletoFeriado($request->all());
+            }
 
             \DB::beginTransaction();
 
@@ -1252,7 +1428,7 @@ class MarcacionController extends Controller
                         \DB::table('horarios')->where('id', $e->id)->update([
                             'extra' => $extra_formateado,
                             'extra_consumido' => $consumido_formateado,
-                            'destino_compensacin' => 'Compensa total del dia : '.$fecha,
+                            'destino_compensacion' => 'Compensa total del dia : '.$fecha,
                         ]);
 
                         // actualizar las h.e
@@ -1315,7 +1491,7 @@ class MarcacionController extends Controller
 
                 }
 
-                return back()->with('success', 'Procesando lógica de compensacin...');
+                return back()->with('success', 'Procesando logica de compensacion...');
             }
         } catch (\Exception $e) {
             \Log::emergency('EXCEPCIN CACHADA: '.$e->getMessage());
@@ -1323,7 +1499,6 @@ class MarcacionController extends Controller
             return back()->withErrors(['message' => 'Error: '.$e->getMessage()]);
         }
 
-        return back()->with('success', 'Procesando lógica de compensacin...');
     }
 
     private function updateModoLibre($data, Marcacion $marcacione)
@@ -1467,7 +1642,9 @@ class MarcacionController extends Controller
         return Horario::where('empleado_id', $empleadoId)
             ->where('estado', 'F')
             ->where('calculo_manual_feriado', 1)
-            ->where('feriado', '>', '00:00:00')
+            ->whereDate('fecha', '>=', now()->startOfYear()->toDateString())
+            ->whereDate('fecha', '<=', today()->toDateString())
+            ->whereRaw('TIME_TO_SEC(feriado) > 0')
             ->get(['feriado'])
             ->sum(function ($horario) {
                 [$hora, $minuto] = explode(':', $horario->feriado);
@@ -1590,7 +1767,6 @@ class MarcacionController extends Controller
 
     public function recalcularFeriados(Request $request)
     {
-
         \Log::info('INICIO RECALCULO FERIADOS', [
             'payload' => $request->all(),
         ]);
@@ -1607,110 +1783,144 @@ class MarcacionController extends Controller
         $fechaInicio = $request->fechaInicio;
         $fechaFin = $request->fechaFin;
 
-        $totalEmpleados = Empleado::where('empresa_id', $empresaId)
-            ->whereNull('fecha_cese')
+        $baseQuery = Horario::query()
+            ->where('estado', 'F')
+            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
+            ->whereHas('empleado', function ($query) use ($empresaId) {
+                $query->where('empresa_id', $empresaId);
+            });
+
+        $totalFeriados = (clone $baseQuery)->count();
+        $sinProgramacion = (clone $baseQuery)
+            ->where(function ($query) {
+                $query->whereNull('ingreso')
+                    ->orWhereNull('salida')
+                    ->orWhere('ingreso', '00:00:00')
+                    ->orWhere('salida', '00:00:00')
+                    ->orWhereColumn('ingreso', 'salida');
+            })
             ->count();
+
+        $pendientes = (clone $baseQuery)
+            ->whereNotNull('ingreso')
+            ->whereNotNull('salida')
+            ->where('ingreso', '<>', '00:00:00')
+            ->where('salida', '<>', '00:00:00')
+            ->whereColumn('ingreso', '<>', 'salida')
+            ->where(function ($query) {
+                $query->whereNull('calculo_manual_feriado')
+                    ->orWhere('calculo_manual_feriado', 0);
+            });
+
+        $totalPendientes = (clone $pendientes)->count();
 
         \Log::info('EMPLEADOS ENCONTRADOS', [
             'empresa_id' => $empresaId,
             'fecha_inicio' => $fechaInicio,
             'fecha_fin' => $fechaFin,
-            'total_empleados' => $totalEmpleados,
+            'horarios_feriado' => $totalFeriados,
+            'pendientes_de_calculo' => $totalPendientes,
+            'sin_programacion' => $sinProgramacion,
         ]);
 
-        Empleado::where('empresa_id', $empresaId)
-            ->whereNull('fecha_cese')
-            ->chunkById(50, function ($empleados) use ($fechaInicio, $fechaFin) {
-                $empleadoIds = $empleados->pluck('id');
+        $actualizados = 0;
 
-                $baseQuery = Horario::whereIn('empleado_id', $empleadoIds)
-                    ->whereBetween('fecha', [$fechaInicio, $fechaFin]);
+        $pendientes->chunkById(200, function ($horariosFeriado) use (&$actualizados) {
+            \Log::info('RESUMEN CHUNK FERIADOS', [
+                'desde_horario_id' => $horariosFeriado->first()?->id,
+                'hasta_horario_id' => $horariosFeriado->last()?->id,
+                'pendientes_de_calculo' => $horariosFeriado->count(),
+            ]);
 
-                $conEstadoF = (clone $baseQuery)
-                    ->where('estado', 'F')
-                    ->count();
-
-                $conHoras = (clone $baseQuery)
-                    ->where('estado', 'F')
-                    ->whereNotNull('ingreso')
-                    ->whereNotNull('salida')
-                    ->count();
-
-                $horariosFeriado = (clone $baseQuery)
-                    ->where('estado', 'F')
-                    ->whereNotNull('ingreso')
-                    ->whereNotNull('salida')
-                    ->where(function ($query) {
-                        $query->whereNull('calculo_manual_feriado')
-                            ->orWhere('calculo_manual_feriado', 0);
-                    })
-                    ->get();
-
-                \Log::info('RESUMEN CHUNK FERIADOS', [
-                    'empleados' => $empleadoIds->values()->all(),
-                    'horarios_en_rango' => (clone $baseQuery)->count(),
-                    'con_estado_F' => $conEstadoF,
-                    'con_horas' => $conHoras,
-                    'pendientes_de_calculo' => $horariosFeriado->count(),
+            foreach ($horariosFeriado as $horario) {
+                \Log::info('CALCULANDO FERIADO', [
+                    'horario_id' => $horario->id,
+                    'empleado_id' => $horario->empleado_id,
+                    'fecha' => $horario->fecha,
+                    'estado' => $horario->estado,
+                    'ingreso' => $horario->ingreso,
+                    'salida' => $horario->salida,
+                    'feriado_antes' => $horario->feriado,
+                    'feriado_consumido_antes' => $horario->feriado_consumido,
+                    'calculo_manual_feriado_antes' => $horario->calculo_manual_feriado,
                 ]);
 
-                foreach ($horariosFeriado as $horario) {
-                    \Log::info('CALCULANDO FERIADO', [
-                        'horario_id' => $horario->id,
-                        'empleado_id' => $horario->empleado_id,
-                        'fecha' => $horario->fecha,
-                        'estado' => $horario->estado,
-                        'ingreso' => $horario->ingreso,
-                        'salida' => $horario->salida,
-                        'feriado_antes' => $horario->feriado,
-                        'feriado_consumido_antes' => $horario->feriado_consumido,
-                        'calculo_manual_feriado_antes' => $horario->calculo_manual_feriado,
-                    ]);
+                $inicio = Carbon::parse($horario->getRawOriginal('ingreso'));
+                $fin = Carbon::parse($horario->getRawOriginal('salida'));
 
-                    $inicio = Carbon::parse($horario->ingreso);
-                    $fin = Carbon::parse($horario->salida);
+                if ($fin->lessThan($inicio)) {
+                    $fin->addDay();
+                }
 
-                    if ($fin->lessThan($inicio)) {
-                        $fin->addDay();
-                    }
+                $minutosProgramados = (int) $inicio->diffInMinutes($fin);
 
-                    $minutosProgramados = $inicio->diffInMinutes($fin);
+                if ($minutosProgramados > 360) {
+                    $minutosProgramados -= 60;
+                }
 
-                    if ($minutosProgramados > 360) {
-                        $minutosProgramados -= 60;
-                    }
+                $saldoFeriado = sprintf(
+                    '%02d:%02d:00',
+                    intdiv($minutosProgramados, 60),
+                    $minutosProgramados % 60
+                );
 
-                    $saldoFeriado = sprintf(
-                        '%02d:%02d:00',
-                        intdiv($minutosProgramados, 60),
-                        $minutosProgramados % 60
-                    );
-
-                    $actualizado = $horario->update([
+                // Query Builder evita que un $fillable desactualizado en produccion
+                // descarte silenciosamente las nuevas columnas de feriados.
+                $filasAfectadas = DB::table('horarios')
+                    ->where('id', $horario->id)
+                    ->update([
                         'feriado' => $saldoFeriado,
                         'feriado_consumido' => '00:00:00',
                         'calculo_manual_feriado' => 1,
+                        'updated_at' => now(),
                     ]);
 
-                    \Log::info('FERIADO ACTUALIZADO', [
-                        'horario_id' => $horario->id,
-                        'minutos_programados' => $minutosProgramados,
-                        'saldo_guardado' => $saldoFeriado,
-                        'update_ok' => $actualizado,
-                        'feriado_despues' => $horario->fresh()->feriado,
-                        'flag_despues' => $horario->fresh()->calculo_manual_feriado,
-                    ]);
+                $guardado = DB::table('horarios')
+                    ->useWritePdo()
+                    ->where('id', $horario->id)
+                    ->first(['feriado', 'feriado_consumido', 'calculo_manual_feriado']);
+
+                $actualizado = $guardado
+                    && $guardado->feriado === $saldoFeriado
+                    && (int) $guardado->calculo_manual_feriado === 1;
+
+                if (! $actualizado) {
+                    throw new \RuntimeException(
+                        "La BD rechazo el saldo de feriado para el horario {$horario->id}. "
+                        .'Revisa los triggers de la tabla horarios.'
+                    );
                 }
-            });
+
+                if ($filasAfectadas > 0) {
+                    $actualizados++;
+                }
+
+                \Log::info('FERIADO ACTUALIZADO', [
+                    'horario_id' => $horario->id,
+                    'minutos_programados' => $minutosProgramados,
+                    'saldo_guardado' => $saldoFeriado,
+                    'update_ok' => $actualizado,
+                    'filas_afectadas' => $filasAfectadas,
+                    'feriado_despues' => $guardado->feriado,
+                    'flag_despues' => (int) $guardado->calculo_manual_feriado,
+                ]);
+            }
+        });
 
         $segundos = round(microtime(true) - $inicioProceso, 2);
 
         \Log::info('FIN RECALCULO FERIADOS', [
             'empresa_id' => $empresaId,
+            'horarios_feriado' => $totalFeriados,
+            'actualizados' => $actualizados,
+            'sin_programacion' => $sinProgramacion,
             'segundos' => $segundos,
         ]);
 
-        return back()->with('message', "Feriados calculados en {$segundos}s.");
+        return back()->with(
+            'message',
+            "Feriados recalculados: {$actualizados}. Sin programacion valida: {$sinProgramacion}. Tiempo: {$segundos}s."
+        );
     }
 
     public function edicion(Request $request): Response
@@ -1754,6 +1964,59 @@ class MarcacionController extends Controller
             });
         } catch (Exception $e) {
             return back()->withInput()->withErrors(['message' => $e->getMessage()]);
+        }
+    }
+
+    public function uploadSustento(Request $request)
+    {
+        $data = $request->validate([
+            'sustento' => 'required|file|mimes:pdf,jpeg,png,jpg|max:2048',
+            'marcacion_id' => 'nullable|integer|exists:marcacions,id',
+            'empleado_id' => 'required|integer|exists:empleados,id',
+            'fecha' => 'required|date',
+        ]);
+
+        try {
+            DB::transaction(function () use ($request, $data) {
+        if (! empty($data['marcacion_id'])) {
+            $marcacion = Marcacion::where('id', $data['marcacion_id'])
+                ->where('empleado_id', $data['empleado_id'])
+                ->whereDate('fecha', $data['fecha'])
+                ->firstOrFail();
+                } else {
+                    $horario = Horario::where('empleado_id', $data['empleado_id'])
+                        ->whereDate('fecha', $data['fecha'])
+                        ->first();
+
+                    if (! $horario || trim((string) $horario->estado) !== 'TD') {
+                        throw new Exception('Solo se puede subir un sustento sin marcacion para Trabajo Dia Descanso.');
+                    }
+
+                    $marcacion = Marcacion::firstOrCreate(
+                        [
+                            'empleado_id' => $data['empleado_id'],
+                            'fecha' => $data['fecha'],
+                        ],
+                        [
+                            'estado' => 0,
+                            'estado_horas_extra' => 0,
+                        ]
+                    );
+                }
+
+                $file = $request->file('sustento');
+                $path = $file->store('asistencia/'.$marcacion->id, 'public');
+
+                $marcacion->update([
+                    'sustento' => "storage/$path",
+                ]);
+            });
+
+            return back()->with('success', 'Sustento subido correctamente.');
+        } catch (Exception $e) {
+            return back()->withInput()->withErrors([
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -1915,12 +2178,12 @@ class MarcacionController extends Controller
                             'tipo_id' => 24,
                             'fecha' => $fechaLogica,
                             'estado' => 0,
-                        ], ['motivo' => 'TRABAJO EN DIA DE DESCANSO']);
+                        ], ['motivo' => 'TRABAJO EN DIA DESCANSO']);
                     }
                 }
             });
 
-            return back()->with('success', 'Sincronizaci贸n completada.');
+            return back()->with('success', 'Sincronizacion completada.');
         } catch (\Exception $e) {
             return back()->withErrors(['message' => $e->getMessage()]);
         }

@@ -2,10 +2,6 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
-use Carbon\CarbonInterval;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -26,7 +22,7 @@ class Horario extends Model
         'fecha_compensacion',
         'extra_consumido',
         'aprobado_93h',
-        
+
         'feriado',
         'feriado_consumido',
         'calculo_manual_feriado',
@@ -36,9 +32,10 @@ class Horario extends Model
     {
         return [
             'fecha' => 'date',
-            //'extra' => 'datetime:H:i',
+            // 'extra' => 'datetime:H:i',
             'ingreso' => 'datetime:H:i',
             'salida' => 'datetime:H:i',
+            'calculo_manual_feriado' => 'boolean',
         ];
     }
 

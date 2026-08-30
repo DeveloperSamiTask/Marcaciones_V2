@@ -121,6 +121,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('download', [MarcacionController::class, 'download'])->name('download');
 
+        Route::post('upload-sustento', [MarcacionController::class, 'uploadSustento'])->name('upload-sustento');
+
         Route::post('{marcacion}/upload', [MarcacionController::class, 'upload'])->name('upload');
 
         Route::post('pull', [MarcacionController::class, 'pull'])->name('pull');

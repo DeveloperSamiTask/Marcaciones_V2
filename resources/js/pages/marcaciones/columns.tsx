@@ -314,6 +314,8 @@ import { sendSomething } from "./send";
                     empleadoId={empleadoId}
                     fecha={fecha}
                     tipo="salida"
+                    hsp={hsp}
+                    hip={hip}
                 />
             );
         },
@@ -627,13 +629,25 @@ import { sendSomething } from "./send";
         id: 'actions',
         cell: ({ row }) => {
             const marcacion = row.original.marcacion ?? null;
-            const estado = row.original.marcacion ? row.original.marcacion?.estado != 0 : format(row.original.fecha, 'yyyy-MM-dd') < format(new Date(), 'yyyy-MM-dd') && !!row.original.horario?.validado;
+            const empleadoId = row.original.empleado.id;
+            const fecha = format(row.original.fecha, 'yyyy-MM-dd');
+            const esTrabajoDiaDescanso = row.original.horario?.estado === 'TD';
+            const puedeSubir = Boolean(marcacion) || esTrabajoDiaDescanso;
+        const uploadBloqueado = marcacion ? Number(marcacion.estado) !== 0 : false;
 
             return (
                 <div className="flex items-center gap-2">
-                    {marcacion && !marcacion.sustento && (<UploadMarcacion key={`upload-marcacion-${marcacion.id}`} disabled={estado} marcacionId={marcacion.id ?? 0} />)}
+                    {puedeSubir && !marcacion?.sustento && (
+                        <UploadMarcacion
+                            key={`upload-marcacion-${empleadoId}-${fecha}`}
+                            disabled={uploadBloqueado}
+                            marcacionId={marcacion?.id ?? null}
+                            empleadoId={empleadoId}
+                            fecha={fecha}
+                        />
+                    )}
 
-                    {marcacion && marcacion.sustento && (
+                    {marcacion?.sustento && (
                         <Button variant="info" asChild key={`download-marcacion-${marcacion.id}`} size="sm" >
                             <a href={`${marcacion.sustento}`} target='_blank' rel="noopener noreferrer">
                                 <Download />

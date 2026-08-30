@@ -80,7 +80,7 @@ export default function EditPermiso({
     let progSalidaMin = toMin(horario_dia.salida);
     let realSalidaMin = toMin(marcacion_dia.salida);
 
-    if (progSalidaMin <= progIngreso) {
+    if (progSalidaMin < progIngreso) {
         progSalidaMin += 1440;
     }
 

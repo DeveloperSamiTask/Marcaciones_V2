@@ -958,7 +958,11 @@ export default function App({ empleados, empresas, url, supervisores }) {
             // ?? 2. Detectar empleados con TD
             const empleadosConTD = filteredEmployees.filter(emp => {
                 const schedule = scheduleData[emp.id] || {};
-                return Object.values(schedule).some(day => day.status === 'TD');
+                return Object.entries(schedule).some(([date, day]) =>
+                    day.status === 'TD'
+                    && !day.existe
+                    && !horariosExistentes.has(`${emp.id}-${date}`)
+                );
             });
 
             // console.log('?? Empleados con C/CA:', empleadosConCompensacion.length);
@@ -1136,7 +1140,15 @@ export default function App({ empleados, empresas, url, supervisores }) {
                 Object.keys(empSchedule).forEach(date => {
                     if (tieneHorariosInvalidos) return; // Salir de este forEach interno si ya falló
 
-                    const { entryTime, exitTime, status } = empSchedule[date];
+                    const daySchedule = empSchedule[date];
+
+                    // Los horarios existentes solo se muestran como referencia. No deben
+                    // volver a validar ni consumir permisos TD/feriados al completar la semana.
+                    if (daySchedule.existe || horariosExistentes.has(`${employee.id}-${date}`)) {
+                        return;
+                    }
+
+                    const { entryTime, exitTime, status } = daySchedule;
 
                     // Validar horarios laborales
                     /*
@@ -1193,17 +1205,6 @@ export default function App({ empleados, empresas, url, supervisores }) {
                             );
                             permisoTDId = permisosOrdenados[0].id;
                             permisosTDUsados[employee.id].push(permisoTDId);
-
-                        } else {
-                            const totalPermisos = permisosTD.length;
-                            const yaUsados = permisosTDUsados[employee.id].length;
-                            toast.error(
-                                `? ${employee.apellidos} ${employee.nombres}: No puede usar más días como "TD". ` +
-                                `Solo tiene ${totalPermisos} permisos TD disponibles y ya usó ${yaUsados}.`,
-                                { duration: 8000 }
-                            );
-                            tieneHorariosInvalidos = true;
-                            return;
                         }
                     }
 

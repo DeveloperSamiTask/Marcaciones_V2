@@ -1042,20 +1042,22 @@ class HorarioController extends Controller
 
         // Buscar primer TD pendiente
         $permiso = Permiso::where('empleado_id', $empleadoId)
-            ->where('tipo_id', 1)
+            ->where('tipo_id', 24)
             ->where('estado', 0)
             ->orderBy('created_at')
             ->first();
 
-        if ($permiso) {
-            $permiso->update([
-                'estado' => 1,
-                'motivo' => 'TD consumido - '.$fecha->format('d/m/Y'),
-                'fecha' => $fecha->toDateString(),
-            ]);
-
-            $horario->update(['estado' => 'TD']);
+        if (! $permiso) {
+            throw new \Exception("El empleado {$empleadoId} no tiene permisos TD disponibles.");
         }
+
+        $permiso->update([
+            'estado' => 1,
+            'motivo' => 'TD consumido - '.$fecha->format('d/m/Y'),
+            'fecha' => $fecha->toDateString(),
+        ]);
+
+        $horario->update(['estado' => 'TD']);
     }
 
     // 🔥 OPTIMIZADO: verifica duplicados con DB::table

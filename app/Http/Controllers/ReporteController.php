@@ -10,20 +10,21 @@ use App\Exports\TareoStarsoftExport;
 use App\Models\Area;
 use App\Models\Empleado;
 use App\Models\Empresa;
+use App\Models\ReporteHeConsumida;
 use App\Models\Feriado;
 use App\Models\Horario;
 use App\Models\Jornada;
 use App\Models\Permiso;
-use App\Models\ReporteHeConsumida;
 use App\Models\Suspension;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Inertia\Inertia; // ← Añade esto
+use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
+use Carbon\CarbonPeriod;
 
 class ReporteController extends Controller
 {
@@ -368,7 +369,7 @@ class ReporteController extends Controller
                         // 5. Lógica de Cálculo
                         if (! $m_salida || $m_salida->lte($inicioVentana)) {
                             // No hay nocturno si no hay salida o si salió antes de las 10 PM
-                            \Log::info("🌙 SIN NOCTURNO - {$apellidos} - Salió antes de las 22:00");
+                            //\Log::info("🌙 SIN NOCTURNO - {$apellidos} - Salió antes de las 22:00");
                         } else {
                             // Inicio: El punto más tarde entre ingreso real y las 10 PM
                             $inicioConteo = $m_ingreso->gt($inicioVentana) ? $m_ingreso : $inicioVentana;
@@ -578,7 +579,8 @@ class ReporteController extends Controller
         // =========================
         // 🧾 LOG FINAL (REPORTE OFICIAL)
         // =========================
-        \Log::info(
+		/*
+			\Log::info(
             '📅 TOTAL DÍA: '.$horario->fecha.' | '.$empleado->apellidos."\n".
                 json_encode([
                     'fecha' => $horario->fecha,
@@ -600,6 +602,8 @@ class ReporteController extends Controller
                     'TOTAL_HHMM' => sprintf('%02d:%02d', intdiv($totalDia, 60), $totalDia % 60),
                 ], JSON_PRETTY_PRINT)
         );
+		*/
+
 
         return $totalDia;
     }
@@ -632,26 +636,29 @@ class ReporteController extends Controller
             \Log::info("Fecha: $fecha");
             \Log::info("Estado: {$h->estado}");
 
-            // ❌ NO sumar COMPENSACIONES
-            if (in_array($h->estado, ['C', 'CA', 'CHE', 'FI'])) {
-                \Log::info('⏭ COMPENSACIÓN → NO SE SUMA');
+			 // ❌ si no hay horarios completos
+            if (! $h->ingreso || ! $h->salida) {
+                \Log::warning("❌ HORARIOS INCOMPLETOS → ingreso={$h->ingreso} salida={$h->salida}");
 
                 continue;
             }
 
-            // ❌ NO sumar DESCANSOS (00:00-00:00)
+			// ❌ NO sumar DESCANSOS (00:00-00:00)
             if ($h->ingreso->format('H:i') === '00:00' && $h->salida->format('H:i') === '00:00') {
                 \Log::info('⏭ DESCANSO (00:00-00:00) → NO SE SUMA');
 
                 continue;
             }
 
-            // ❌ si no hay horarios completos
-            if (! $h->ingreso || ! $h->salida) {
-                \Log::warning("❌ HORARIOS INCOMPLETOS → ingreso={$h->ingreso} salida={$h->salida}");
-
+            // ❌ NO sumar COMPENSACIONES
+            if (in_array($h->estado, ['C', 'CA', 'CHE', 'FI'])) {
+                \Log::info('⏭ COMPENSACIÓN → NO SE SUMA');
                 continue;
             }
+
+
+
+
 
             // HI = HIP (Hora Ingreso Programada)
             // HS = HSP (Hora Salida Programada)
@@ -945,235 +952,495 @@ class ReporteController extends Controller
     }
 
     //  ------------------------------------------------------------------------
-    public function extraIndex(Request $request)
-    {
-        $filters = $request->validate([
-            'empresa' => 'nullable|integer|exists:empresas,id',
-            'encargado' => 'nullable|integer|exists:empleados,id',
-            'fechaInicio' => 'nullable|date',
-            'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
-            'modalidad' => 'nullable|integer',
-            'area' => 'nullable|integer|exists:areas,id',
+	public function extraIndex(Request $request)
+{
+    $filters = $request->validate([
+        'empresa' => 'nullable|integer|exists:empresas,id',
+        'encargado' => 'nullable|integer|exists:empleados,id',
+        'fechaInicio' => 'nullable|date',
+        'fechaFin' => 'nullable|date|after_or_equal:fechaInicio',
+        'modalidad' => 'nullable|integer',
+        'area' => 'nullable|integer|exists:areas,id',
+    ]);
+
+    $user = $request->user();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Datos para los filtros
+    |--------------------------------------------------------------------------
+    */
+
+    $areas = Area::query()
+        ->where('estado', 1)
+        ->when(
+            $filters['empresa'] ?? null,
+            fn ($query, $empresaId) => $query->where(
+                'empresa_id',
+                $empresaId
+            )
+        )
+        ->orderBy('nombre')
+        ->get([
+            'id',
+            'nombre',
+            'empresa_id',
         ]);
 
-        $user = $request->user();
-        $areas = Area::where('estado', 1)
-            ->when($request->empresa, fn ($q) => $q->where('empresa_id', $request->empresa))
-            ->orderBy('nombre')
-            ->get(['id', 'nombre', 'empresa_id']);
+    if ($user->name === 'ANGELES TERRONES MILUSKA') {
+        $empresas = Empresa::query()
+            ->where('estado', 1)
+            ->whereIn('id', [4, 10, 11])
+            ->get([
+                'id',
+                'razonsocial',
+            ]);
+    } elseif ($user->id === 73) {
+        $empresas = Empresa::query()
+            ->where('estado', 1)
+            ->whereIn('id', [1, 5])
+            ->get([
+                'id',
+                'razonsocial',
+            ]);
+    } else {
+        $empresas = Empresa::query()
+            ->where('estado', 1)
+            ->get([
+                'id',
+                'razonsocial',
+            ]);
+    }
 
-        // 1. LÓGICA DE EMPRESAS (Se mantiene igual)
-        if ($user->name === 'ANGELES TERRONES MILUSKA') {
-            $empresas = Empresa::where('estado', 1)->whereIn('id', [4, 10, 11])->get(['id', 'razonsocial']);
-        } elseif ($user->id === 73) {
-            $empresas = Empresa::where('estado', 1)->whereIn('id', [1, 5])->get(['id', 'razonsocial']);
-        } else {
-            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-        }
+    $encargados = User::query()
+        ->select([
+            'id',
+            'empleado_id',
+            'estado',
+        ])
+        ->with([
+            'empleado:id,nombres,apellidos',
+        ])
+        ->where('estado', 1)
+        ->whereNotNull('empleado_id')
+        ->get()
+        ->filter(fn ($usuario) => $usuario->empleado)
+        ->sortBy(
+            fn ($usuario) => $usuario->empleado->apellidos
+        )
+        ->values();
 
-        $encargados = User::with('empleado')->where('estado', 1)->get()
-            ->sortBy(fn ($e) => $e->empleado->apellidos)->values();
+    /*
+    |--------------------------------------------------------------------------
+    | No procesar el reporte sin filtros completos
+    |--------------------------------------------------------------------------
+    |
+    | Al entrar desde el menú solamente se muestran los filtros.
+    | No se cargan todos los empleados, horarios y marcaciones del año.
+    */
 
-        // 2. QUERY DE EMPLEADOS FILTRADA
-        $empleados = Empleado::query()
-            // Prioridad 1: Filtro manual del selector de encargado
-            ->when($request->encargado, function ($q) use ($request) {
-                $q->where('jefe_id', $request->encargado);
-            })
-            // Prioridad 2: Si NO hay encargado seleccionado pero es Rol 4, filtrar por sí mismo
-            ->when(! $request->encargado && $user->rol_id == 4 && $user->id !== 73, function ($q) use ($user) {
-                $q->where('jefe_id', $user->empleado_id);
-            })
+    $tieneFiltrosCompletos =
+        ! empty($filters['empresa'])
+        && ! empty($filters['fechaInicio'])
+        && ! empty($filters['fechaFin']);
 
-            // Filtro de Modalidad (FT/PT)
-            ->when($request->modalidad, function ($q) use ($request) {
-                $q->where('jornada_id', $request->modalidad);
-            })
-
-            // Filtro por Area
-            ->when($request->area, fn ($q) => $q->where('area_id', $request->area))
-
-            // Filtro de Empresa y restricciones de seguridad
-            ->where(function ($q) use ($request, $user) {
-                if ($user->name === 'ANGELES TERRONES MILUSKA') {
-                    $ids = [4, 10, 11];
-                    $q->whereIn('empresa_id', $request->empresa && in_array($request->empresa, $ids) ? [$request->empresa] : $ids);
-                } elseif ($user->id === 73) {
-                    $ids = [1, 5];
-                    $q->whereIn('empresa_id', $request->empresa && in_array($request->empresa, $ids) ? [$request->empresa] : $ids);
-                } elseif ($request->empresa) {
-                    $q->where('empresa_id', $request->empresa);
-                }
-            })
-            ->select('empleados.id', 'dni', 'nombres', 'apellidos', 'area_id', 'jornada_id', 'empresa_id', 'fecha_ingreso')
-            ->with([
-                'area:id,nombre',
-                'jornada:id,nombre',
-                'horarios' => fn ($q) => $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]),
-                'marcaciones' => fn ($q) => $q->whereBetween('fecha', [$request->fechaInicio, $request->fechaFin]),
-            ])
-            ->whereNull('fecha_cese')
-            ->orderBy('apellidos')
-            ->get();
-
-        // Extra usado — horarios con extra_consumido dentro del rango
-        $query = ReporteHeConsumida::query();
-
-        if ($request->fechaInicio && $request->fechaFin) {
-            $query->whereBetween('fecha_uso', [$request->fechaInicio, $request->fechaFin]);
-        }
-
-        if ($request->empresa || $request->area || $request->encargado) {
-            $empleadosIds = Empleado::query()
-                ->when($request->empresa, fn ($q) => $q->where('empresa_id', $request->empresa))
-                ->when($request->area, fn ($q) => $q->where('area_id', $request->area))
-                ->when($request->encargado, fn ($q) => $q->where('jefe_id', $request->encargado))
-                ->whereNull('fecha_cese')
-                ->pluck('id');
-
-            $query->whereIn('empleado_id', $empleadosIds);
-        }
-
-        // Restricciones de seguridad por usuario
-        if ($user->name === 'ANGELES TERRONES MILUSKA') {
-            $ids = Empleado::whereIn('empresa_id', [4, 10, 11])->pluck('id');
-            $query->whereIn('empleado_id', $ids);
-        } elseif ($user->id === 73) {
-            $ids = Empleado::whereIn('empresa_id', [1, 5])->pluck('id');
-            $query->whereIn('empleado_id', $ids);
-        } elseif ($user->rol_id == 4 && $user->id !== 73 && ! $request->encargado) {
-            $ids = Empleado::where('jefe_id', $user->empleado_id)->pluck('id');
-            $query->whereIn('empleado_id', $ids);
-        }
-
-        $extraUsado = $query->orderBy('apellidos')->get();
-
-        $pendientes = collect();
-        $revision = collect();
-        $aprobados = collect();
-
-        // Log::info('Informacion de las HE por dia : ' . $extraUsado);
-
-        $debug = \DB::table('horarios')
-            ->whereNotNull('extra_consumido')
-            ->where('extra_consumido', '!=', '00:00:00')
-            ->select('id', 'empleado_id', 'fecha', 'extra_consumido', 'destino_compensacion')
-            ->limit(5)
-            ->get();
-
-        // Log::info('DEBUG horarios con extra_consumido: '.json_encode($debug));
-
-        $empleados->map(function ($empleado) use (&$pendientes, &$revision, &$aprobados) {
-            $empleadoMarcaciones = $empleado->marcaciones ?? collect();
-            $extra_no_solicitado = 0;
-            $extra_solicitado = 0; // esto ahora viene de horarios.extra
-            $estados_extras = [];
-
-            $empleadoMarcaciones->each(function ($marcacion) use ($empleado, &$extra_no_solicitado, &$extra_solicitado, &$estados_extras) {
-                $horario = $empleado->horarios->firstWhere('fecha', $marcacion->fecha);
-
-                if ($horario && $marcacion->ingreso && $marcacion->salida) {
-
-                    if ($horario->ingreso->format('H:i') === '00:00' && $horario->salida->format('H:i') === '00:00') {
-                        return;
-                    }
-
-                    $horaSalidaProg = $horario->salida->copy();
-                    $horaSalidaReal = $marcacion->salida->copy();
-
-                    if ($horaSalidaProg->lt($horario->ingreso)) {
-                        $horaSalidaProg->addDay();
-                    }
-                    if ($horaSalidaReal->lt($marcacion->ingreso)) {
-                        $horaSalidaReal->addDay();
-                    }
-
-                    $minutosDiferencia = max(0, $horaSalidaProg->diffInMinutes($horaSalidaReal, false));
-
-                    $estados_extras[] = $marcacion->estado_horas_extra;
-
-                    if ($marcacion->estado_horas_extra == 1) {
-                        // APROBADO: usar horario.extra en vez del cálculo
-                        if ($horario->extra && $horario->extra !== '00:00:00') {
-                            $partes = explode(':', $horario->extra);
-                            $minutosExtra = ((int) $partes[0] * 60) + (int) ($partes[1] ?? 0);
-                            $extra_solicitado += $minutosExtra;
-                        }
-                    } else {
-                        // PENDIENTE: sigue calculando desde marcacion
-                        $extra_no_solicitado += $minutosDiferencia;
-                    }
-                }
-            });
-
-            // Sin redondeo de 30 en 30
-            $estadoFinal = null;
-            if (! empty($estados_extras)) {
-                if (in_array(0, $estados_extras)) {
-                    $estadoFinal = 'pendientes';
-                } elseif (in_array(2, $estados_extras)) {
-                    $estadoFinal = 'revision';
-                } else {
-                    $estadoFinal = 'aprobados';
-                }
-            }
-
-            $extra = $extra_solicitado + $extra_no_solicitado;
-
-            if ($extra > 0) {
-                $item = [
-                    'empleado' => $empleado,
-                    'horas' => 0,
-                    'extra' => $extra,
-                    'estado' => $estadoFinal,
-                    'extra_solicitado' => $extra_solicitado,   // ahora viene de horarios.extra
-                    'extra_no_solicitado' => $extra_no_solicitado,
-                ];
-
-                if ($estadoFinal === 'pendientes') {
-                    $pendientes->push($item);
-                } elseif ($estadoFinal === 'revision') {
-                    $revision->push($item);
-                } elseif ($estadoFinal === 'aprobados') {
-                    $aprobados->push($item);
-                }
-            }
-        });
-
+    if (! $tieneFiltrosCompletos) {
         return Inertia::render('reportes/extra/index', [
             'filters' => $filters,
             'empresas' => $empresas,
             'encargados' => $encargados,
-            'pendientes' => $pendientes,
-            'revision' => $extraUsado,
-            'aprobados' => $aprobados,
+            'pendientes' => [],
+            'revision' => [],
+            'aprobados' => [],
             'areas' => $areas,
             'csrf_token' => csrf_token(),
         ]);
     }
 
+    $fechaInicio = $filters['fechaInicio'];
+    $fechaFin = $filters['fechaFin'];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Obtener empleados y solamente las columnas necesarias
+    |--------------------------------------------------------------------------
+    */
+
+    $empleados = Empleado::query()
+        ->when(
+            $filters['encargado'] ?? null,
+            fn ($query, $encargadoId) => $query->where(
+                'jefe_id',
+                $encargadoId
+            )
+        )
+        ->when(
+            empty($filters['encargado'])
+                && $user->rol_id == 4
+                && $user->id !== 73,
+            fn ($query) => $query->where(
+                'jefe_id',
+                $user->empleado_id
+            )
+        )
+        ->when(
+            $filters['modalidad'] ?? null,
+            fn ($query, $modalidadId) => $query->where(
+                'jornada_id',
+                $modalidadId
+            )
+        )
+        ->when(
+            $filters['area'] ?? null,
+            fn ($query, $areaId) => $query->where(
+                'area_id',
+                $areaId
+            )
+        )
+        ->where(function ($query) use ($filters, $user) {
+            $empresaSeleccionada = $filters['empresa'] ?? null;
+
+            if ($user->name === 'ANGELES TERRONES MILUSKA') {
+                $empresasPermitidas = [4, 10, 11];
+
+                $query->whereIn(
+                    'empresa_id',
+                    in_array(
+                        $empresaSeleccionada,
+                        $empresasPermitidas,
+                        true
+                    )
+                        ? [$empresaSeleccionada]
+                        : $empresasPermitidas
+                );
+
+                return;
+            }
+
+            if ($user->id === 73) {
+                $empresasPermitidas = [1, 5];
+
+                $query->whereIn(
+                    'empresa_id',
+                    in_array(
+                        $empresaSeleccionada,
+                        $empresasPermitidas,
+                        true
+                    )
+                        ? [$empresaSeleccionada]
+                        : $empresasPermitidas
+                );
+
+                return;
+            }
+
+            $query->where(
+                'empresa_id',
+                $empresaSeleccionada
+            );
+        })
+        ->select([
+            'empleados.id',
+            'empleados.dni',
+            'empleados.nombres',
+            'empleados.apellidos',
+            'empleados.area_id',
+            'empleados.jornada_id',
+            'empleados.empresa_id',
+            'empleados.fecha_ingreso',
+        ])
+        ->with([
+            'area:id,nombre',
+            'jornada:id,nombre',
+
+            'horarios' => fn ($query) => $query
+                ->select([
+                    'id',
+                    'empleado_id',
+                    'fecha',
+                    'ingreso',
+                    'salida',
+                    'extra',
+                    'destino_compensacion',
+                ])
+                ->whereBetween(
+                    'fecha',
+                    [$fechaInicio, $fechaFin]
+                ),
+
+            'marcaciones' => fn ($query) => $query
+                ->select([
+                    'id',
+                    'empleado_id',
+                    'fecha',
+                    'ingreso',
+                    'salida',
+                    'estado',
+                    'estado_horas_extra',
+                ])
+                ->whereBetween(
+                    'fecha',
+                    [$fechaInicio, $fechaFin]
+                ),
+        ])
+        ->whereNull('fecha_cese')
+        ->orderBy('apellidos')
+        ->get();
+
+    $empleadoIds = $empleados->pluck('id');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Historial mostrado exclusivamente en HE USADAS
+    |--------------------------------------------------------------------------
+    */
+
+    $extraUsado = ReporteHeConsumida::query()
+        ->whereIn('empleado_id', $empleadoIds)
+        ->whereBetween(
+            'fecha_uso',
+            [$fechaInicio, $fechaFin]
+        )
+        ->orderBy('apellidos')
+        ->orderBy('id')
+        ->get();
+
+    $pendientes = collect();
+    $aprobados = collect();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Calcular resumen por empleado
+    |--------------------------------------------------------------------------
+    */
+
+    foreach ($empleados as $empleado) {
+        $extraNoSolicitado = 0;
+        $extraSolicitado = 0;
+        $estadosExtras = [];
+
+        /*
+        | Indexar horarios por fecha.
+        |
+        | Antes se recorrían todos los horarios para encontrar cada fecha.
+        | Ahora la búsqueda se realiza directamente.
+        */
+
+        $horariosPorFecha = $empleado->horarios->keyBy(
+            fn ($horario) => $horario->fecha->format('Y-m-d')
+        );
+
+        /*
+        | Evitar contar varias marcaciones de una misma fecha.
+        |
+        | Si existen duplicados, se prioriza la marcación con mayor estado.
+        */
+
+        $marcacionesPorFecha = $empleado->marcaciones
+            ->filter(fn ($marcacion) => $marcacion->fecha)
+            ->groupBy(
+                fn ($marcacion) => $marcacion->fecha->format('Y-m-d')
+            )
+            ->map(
+                fn ($grupo) => $grupo
+                    ->sortByDesc(
+                        fn ($marcacion) => (int) $marcacion->estado
+                    )
+                    ->first()
+            );
+
+        foreach ($marcacionesPorFecha as $fecha => $marcacion) {
+            $horario = $horariosPorFecha->get($fecha);
+
+            if (
+                ! $horario
+                || ! $horario->ingreso
+                || ! $horario->salida
+                || ! $marcacion->ingreso
+                || ! $marcacion->salida
+            ) {
+                continue;
+            }
+
+            if (
+                $horario->ingreso->format('H:i') === '00:00'
+                && $horario->salida->format('H:i') === '00:00'
+            ) {
+                continue;
+            }
+
+            $horaIngresoProgramada = $horario->ingreso->copy();
+            $horaSalidaProgramada = $horario->salida->copy();
+
+            $horaIngresoReal = $marcacion->ingreso->copy();
+            $horaSalidaReal = $marcacion->salida->copy();
+
+            /*
+            | Horarios que cruzan medianoche.
+            */
+
+            if ($horaSalidaProgramada->lt($horaIngresoProgramada)) {
+                $horaSalidaProgramada->addDay();
+            }
+
+            if ($horaSalidaReal->lt($horaIngresoReal)) {
+                $horaSalidaReal->addDay();
+            }
+
+            $minutosDiferencia = max(
+                0,
+                $horaSalidaProgramada->diffInMinutes(
+                    $horaSalidaReal,
+                    false
+                )
+            );
+
+            $estadoHE = (int) $marcacion->estado_horas_extra;
+            $estadosExtras[] = $estadoHE;
+
+            /*
+            | HE aprobada.
+            |
+            | horarios.extra es el saldo actual disponible.
+            | reporte_he_consumidas es únicamente el historial.
+            */
+
+            if ($estadoHE === 1) {
+                $saldoDisponible = $horario->extra;
+
+                if (
+                    ! $saldoDisponible
+                    || $saldoDisponible === '00:00:00'
+                ) {
+                    continue;
+                }
+
+                $partes = explode(':', $saldoDisponible);
+
+                $extraSolicitado +=
+                    ((int) ($partes[0] ?? 0) * 60)
+                    + (int) ($partes[1] ?? 0);
+
+                continue;
+            }
+
+            /*
+            | HE todavía no aprobada.
+            */
+
+            $extraNoSolicitado += $minutosDiferencia;
+        }
+
+        if (empty($estadosExtras)) {
+            continue;
+        }
+
+        $totalExtra = $extraSolicitado + $extraNoSolicitado;
+
+        if ($totalExtra <= 0) {
+            continue;
+        }
+
+        /*
+        | La interfaz solamente necesita estos datos del empleado.
+        | No enviar todos sus horarios y marcaciones al navegador.
+        */
+
+        $item = [
+            'empleado' => [
+                'id' => $empleado->id,
+                'dni' => $empleado->dni,
+                'nombres' => $empleado->nombres,
+                'apellidos' => $empleado->apellidos,
+                'jornada_id' => $empleado->jornada_id,
+                'area' => [
+                    'nombre' => $empleado->area->nombre ?? 'N/A',
+                ],
+                'jornada' => [
+                    'nombre' => $empleado->jornada->nombre ?? 'N/A',
+                ],
+            ],
+            'horas' => 0,
+            'extra' => $totalExtra,
+            'extra_solicitado' => $extraSolicitado,
+            'extra_no_solicitado' => $extraNoSolicitado,
+        ];
+
+        /*
+        | Estados:
+        | 0 = HE todavía no solicitada.
+        | 1 = HE aprobada.
+        | 2 = HE pendiente de aprobación.
+        |
+        | Tanto 0 como 2 se muestran en PENDIENTES.
+        */
+
+        if (
+            in_array(0, $estadosExtras, true)
+            || in_array(2, $estadosExtras, true)
+        ) {
+            $item['estado'] = 'pendientes';
+            $pendientes->push($item);
+        } else {
+            $item['estado'] = 'aprobados';
+            $aprobados->push($item);
+        }
+    }
+
+    return Inertia::render('reportes/extra/index', [
+        'filters' => $filters,
+        'empresas' => $empresas,
+        'encargados' => $encargados,
+        'pendientes' => $pendientes,
+        'revision' => $extraUsado,
+        'aprobados' => $aprobados,
+        'areas' => $areas,
+        'csrf_token' => csrf_token(),
+    ]);
+}
+
     public function extraDetalle(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'empleado_id' => 'required|exists:empleados,id',
             'fechaInicio' => 'required|date',
-            'fechaFin' => 'required|date',
+            'fechaFin' => 'required|date|after_or_equal:fechaInicio',
         ]);
 
-        $empleado = Empleado::with(['horarios', 'marcaciones', 'area'])->findOrFail($request->empleado_id);
-        $marcacionesLimpias = $empleado->marcaciones
-            ->groupBy(fn ($m) => \Carbon\Carbon::parse($m->fecha)->format('Y-m-d'))
-            ->map(fn ($grupo) => $grupo->first()); // Aquí podrías usar ->sortBy('ingreso')->first() si quieres la más temprana
+        $empleado = Empleado::with([
+            'area:id,nombre',
 
-        $horarios = $empleado->horarios->keyBy(fn ($h) => \Carbon\Carbon::parse($h->fecha)->format('Y-m-d'));
-        $marcaciones = $marcacionesLimpias;
+            'horarios' => fn ($query) => $query->whereBetween(
+                'fecha',
+                [$data['fechaInicio'], $data['fechaFin']]
+            ),
 
-        $periodo = \Carbon\CarbonPeriod::create($request->fechaInicio, $request->fechaFin);
+            'marcaciones' => fn ($query) => $query->whereBetween(
+                'fecha',
+                [$data['fechaInicio'], $data['fechaFin']]
+            ),
+        ])->findOrFail($data['empleado_id']);
+
+        $horarios = $empleado->horarios->keyBy(
+            fn ($horario) => Carbon::parse(
+                $horario->fecha
+            )->format('Y-m-d')
+        );
+
+        $marcaciones = $empleado->marcaciones
+            ->groupBy(
+                fn ($marcacion) => Carbon::parse(
+                    $marcacion->fecha
+                )->format('Y-m-d')
+            )
+            ->map(fn ($grupo) => $grupo->first());
+
+        $periodo = CarbonPeriod::create(
+            $data['fechaInicio'],
+            $data['fechaFin']
+        );
+
         $detalle = [];
-
-        //  $marcaciones = $marcaciones->map(function ($grupo) {
-        //     return $grupo->unique('fecha');
-        // });
 
         foreach ($periodo as $fecha) {
             $fechaStr = $fecha->format('Y-m-d');
@@ -1181,66 +1448,106 @@ class ReporteController extends Controller
             $horario = $horarios->get($fechaStr);
             $marcacion = $marcaciones->get($fechaStr);
 
-            if ($horario && $marcacion && $marcacion->salida) {
-                $hIngresoProg = \Carbon\Carbon::parse($horario->ingreso);
-                $hSalidaProg = \Carbon\Carbon::parse($horario->salida);
-                $mSalidaReal = \Carbon\Carbon::parse($marcacion->salida);
+            if (
+                ! $horario
+                || ! $marcacion
+                || ! $horario->ingreso
+                || ! $horario->salida
+                || ! $marcacion->ingreso
+                || ! $marcacion->salida
+            ) {
+                continue;
+            }
 
-                if ($hIngresoProg->format('H:i') === '00:00' && $hSalidaProg->format('H:i') === '00:00') {
+            $horaIngresoProgramada = Carbon::parse(
+                $horario->ingreso
+            );
+
+            $horaSalidaProgramada = Carbon::parse(
+                $horario->salida
+            );
+
+            $horaSalidaReal = Carbon::parse(
+                $marcacion->salida
+            );
+
+            if (
+                $horaIngresoProgramada->format('H:i') === '00:00'
+                && $horaSalidaProgramada->format('H:i') === '00:00'
+            ) {
+                continue;
+            }
+
+            if ($horaSalidaProgramada->lt($horaIngresoProgramada)) {
+                $horaSalidaProgramada->addDay();
+            }
+
+            if ($horaSalidaReal->lt($horaIngresoProgramada)) {
+                $horaSalidaReal->addDay();
+            }
+
+            $diferencia = $horaSalidaProgramada->diffInMinutes(
+                $horaSalidaReal,
+                false
+            );
+
+            if ($diferencia >= 1440) {
+                $diferencia -= 1440;
+            }
+
+            if ($diferencia <= -1440) {
+                $diferencia += 1440;
+            }
+
+            $minutosExtra = max(0, $diferencia);
+            $estadoHE = (int) $marcacion->estado_horas_extra;
+            $saldoDisponible = null;
+
+            /*
+            * Para HE aprobadas se muestra el saldo restante.
+            */
+            if ($estadoHE === 1) {
+                // Igual que el resumen: usar el saldo vigente.
+                $saldoDisponible = $horario->extra;
+
+                if (
+                    ! $saldoDisponible
+                    || $saldoDisponible === '00:00:00'
+                ) {
                     continue;
                 }
 
-                if ($hSalidaProg->lt($hIngresoProg)) {
-                    $hSalidaProg->addDay();
-                }
-                if ($mSalidaReal->lt($hIngresoProg)) {
-                    $mSalidaReal->addDay();
-                }
+                $partes = explode(':', $saldoDisponible);
 
-                $diff = $hSalidaProg->diffInMinutes($mSalidaReal, false);
-                if ($diff >= 1440) {
-                    $diff -= 1440;
-                }
-                if ($diff <= -1440) {
-                    $diff += 1440;
-                }
-
-                $minutosExtra = $diff > 0 ? $diff : 0;
-
-                if ($marcacion->estado_horas_extra == 1) {
-                    if (! $horario->extra || $horario->extra === '00:00:00') {
-                        continue; // ya compensado totalmente, saltar
-                    }
-                    $partes = explode(':', $horario->extra);
-                    $minutosExtra = ((int) $partes[0] * 60) + (int) ($partes[1] ?? 0);
-                    if ($minutosExtra === 0) {
-                        continue;
-                    }
-                } else {
-
-                    if ($minutosExtra <= 0) {
-                        continue;
-                    }
-                }
-
-                if ($minutosExtra > 0) {
-                    $detalle[] = [
-                        'fecha' => $fechaStr,
-                        'programada' => \Carbon\Carbon::parse($horario->salida)->format('H:i'),
-                        'marcada' => \Carbon\Carbon::parse($marcacion->salida)->format('H:i'),
-                        'minutos' => $minutosExtra,
-                        'estado_he' => $marcacion->estado_horas_extra,
-                        'extra_aprobado' => $horario->extra, // para el front si lo necesita
-                        'destino_compensacion' => $horario->destino_compensacion, // dónde se usó
-                    ];
-                }
+                $minutosExtra =
+                    ((int) ($partes[0] ?? 0) * 60)
+                    + (int) ($partes[1] ?? 0);
             }
+
+            if ($minutosExtra <= 0) {
+                continue;
+            }
+
+            $detalle[] = [
+                'fecha' => $fechaStr,
+                'programada' => Carbon::parse(
+                    $horario->salida
+                )->format('H:i'),
+                'marcada' => Carbon::parse(
+                    $marcacion->salida
+                )->format('H:i'),
+                'minutos' => $minutosExtra,
+                'estado_he' => $estadoHE,
+                'extra_aprobado' => $saldoDisponible,
+                'destino_compensacion' => $horario->destino_compensacion,
+            ];
         }
 
-        // EL RETURN DEBE ESTAR FUERA DEL BUCLE
         return response()->json([
             'empleado' => [
-                'nombre' => $empleado->apellidos.' '.$empleado->nombres,
+                'nombre' => trim(
+                    $empleado->apellidos.' '.$empleado->nombres
+                ),
                 'dni' => $empleado->dni,
                 'area' => $empleado->area->nombre ?? 'N/A',
             ],
@@ -1255,6 +1562,45 @@ class ReporteController extends Controller
             'fechaInicio' => 'nullable|date',
             'fechaFin' => 'nullable|date',
         ]);
+
+        /*
+            $extraUsado = \DB::table('horarios as h')
+            ->join('empleados as e', 'e.id', '=', 'h.empleado_id')
+            ->join('areas as a', 'a.id', '=', 'e.area_id')
+            ->join('jornadas as j', 'j.id', '=', 'e.jornada_id')
+            ->leftJoin('marcacion_edicions as mse', function ($join) {
+                $join->on('mse.empleado_id', '=', 'e.id')
+                    ->on('mse.fecha', '=', 'h.fecha_compensacion') // para que coincida el dia que se compensó
+                    ->where('mse.es_consolidado', '=', 1);
+            })
+            ->whereNotNull('h.extra_consumido')
+            ->where('h.extra_consumido', '!=', '00:00:00')
+            ->when($request->fechaInicio && $request->fechaFin, fn ($q) => $q->whereBetween('h.fecha_compensacion', [$request->fechaInicio, $request->fechaFin])
+            )
+            ->when($request->empresa, fn ($q) => $q->where('e.empresa_id', $request->empresa)
+            )
+            ->when($request->area, fn ($q) => $q->where('e.area_id', $request->area)
+            )
+            ->when($request->modalidad, fn ($q) => $q->where('e.jornada_id', $request->modalidad)
+            )
+            ->whereNull('e.fecha_cese')
+            ->select(
+                'e.id as empleado_id',
+                'e.apellidos',
+                'e.nombres',
+                'e.dni',
+                'a.nombre as area',
+                'j.nombre as jornada',
+                'h.fecha as fecha_he',
+                'h.extra as extra_restante',
+                'h.extra_consumido',
+                'h.destino_compensacion',
+                'mse.fecha as fecha_uso',
+                \DB::raw('DATE(mse.created_at) as fecha_edicion')
+            )
+            ->orderBy('e.apellidos')
+            ->get();
+        */
 
         $horarios = \DB::table('horarios as h')
             ->join('empleados as e', 'e.id', '=', 'h.empleado_id')

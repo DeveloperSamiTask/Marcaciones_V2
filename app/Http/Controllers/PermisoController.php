@@ -236,7 +236,7 @@ class PermisoController extends Controller
 
                     $empleado = Empleado::find($permiso->empleado_id, 'id');
 
-                    Log:info('HE aprobadas: '.json_encode([
+                    \Log::info('HE aprobadas: '.json_encode([
                         'Emp: ' => $empleado->apellidos,
                         'Total: ' => $totalFormateado,
                         'Ant: ' => $validated['he_anticipada'],

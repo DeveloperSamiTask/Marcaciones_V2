@@ -9,16 +9,36 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { LoaderCircle, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
-export default function UploadMarcacion({ marcacionId, disabled } : {marcacionId : number, disabled: boolean}) {
+type UploadMarcacionProps = {
+    marcacionId?: number | null;
+    empleadoId: number;
+    fecha: string;
+    disabled: boolean;
+};
+
+type UploadMarcacionForm = {
+    sustento: File | null;
+    marcacion_id: number | null;
+    empleado_id: number;
+    fecha: string;
+};
+
+export default function UploadMarcacion({ marcacionId, empleadoId, fecha, disabled }: UploadMarcacionProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { data, setData, post, processing, reset, errors, clearErrors } = useForm<Required<{sustento: File | null }>>({ sustento: null });
+    const { data, setData, post, processing, reset, errors, clearErrors } = useForm<UploadMarcacionForm>({
+        sustento: null,
+        marcacion_id: marcacionId ?? null,
+        empleado_id: empleadoId,
+        fecha,
+    });
 
 
     const uploadMarcacion: FormEventHandler = (e) => {
         e.preventDefault();
 
-        post(route('marcaciones.upload', marcacionId), {
+        post(route('marcaciones.upload-sustento'), {
             preserveScroll: true,
+            forceFormData: true,
             onSuccess: () => {
                 toast.success('Sustento subido exitosamente!', {
                     richColors: true,
@@ -34,7 +54,7 @@ export default function UploadMarcacion({ marcacionId, disabled } : {marcacionId
                     duration: 6000,
                 });
             },
-            onFinish: () => reset(),
+            onFinish: () => reset('sustento'),
         });
     };
 
@@ -45,7 +65,7 @@ export default function UploadMarcacion({ marcacionId, disabled } : {marcacionId
 
     const closeModal = () => {
         clearErrors();
-        reset();
+        reset('sustento');
     };
 
     return (
@@ -82,7 +102,7 @@ export default function UploadMarcacion({ marcacionId, disabled } : {marcacionId
                             </Button>
                         </DialogClose>
 
-                        <Button type='submit' disabled={processing}>
+                        <Button type='submit' disabled={processing || !data.sustento}>
                             {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
                             Subir
                         </Button>
